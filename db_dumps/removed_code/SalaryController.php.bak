@@ -1,0 +1,1946 @@
+<?php
+
+namespace App\Controllers;
+
+use App\Models\SalaryModel;
+use App\Models\AdminModel;
+
+class SalaryController extends BaseController
+{
+
+ public function pay_roll()
+ {
+        $session = session();
+        if (!$session->get('logged_in')) {
+        return redirect()->to(base_url('/'));
+        }
+        $model = new SalaryModel();
+    
+        $empid = $session->get('emp_id');
+
+        // filters: month (ALL or a month name) and financial year (April - March), default = current one
+        $fyStart = (int) date('n') >= 4 ? (int) date('Y') : (int) date('Y') - 1;
+        $month = $this->request->getGet('month') ?: 'ALL';
+        $year  = $this->request->getGet('year') ?: ($fyStart . '-' . substr((string) ($fyStart + 1), -2));
+        $data['selectedMonth'] = $month;
+        $data['selectedYear']  = $year;
+
+        // generated payslips of paid employees from the payroll cycles (employee_payslips)
+        $rows = $model->employee_payslip_list($empid, null, $month, $year);
+        $data['salary'] = [];
+        $data['listMessage'] = '';
+        if (isset($rows[0]['status']) && $rows[0]['status'] !== 'Y') {
+            $data['listMessage'] = $rows[0]['remarks'] ?? 'No payslips found.';
+        } else {
+            $data['salary'] = $rows;
+        }
+
+        return  view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/payslips',$data)
+            . view('Layouts/Footer');
+    }
+
+    // public function emp_payslip($empid = '', $month = '', $year = '')
+    // {
+    //     try {
+    //         $session = session();
+    //         if (!$session->get('logged_in')) {
+    //             return redirect()->to(base_url('/'));
+    //         }
+    //         $model = new SalaryModel();
+
+    //         // If no values come from URL, use current logged-in employee and current month/year
+    //         if ($empid == '') {
+    //             $empid = $session->get('emp_id');
+    //         }
+
+    //         if ($month == '') {
+    //             $month = date('F');
+    //         }
+
+    //         if ($year == '') {
+    //             $year = date('Y');
+    //         }
+
+    //         // Payslip
+    //         $data['content'] = $model->get_emp_payslip($empid, $month, $year);
+
+    //         // Check DB response
+    //         if (isset($data['content'][0]['status']) && $data['content'][0]['status'] == 'N') {
+    //             $referer = request()->getServer('HTTP_REFERER');
+    //             if (!empty($referer)) {
+    //                 return redirect()->back()->with(
+    //                     'error',
+    //                     $data['content'][0]['remarks']
+    //                 );
+    //             }
+    //             return redirect()->to(base_url('payroll/payslips'))->with(
+    //                 'error',
+    //                 $data['content'][0]['remarks']
+    //             );
+    //         }
+
+    //         // Earnings
+    //         $data['earnings'] = $model->get_emp_allowance($empid, $month, $year);
+
+    //         // Deductions
+    //         $data['deductions'] = $model->get_emp_deductions($empid, $month, $year);
+
+    //         return view('Layouts/Header')
+    //             . view('Layouts/Sidebar')
+    //             . view('employee/new_emp_payslip', $data)
+    //             . view('Layouts/Footer');
+    //     } catch (\Throwable $e) {
+    //         log_message('error', 'emp_payslip Error: ' . $e->getMessage());
+    //         $referer = request()->getServer('HTTP_REFERER');
+    //         $errorMessage = 'Payslip error: ' . $e->getMessage();
+    //         if (!empty($referer)) {
+    //             return redirect()->back()->with('error', $errorMessage);
+    //         }
+    //         return redirect()->to(base_url('payroll/payslips'))->with('error', $errorMessage);
+    //     }
+    // }
+
+        public function emp_payslip($empid = '', $month = '', $year = '')
+    {
+        try {
+            $session = session();
+            if (!$session->get('logged_in')) {
+                return redirect()->to(base_url('/'));
+            }
+
+            $model = new SalaryModel();
+            $sessionId = $session->get('emp_id');
+
+            // If no values come from URL, use request parameters or current logged-in employee and current month/year
+            $empid = !empty($empid) 
+                ? $empid 
+                : ($this->request->getGetPost('emp_id') 
+                    ?? $this->request->getGetPost('staff_id') 
+                    ?? $this->request->getGetPost('staff_d') 
+                    ?? $session->get('emp_id'));
+
+            $monthRaw = !empty($month) 
+                ? $month 
+                : ($this->request->getGetPost('month') ?? date('n'));
+
+            $yearRaw = !empty($year) 
+                ? $year 
+                : ($this->request->getGetPost('year') ?? date('Y'));
+
+            // Parse month to integer 1-12
+            if (is_numeric($monthRaw)) {
+                $monthNum = (int) $monthRaw;
+            } else {
+                $parsedTime = strtotime("1 " . trim($monthRaw) . " " . $yearRaw);
+                $monthNum = $parsedTime ? (int) date('n', $parsedTime) : (int) date('n');
+            }
+            if ($monthNum < 1 || $monthNum > 12) {
+                $monthNum = (int) date('n');
+            }
+
+            // Parse year to integer
+            $yearNum = (int) $yearRaw;
+            if ($yearNum < 2000 || $yearNum > 2100) {
+                $yearNum = (int) date('Y');
+            }
+
+            // Call procedure: payslips_new($sessionId, $empid, $month, $year)
+            $payslipResult = $model->payslips_new($sessionId, $empid, $monthNum, $yearNum);
+
+            // Normalize single row response if returned directly as associative array
+            if (!empty($payslipResult) && is_array($payslipResult) && isset($payslipResult['emp_id'])) {
+                $payslipResult = [$payslipResult];
+            }
+
+            // Check DB response
+            if (!empty($payslipResult) && isset($payslipResult[0]['status']) && strtoupper(trim($payslipResult[0]['status'])) === 'N') {
+                $referer = request()->getServer('HTTP_REFERER');
+                $errorMsg = $payslipResult[0]['remarks'] ?? 'Unable to retrieve payslip details.';
+                if (!empty($referer)) {
+                    return redirect()->back()->with('error', $errorMsg);
+                }
+                return redirect()->to(base_url('payroll/payslips_new'))->with('error', $errorMsg);
+            }
+
+            $firstRow = !empty($payslipResult[0]) ? $payslipResult[0] : [];
+
+            // Parse JSON components column
+            $componentsRaw = $firstRow['components'] ?? '[]';
+            if (is_string($componentsRaw)) {
+                $components = json_decode($componentsRaw, true);
+                if (!is_array($components)) {
+                    $components = [];
+                }
+            } elseif (is_array($componentsRaw)) {
+                $components = $componentsRaw;
+            } else {
+                $components = [];
+            }
+
+            // Dynamically classify components by component_type
+            $earnings = [];
+            $deductions = [];
+            $employerContributions = [];
+
+            foreach ($components as $comp) {
+                $ctype = strtoupper(trim((string) ($comp['component_type'] ?? '')));
+                if ($ctype === 'EARNING') {
+                    $earnings[] = $comp;
+                } elseif ($ctype === 'DEDUCTION') {
+                    $deductions[] = $comp;
+                } elseif ($ctype === 'EMPLOYER_CONTRIBUTION' || $ctype === 'CONTRIBUTION') {
+                    $employerContributions[] = $comp;
+                }
+            }
+
+            $data = [
+                'content'                => $payslipResult,
+                'payslip'                => $firstRow,
+                'components'             => $components,
+                'earnings'               => $earnings,
+                'deductions'             => $deductions,
+                'employer_contributions' => $employerContributions,
+                'month'                  => $monthNum,
+                'year'                   => $yearNum,
+                'selectedEmpId'          => $empid,
+            ];
+
+            return view('Layouts/Header')
+                . view('Layouts/Sidebar')
+                . view('employee/new_emp_payslip', $data)
+                . view('Layouts/Footer');
+        } catch (\Throwable $e) {
+            $referer = request()->getServer('HTTP_REFERER');
+            $errorMessage = 'Payslip error: ' . $e->getMessage();
+            if (!empty($referer)) {
+                return redirect()->back()->with('error', $errorMessage);
+            }
+            return redirect()->to(base_url('payroll/payslips_new'))->with('error', $errorMessage);
+        }
+    }
+
+   public function Sal_invoice()
+   {
+        $session = session();
+        if (!$session->get('logged_in')) {
+        return redirect()->to(base_url('/'));
+        }
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('employee/salaryinvoice')
+            . view('Layouts/Footer');
+   }
+
+
+    public function payroll_dash()
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+        
+        $model = new SalaryModel();
+        $sessionId = $session->get('emp_id');
+        $year = $this->request->getPost('year');
+        if (empty($year) || !is_numeric($year)) {
+            $year = date('Y');
+        }
+        $year = (int) $year;
+        if ($year < 2020 || $year > ((int) date('Y') + 1)) {
+            $year = (int) date('Y');
+        }
+        // Cycles of the year from the payroll cycle engine (includes cycles that have no run yet)
+        $cycles = [];
+        foreach ((new \App\Models\PayrollCycleModel())->cycle_list($sessionId, $year) as $row) {
+            if (!empty($row['payroll_cycle_id'])) {
+                $cycles[] = $row;
+            }
+        }
+        $data = [
+            'selectedYear'  => $year,
+            'payroll_cycles' => $cycles,
+            // the cycle still in progress (any year): the dashboard continues it instead of creating a new one
+            'activeCycle'   => (new \App\Models\PayrollCycleModel())->active_cycle($sessionId),
+        ];
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/payroll_dashboard', $data)
+            . view('Layouts/Footer');
+    }
+
+//    public function create_payroll_cycle()
+//     {
+//         $session = session();
+
+//         if (!$session->get('logged_in')) {
+//             return redirect()->to(base_url('/'));
+//         }
+
+//         $model = new SalaryModel();
+//         $sessionId = $session->get('emp_id');
+
+//         // Get values from payroll popup form
+//         $month     = $this->request->getPost('month');
+//         $year      = $this->request->getPost('year');
+//         $fromdate  = $this->request->getPost('from_date');
+//         $todate    = $this->request->getPost('to_date');
+//         $cyclecode = $this->request->getPost('cycle_code');
+//         $remarks   = $this->request->getPost('remarks');
+
+//         // dd($month,$year,$fromdate,$todate,$cyclecode,$remarks);
+//         // Payment date - if your procedure requires it
+//         $paydate = $this->request->getPost('pay_date');
+
+//         // Basic validation
+//         if (empty($month) || empty($year) || empty($fromdate) || empty($todate) || empty($cyclecode)) {
+//             return redirect()->to(base_url('payroll/payroll_dashboard'))
+//                 ->with('error', 'Please provide all required payroll cycle details.');
+//         }
+
+//         // If payment date is not part of the popup, keep it NULL
+//         if (empty($paydate)) {
+//             $paydate = null;
+//         }
+
+//         if (empty($remarks)) {
+//             $remarks = null;
+//         }
+
+//         $result = $model->create_payroll_cycle(
+//             $sessionId,
+//             $month,
+//             $year,
+//             $paydate,
+//             $fromdate,
+//             $todate,
+//             $remarks,
+//             $cyclecode
+//         );
+
+//         if ($result['']) {
+//             return redirect()->to(base_url('payroll/step1'))
+//                 ->with('success', 'Payroll cycle created successfully.');
+//         }
+
+//         return redirect()->to(base_url('payroll/payroll_dashboard'))
+//             ->with('error', 'Failed to create payroll cycle.');
+//     }
+
+
+    // public function create_payroll_cycle()
+    // {
+    //     $session = session();
+
+    //     if (!$session->get('logged_in')) {
+    //         return redirect()->to(base_url('/'));
+    //     }
+
+    //     $model = new SalaryModel();
+    //     $sessionId = $session->get('emp_id');
+
+    //     // Get values from payroll popup form
+    //     $month     = $this->request->getPost('month');
+    //     $year      = $this->request->getPost('year');
+    //     $fromdate  = $this->request->getPost('from_date');
+    //     $todate    = $this->request->getPost('to_date');
+    //     $cyclecode = $this->request->getPost('cycle_code');
+    //     $remarks   = $this->request->getPost('remarks');
+    //     $paydate   = $this->request->getPost('pay_date');
+
+    //     // Basic validation
+    //     if (
+    //         empty($month) ||
+    //         empty($year) ||
+    //         empty($fromdate) ||
+    //         empty($todate) ||
+    //         empty($cyclecode)
+    //     ) {
+    //         return redirect()->to(base_url('payroll/payroll_dashboard'))
+    //             ->with('error', 'Please provide all required payroll cycle details.');
+    //     }
+
+    //     // Optional values
+    //     $paydate = !empty($paydate) ? $paydate : null;
+    //     $remarks = !empty($remarks) ? $remarks : null;
+
+    //     // Create payroll cycle
+    //     $result = $model->create_payroll_cycle(
+    //         $sessionId,
+    //         $month,
+    //         $year,
+    //         $paydate,
+    //         $fromdate,
+    //         $todate,
+    //         $remarks,
+    //         $cyclecode
+    //     );
+
+    //     // Get status and message returned by model/procedure
+    //     $status  = strtoupper(trim($result['status'] ?? 'N'));
+    //     $message = trim($result['message'] ?? '');
+
+    //     if ($status === 'Y') {
+
+    //         return redirect()->to(
+    //             base_url('payroll/step1') .
+    //             '?month=' . urlencode($month) .
+    //             '&year=' . urlencode($year)
+    //         )->with(
+    //             'success',
+    //             !empty($message)
+    //                 ? $message
+    //                 : 'Payroll cycle created successfully.'
+    //         );
+    //     }
+
+    //     return redirect()->to(
+    //         base_url('payroll/step1') .
+    //         '?month=' . urlencode($month) .
+    //         '&year=' . urlencode($year)
+    //     )->with(
+    //         'error',
+    //         !empty($message)
+    //             ? $message
+    //             : 'Payroll cycle could not be created.'
+    //     );
+    // }
+
+    public function create_payroll_cycle()
+{
+    $session = session();
+
+    if (!$session->get('logged_in')) {
+        return redirect()->to(base_url('/'));
+    }
+
+    // New flow: the cycle is created in status OPEN and processed on the payroll cycle page.
+    $p = fn($k) => trim((string) ($this->request->getPost($k) ?? ''));
+    $row = (new \App\Models\PayrollCycleModel())->cycle_create(
+        $session->get('emp_id'), (int) $p('month'), (int) $p('year'), $p('cycle_code'),
+        $p('from_date') ?: null, $p('to_date') ?: null, $p('pay_date') ?: null, $p('remarks') ?: null
+    )[0] ?? [];
+    $session->remove('pending_cycle');
+    if (strtoupper((string) ($row['status'] ?? 'N')) === 'Y' && !empty($row['payroll_cycle_id'])) {
+        return redirect()->to(base_url('payroll/cycle/' . (int) $row['payroll_cycle_id']))->with('success', $row['remarks']);
+    }
+    return redirect()->to(base_url('payroll/payroll_dashboard'))
+        ->with('error', $row['remarks'] ?? 'Payroll cycle could not be created.');
+
+    /* Old one-step creation (attendance + calculation + approval at once), kept for reference:
+    $model = new SalaryModel();
+    $sessionId = $session->get('emp_id');
+
+    // Retrieve from POST; fallback to session ONLY if returning via s1/complete flow
+    $month     = $this->request->getPost('month')      ?? $session->get('pending_cycle.month');
+    $year      = $this->request->getPost('year')       ?? $session->get('pending_cycle.year');
+    $fromdate  = $this->request->getPost('from_date')  ?? $session->get('pending_cycle.from_date');
+    $todate    = $this->request->getPost('to_date')    ?? $session->get('pending_cycle.to_date');
+    $cyclecode = $this->request->getPost('cycle_code') ?? $session->get('pending_cycle.cycle_code');
+    $remarks   = $this->request->getPost('remarks')    ?? $session->get('pending_cycle.remarks');
+    $paydate   = $this->request->getPost('pay_date')   ?? $session->get('pending_cycle.pay_date');
+
+    // Basic validation
+    if (
+        empty($month) ||
+        empty($year) ||
+        empty($fromdate) ||
+        empty($todate) ||
+        empty($cyclecode)
+    ) {
+        return redirect()->to(base_url('payroll/payroll_dashboard'))
+            ->with('error', 'Please provide all required payroll cycle details.');
+    }
+
+    // Optional values
+    $paydate = !empty($paydate) ? $paydate : null;
+    $remarks = !empty($remarks) ? $remarks : null;
+
+    // Create payroll cycle
+    $result = $model->create_payroll_cycle(
+        $sessionId,
+        $month,
+        $year,
+        $paydate,
+        $fromdate,
+        $todate,
+        $remarks,
+        $cyclecode
+    );
+
+    $status  = strtoupper(trim($result['status'] ?? 'N'));
+    $message = trim($result['message'] ?? '');
+
+    if ($status === 'Y') {
+        // Clear pending session data if present
+        $session->remove('pending_cycle');
+
+        return redirect()->to(
+            base_url('payroll/step1') .
+            '?month=' . urlencode($month) .
+            '&year=' . urlencode($year)
+        )->with(
+            'success',
+            !empty($message) ? $message : 'Payroll cycle created successfully.'
+        );
+    }
+
+    // FAILED / ATTENDANCE NOT FINALIZED:
+    // Store in session and attach s1=1 to trigger the special attendance-link flow
+    $session->set('pending_cycle', [
+        'month'      => $month,
+        'year'       => $year,
+        'from_date'  => $fromdate,
+        'to_date'    => $todate,
+        'cycle_code' => $cyclecode,
+        'pay_date'   => $paydate,
+        'remarks'    => $remarks,
+    ]);
+
+    return redirect()->to(
+        base_url('payroll/step1') .
+        '?month=' . urlencode($month) .
+        '&year=' . urlencode($year) .
+        '&s1=1'
+    )->with(
+        'error',
+        !empty($message) ? $message : 'Payroll cycle could not be created.'
+    );
+    */
+}
+
+// public function create_payroll_cycle()
+// {
+//     $session = session();
+
+//     if (!$session->get('logged_in')) {
+//         return redirect()->to(base_url('login'));
+//     }
+
+//     $model = new SalaryModel();
+//     $sessionId = $session->get('emp_id');
+
+//     // Check whether this is the return after attendance finalization
+//     $complete = $this->request->getGet('complete');
+
+//     if ($complete === 'complete') {
+
+//         // Retrieve original payroll cycle details from session
+//         $cycleData = $session->get('payroll_cycle_context');
+
+//         if (empty($cycleData) || !is_array($cycleData)) {
+//             return redirect()->to(base_url('payroll/payroll_dashboard'))
+//                 ->with('error', 'Original payroll cycle details were not found.');
+//         }
+
+//         // Retrieve original values
+//         $month     = $cycleData['month'];
+//         $year      = $cycleData['year'];
+//         $fromdate  = $cycleData['from_date'];
+//         $todate    = $cycleData['to_date'];
+//         $cyclecode = $cycleData['cycle_code'];
+//         $paydate   = $cycleData['pay_date'];
+//         $remarks   = $cycleData['remarks'];
+
+//     } else {
+
+//         // Initial payroll cycle form submission
+//         $month     = (int) $this->request->getPost('month');
+//         $year      = (int) $this->request->getPost('year');
+//         $fromdate  = $this->request->getPost('from_date');
+//         $todate    = $this->request->getPost('to_date');
+//         $cyclecode = $this->request->getPost('cycle_code');
+//         $paydate   = $this->request->getPost('pay_date') ?: null;
+//         $remarks   = $this->request->getPost('remarks') ?: null;
+//         // Validate required fields
+//         if (
+//             !$month || !$year ||
+//             empty($fromdate) ||
+//             empty($todate) ||
+//             empty($cyclecode)
+//         ) {
+//             return redirect()->back()
+//                 ->with('error', 'Please provide all required payroll cycle details.');
+//         }
+
+//         // Save original payroll cycle details
+//         $cycleData = [
+//             'month'      => $month,
+//             'year'       => $year,
+//             'from_date'  => $fromdate,
+//             'to_date'    => $todate,
+//             'cycle_code' => $cyclecode,
+//             'pay_date'   => $paydate,
+//             'remarks'    => $remarks,
+//         ];
+
+//         $session->set('payroll_cycle_context', $cycleData);
+//     }
+
+//     // Call the same model method in both situations
+//     $result = $model->create_payroll_cycle(
+//         $sessionId,
+//         $month,
+//         $year,
+//         $paydate,
+//         $fromdate,
+//         $todate,
+//         $remarks,
+//         $cyclecode
+//     );
+
+//     $status  = $result['status'] ?? 'N';
+//     $message = $result['message'] ?? 'Unable to process payroll cycle.';
+
+//     if (strtoupper((string) $status) === 'Y') {
+
+//         if ($complete === 'complete') {
+//             return redirect()->to(base_url('payroll/step1'))
+//                 ->with('success', $message);
+//         }
+
+//         return redirect()->to(
+//             base_url('payroll/step1')
+//             . '?month=' . $month
+//             . '&year=' . $year
+//             . '&s1=s1'
+//         )->with('success', $message);
+//     }
+
+//     return redirect()->to(base_url('payroll/payroll_dashboard'))
+//         ->with('error', $message);
+// }
+
+
+    # Get Salary Components 
+    public function sal_comp()
+   {
+        $session = session();
+        if (!$session->get('logged_in')) {
+        return redirect()->to(base_url('/'));
+        }
+        $model = new SalaryModel();
+        $emp_id = $session->get('emp_id');
+        $data['salary_components'] = $model->salary_components($emp_id);
+        // dd($data['salary_components']); // Debugging line to check the data
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/salary_components', $data)
+            . view('Layouts/Footer');
+   }
+
+   # Manage Salary Components
+    public function manage_sal_comp()
+    {
+        $session = session();
+        
+        // Check session authorization
+        if (!$session->get('logged_in')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status'  => false, 
+                    'message' => 'Unauthorized or expired session. Please log in again.'
+                ])->setStatusCode(401);
+            }
+            return redirect()->to(base_url('/'));
+        }
+
+        $model  = new SalaryModel();
+        $emp_id = $session->get('emp_id');
+
+        // Extract input parameters
+        $requested_action = strtoupper(trim($this->request->getPost('action') ?? ''));
+        $component_id     = $this->request->getPost('component_id');
+        $code             = trim($this->request->getPost('code') ?? '');
+        $name             = trim($this->request->getPost('name') ?? '');
+        $type             = $this->request->getPost('type');
+        $calculation_type = $this->request->getPost('calculation_type');
+        $percentage_base  = $this->request->getPost('percentage_base');
+        $percentage       = $this->request->getPost('percentage');
+        $taxable          = $this->request->getPost('taxable');
+        $active           = $this->request->getPost('active');
+
+        // Dynamic engine fields (formula, limits, calculation order, eligibility)
+        $formula_expression         = trim((string) ($this->request->getPost('formula_expression') ?? ''));
+        $minimum_amount             = $this->request->getPost('minimum_amount');
+        $maximum_amount             = $this->request->getPost('maximum_amount');
+        $calculation_order          = $this->request->getPost('calculation_order');
+        $eligibility_parameter      = trim((string) ($this->request->getPost('eligibility_parameter') ?? ''));
+        $eligibility_required_value = $eligibility_parameter !== '' ? 'Y' : null;
+        $rounding_precision         = $this->request->getPost('rounding_precision');
+
+        // Component kind, manual flag, slabs entered on the same form, and "check only"
+        $calculation_scope = strtoupper(trim((string) ($this->request->getPost('calculation_scope') ?? ''))) ?: 'COMPONENT';
+        $is_manual = $this->request->getPost('is_manual') ? 1 : 0;
+        $is_slab   = $this->request->getPost('is_slab') ? 1 : 0;
+        $slab_json = $this->request->getPost('slabs');          // JSON array string, or null when not sent
+        if ($slab_json !== null && !$is_slab) {
+            $slab_json = '[]';                                   // not a slab component: remove its slabs
+        }
+        $dry_run = $this->request->getPost('dry_run') ? 1 : 0;
+
+        // Resolve Action branch
+        if ($requested_action === 'ACTIVE') {
+            $action           = 'ACTIVE';
+            $code             = null;
+            $name             = null;
+            $type             = null;
+            $calculation_type = null;
+            $percentage_base  = null;
+            $percentage       = null;
+            $taxable          = null;
+            $formula_expression = $minimum_amount = $maximum_amount = $calculation_order = null;
+            $eligibility_parameter = $eligibility_required_value = $rounding_precision = null;
+            $is_manual = $is_slab = $slab_json = null;
+            $dry_run = 0;
+        } elseif (!empty($component_id) && $component_id !== 'NULL' && $requested_action === 'UPDATE') {
+            $action = 'UPDATE';
+        } else {
+            $action       = 'INSERT';
+            $component_id = null;
+        }
+
+        // Execute Model / Stored Procedure with Exception Protection
+        try {
+            $result = $model->manage_salary_components(
+                $emp_id,
+                $action,
+                $component_id,
+                $code,
+                $name,
+                $type,
+                $calculation_type,
+                $percentage_base,
+                $percentage,
+                $taxable,
+                $active,
+                $formula_expression,
+                $minimum_amount,
+                $maximum_amount,
+                $calculation_scope,
+                $calculation_order,
+                $eligibility_parameter,
+                $eligibility_required_value,
+                $is_slab,
+                $rounding_precision,
+                $is_manual,
+                $slab_json,
+                $dry_run
+            );
+        } catch (\Throwable $e) {
+            log_message('error', 'manage_sal_comp exception: ' . $e->getMessage());
+
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status'  => false,
+                    'message' => 'Database error: ' . $e->getMessage()
+                ])->setStatusCode(500);
+            }
+
+            return redirect()->to(base_url('payroll/salary_components'))->with('error', $e->getMessage());
+        }
+
+        // The procedure always answers with one row: status (Y/N) and remarks.
+        $row = $this->firstProcedureRow($result);
+        $ok  = strtoupper(trim((string) ($row['status'] ?? 'N'))) === 'Y';
+
+        $actionMessages = [
+            'INSERT' => 'Salary component added successfully.',
+            'UPDATE' => 'Salary component updated successfully.',
+            'ACTIVE' => 'Component status updated successfully.'
+        ];
+        $msg = trim((string) ($row['remarks'] ?? ''));
+        if ($msg === '') {
+            $msg = $ok
+                ? ($actionMessages[$action] ?? 'Operation completed successfully.')
+                : "Failed to execute {$action} on salary component.";
+        }
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'status'       => $ok,
+                'action'       => $action,
+                'dry_run'      => (bool) $dry_run,
+                'message'      => $msg,
+                'component_id' => $row['component_id'] ?? null,
+                'csrf_token'   => csrf_hash() // Send refreshed CSRF token if regeneration is on
+            ]);
+        }
+
+        return redirect()->to(base_url('payroll/salary_components'))->with($ok ? 'success' : 'error', $msg);
+    }
+
+    /**
+     * First row of a procedure result, whether the model returned a list of rows or one row.
+     */
+    private function firstProcedureRow($result): array
+    {
+        if (is_array($result) && isset($result[0]) && is_array($result[0])) {
+            return $result[0];
+        }
+        return (is_array($result) && isset($result['status'])) ? $result : [];
+    }
+
+    # Components page: "Check formula" button
+    public function validate_formula()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+
+        $model = new SalaryModel();
+        $row = $this->firstProcedureRow($model->validate_component_formula(
+            $session->get('emp_id'),
+            $this->request->getPost('component_id'),
+            strtoupper(trim((string) ($this->request->getPost('code') ?? ''))),
+            $this->request->getPost('calculation_order'),
+            trim((string) ($this->request->getPost('formula_expression') ?? ''))
+        ));
+
+        return $this->response->setJSON([
+            'status'        => strtoupper(trim((string) ($row['status'] ?? 'N'))) === 'Y',
+            'message'       => $row['remarks'] ?? 'Formula could not be checked.',
+            'sample_result' => $row['sample_result'] ?? null,
+            'csrf_token'    => csrf_hash(),
+        ]);
+    }
+
+    # Components page: slabs of one component
+    public function component_slabs()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+
+        $componentId = (int) $this->request->getGet('component_id');
+        $model = new SalaryModel();
+        $rows  = $model->component_slabs($session->get('emp_id'), $componentId);
+        $first = $this->firstProcedureRow($rows);
+        $ok    = strtoupper(trim((string) ($first['status'] ?? 'N'))) === 'Y';
+
+        $slabs = [];
+        if ($ok) {
+            foreach ($rows as $r) {
+                if (!empty($r['slab_id'])) {
+                    unset($r['status'], $r['remarks']);
+                    $slabs[] = $r;
+                }
+            }
+        }
+
+        return $this->response->setJSON([
+            'status'  => $ok,
+            'message' => $first['remarks'] ?? '',
+            'slabs'   => $slabs,
+        ]);
+    }
+
+    # Components page: save all slabs of one component
+    public function save_component_slabs()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+
+        $componentId = (int) $this->request->getPost('component_id');
+        $slabJson    = (string) ($this->request->getPost('slabs') ?? '');
+        $decoded     = json_decode($slabJson, true);
+
+        if ($componentId <= 0 || !is_array($decoded)) {
+            return $this->response->setJSON([
+                'status'     => false,
+                'message'    => 'Component and slab list are required.',
+                'csrf_token' => csrf_hash(),
+            ]);
+        }
+
+        $model = new SalaryModel();
+        $row = $this->firstProcedureRow($model->save_component_slabs(
+            $session->get('emp_id'),
+            $componentId,
+            json_encode(array_values($decoded))
+        ));
+
+        return $this->response->setJSON([
+            'status'     => strtoupper(trim((string) ($row['status'] ?? 'N'))) === 'Y',
+            'message'    => $row['remarks'] ?? 'Slabs could not be saved.',
+            'slab_count' => $row['slab_count'] ?? 0,
+            'csrf_token' => csrf_hash(),
+        ]);
+    }
+
+
+    public function sal_struct()
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $model = new SalaryModel();
+        $sessionId = $session->get('emp_id');
+
+        $data['salary_structure'] = $model->salary_structure($sessionId, null);
+        $data['without_salary'] = $model->employees_without_salary($sessionId);   // new joiners
+        $data['esi_review'] = $model->esi_review($sessionId);                     // ESI off but gross within the limit
+        $data['esi_limit'] = $model->esi_wage_limit();
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/salary_structure', $data)
+            . view('Layouts/Footer');
+    }
+
+    public function update_salary_component()
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $id                 = $session->get('emp_id');
+        $employee_id        = $this->request->getPost('employee_id');
+        $component_id       = $this->request->getPost('component_id');
+        $calculation_type   = $this->request->getPost('calculation_type');
+        $component_value    = $this->request->getPost('component_value');
+        $percentage_base    = $this->request->getPost('percentage_base');
+        $formula_expression = $this->request->getPost('formula_expression');
+
+        $model = new SalaryModel();
+
+        $success = $model->edit_salary_structure(
+            $id,
+            $employee_id,
+            $component_id,
+            $calculation_type,
+            $component_value,
+            $percentage_base,
+            $formula_expression
+        );
+
+        // The procedure answers with status (Y/N) and remarks; the salary is recalculated by the engine.
+        $row = (is_array($success) && isset($success[0])) ? $success[0] : [];
+        $ok  = strtoupper((string) ($row['status'] ?? 'N')) === 'Y';
+        return redirect()->to(site_url('payroll/salary_structure'))
+            ->with($ok ? 'success' : 'error', $row['remarks'] ?? ($ok ? 'Salary component updated successfully.' : 'Unable to update salary component.'));
+    }
+
+    # Salary structure page: live preview from the salary engine (nothing is saved)
+    public function preview_salary_structure()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+
+        $ctc     = $this->request->getPost('monthly_ctc');
+        $changes = json_decode((string) ($this->request->getPost('changes') ?? '[]'), true);
+        $changes = is_array($changes) ? array_values($changes) : [];
+
+        $structureId = (int) $this->request->getPost('structure_id');
+        $rows = (new SalaryModel())->preview_salary_structure(
+            $session->get('emp_id'),
+            strtoupper(trim((string) $this->request->getPost('emp_id'))),
+            ($ctc === null || $ctc === '') ? null : (float) $ctc,
+            json_encode($changes),
+            $structureId > 0 ? $structureId : null
+        );
+        return $this->previewJson($rows);
+    }
+
+    /**
+     * Where the employee salary page goes back to: the payroll cycle it was opened
+     * from (return=cycle/{id}) or the salary structure list. Only these two.
+     */
+    private function salaryReturnUrl(?string $return): string
+    {
+        $return = trim((string) $return);
+        if (preg_match('#^cycle/(\d+)$#', $return, $m)) {
+            return base_url('payroll/cycle/' . (int) $m[1]);
+        }
+        return base_url('payroll/salary_structure');
+    }
+
+    /** Preview rows (C-074 / C-083 shape) as JSON: amounts and totals by component code. */
+    private function previewJson(array $rows)
+    {
+        $first = $rows[0] ?? [];
+        $ok = strtoupper((string) ($first['status'] ?? 'N')) === 'Y';
+        $amounts = [];
+        $types = [];
+        $totals = [];
+        if ($ok) {
+            foreach ($rows as $r) {
+                $code = strtoupper((string) ($r['component_code'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                if (strtoupper((string) $r['calculation_scope']) === 'AGGREGATE') {
+                    $totals[$code] = (float) $r['monthly_amount'];
+                } else {
+                    $amounts[$code] = (float) $r['monthly_amount'];
+                    $types[$code] = $r['component_type'];
+                }
+            }
+        }
+        return $this->response->setJSON([
+            'status'     => $ok,
+            'message'    => $first['remarks'] ?? 'Preview failed.',
+            'amounts'    => $amounts,
+            'types'      => $types,
+            'totals'     => $totals,
+            'csrf_token' => csrf_hash(),
+        ]);
+    }
+
+    # GET payroll/salary_structure/new/{emp_id}?from=YYYY-MM-DD&return=cycle/{id} : add a salary
+    public function new_salary($empId = null)
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $empId  = strtoupper(trim((string) $empId));
+        $return = (string) ($this->request->getGet('return') ?? '');
+        $model  = new SalaryModel();
+        $me     = $session->get('emp_id');
+
+        $periods = $model->salary_periods($me, $empId);
+        $first   = $periods[0] ?? [];
+        if (strtoupper((string) ($first['status'] ?? 'N')) !== 'Y') {
+            return redirect()->to($this->salaryReturnUrl($return))->with('error', $first['remarks'] ?? 'Employee not found.');
+        }
+        if (strtolower((string) ($first['login_status'] ?? '')) !== 'active') {
+            return redirect()->to($this->salaryReturnUrl($return))
+                ->with('error', 'Employee ' . $empId . ' is not active, so a salary cannot be added.');
+        }
+
+        // default "applies from": the joining date, or the start of the payroll period it was opened from if that is later
+        $fromParam = (string) ($this->request->getGet('from') ?? '');
+        $fromParam = preg_match('/^\d{4}-\d{2}-\d{2}$/', $fromParam) ? $fromParam : '';
+        $joining   = (string) ($first['joining_date'] ?? '');
+        $candidates = array_filter([$fromParam, $joining]);
+        $defaultFrom = $candidates ? max($candidates) : date('Y-m-d');
+
+        $rules = [];
+        foreach ($model->salary_period_components($me, null) as $c) {
+            if (!empty($c['component_id'])) {
+                $rules[] = $c;
+            }
+        }
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/salary_structure_new', [
+                'esiLimit'    => $model->esi_wage_limit(),   // from the ESI slabs
+                'employee'    => $first,
+                'periods'     => array_values(array_filter($periods, fn($p) => !empty($p['structure_id']))),
+                'components'  => $rules,
+                'defaultFrom' => $defaultFrom,
+                'returnParam' => preg_match('#^cycle/\d+$#', $return) ? $return : '',
+                'returnUrl'   => $this->salaryReturnUrl($return),
+            ])
+            . view('Layouts/Footer');
+    }
+
+    # POST payroll/salary_structure/new_preview : amounts of the new salary (nothing saved)
+    public function preview_new_salary()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+        $ctc = $this->request->getPost('monthly_ctc');
+        return $this->previewJson((new SalaryModel())->preview_new_salary(
+            $session->get('emp_id'),
+            strtoupper(trim((string) $this->request->getPost('emp_id'))),
+            ($ctc === null || $ctc === '') ? null : (float) $ctc,
+            strtoupper(trim((string) $this->request->getPost('esi'))) === 'Y' ? 'Y' : 'N'
+        ));
+    }
+
+    # POST payroll/salary_structure/create : create the salary with every active component
+    public function create_employee_salary()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+        $empId  = strtoupper(trim((string) $this->request->getPost('emp_id')));
+        $ctc    = $this->request->getPost('monthly_ctc');
+        $from   = trim((string) ($this->request->getPost('effective_from') ?? ''));
+        $esi    = strtoupper(trim((string) ($this->request->getPost('esi') ?? '')));
+        $return = (string) ($this->request->getPost('return') ?? '');
+
+        $row = (new SalaryModel())->create_employee_salary(
+            $session->get('emp_id'),
+            $empId,
+            ($ctc === null || $ctc === '') ? null : (float) $ctc,
+            $from !== '' ? $from : null,
+            $esi
+        )[0] ?? [];
+        $ok = strtoupper((string) ($row['status'] ?? 'N')) === 'Y';
+        if ($ok) {
+            $session->setFlashdata('success', $empId . ': ' . ($row['remarks'] ?? 'Salary created.'));
+        }
+
+        return $this->response->setJSON([
+            'status'       => $ok,
+            'message'      => $row['remarks'] ?? 'The salary could not be created.',
+            'structure_id' => $row['structure_id'] ?? null,
+            'redirect'     => $ok ? $this->salaryReturnUrl($return) : null,
+            'csrf_token'   => csrf_hash(),
+        ]);
+    }
+
+    # GET payroll/salary_structure/edit/{emp_id}?period={structure_id}&return=cycle/{id}
+    public function edit_salary_structure($empId = null)
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $empId  = strtoupper(trim((string) $empId));
+        $return = (string) ($this->request->getGet('return') ?? '');
+        $model  = new SalaryModel();
+        $me     = $session->get('emp_id');
+
+        $periods = $model->salary_periods($me, $empId);
+        $first   = $periods[0] ?? [];
+        if (strtoupper((string) ($first['status'] ?? 'N')) !== 'Y') {
+            return redirect()->to($this->salaryReturnUrl($return))
+                ->with('error', $first['remarks'] ?? 'Employee not found.');
+        }
+
+        // the period to edit: ?period=, else the salary in force today, else the newest
+        $periods = array_values(array_filter($periods, fn($p) => !empty($p['structure_id'])));
+        $wanted  = (int) ($this->request->getGet('period') ?? 0);
+        $current = null;
+        foreach ($periods as $p) {
+            if ($wanted > 0 && (int) $p['structure_id'] === $wanted) {
+                $current = $p;
+                break;
+            }
+        }
+        if ($current === null) {
+            foreach ($periods as $p) {
+                if ((int) $p['is_current'] === 1) {
+                    $current = $p;
+                    break;
+                }
+            }
+        }
+        if ($current === null && !empty($periods)) {
+            $current = $periods[0];
+        }
+
+        $components = [];
+        if ($current !== null) {
+            foreach ($model->salary_period_components($me, (int) $current['structure_id']) as $c) {
+                if (!empty($c['component_id'])) {
+                    $components[] = $c;
+                }
+            }
+        }
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/salary_structure_edit', [
+                'employee'   => $first,
+                'periods'    => $periods,
+                'current'    => $current,
+                'components' => $components,
+                'returnParam' => preg_match('#^cycle/\d+$#', $return) ? $return : '',
+                'returnUrl'  => $this->salaryReturnUrl($return),
+            ])
+            . view('Layouts/Footer');
+    }
+
+    # POST payroll/salary_structure/save : CTC, applies-from date and all changed components in one step
+    public function save_employee_salary()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+
+        $empId   = strtoupper(trim((string) $this->request->getPost('emp_id')));
+        $changes = json_decode((string) ($this->request->getPost('changes') ?? '[]'), true);
+        $changes = is_array($changes) ? array_values($changes) : [];
+        $ctc     = $this->request->getPost('monthly_ctc');
+        $from    = trim((string) ($this->request->getPost('effective_from') ?? ''));
+        $return  = (string) ($this->request->getPost('return') ?? '');
+
+        $rows = (new SalaryModel())->save_employee_salary(
+            $session->get('emp_id'),
+            $empId,
+            (int) $this->request->getPost('structure_id'),
+            ($ctc === null || $ctc === '') ? null : (float) $ctc,
+            $from !== '' ? $from : null,
+            json_encode($changes)
+        );
+        $row = $rows[0] ?? [];
+        $ok  = strtoupper((string) ($row['status'] ?? 'N')) === 'Y';
+
+        if ($ok) {
+            $session->setFlashdata('success', $row['remarks'] ?? 'Salary saved.');
+        }
+        // back to the payroll cycle it came from; otherwise stay on this employee's (new) salary period
+        $next = preg_match('#^cycle/\d+$#', $return)
+            ? $this->salaryReturnUrl($return)
+            : base_url('payroll/salary_structure/edit/' . rawurlencode($empId) . '?period=' . (int) ($row['structure_id'] ?? 0));
+
+        return $this->response->setJSON([
+            'status'       => $ok,
+            'message'      => $row['remarks'] ?? 'The salary could not be saved.',
+            'structure_id' => $row['structure_id'] ?? null,
+            'new_period'   => (int) ($row['new_period'] ?? 0),
+            'redirect'     => $ok ? $next : null,
+            'csrf_token'   => csrf_hash(),
+        ]);
+    }
+
+    public function update_monthly_ctc()
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $model = new SalaryModel();
+
+        $sessionId = $session->get('emp_id');
+        $empId = $this->request->getPost('emp_id');
+        $salary = (float) $this->request->getPost('monthly_ctc');
+        $effectiveDate = $this->request->getPost('effective_from') ?: date('Y-m-d');
+
+        $success = $model->update_salary_structure(
+            $sessionId,
+            $empId,
+            $salary,
+            $effectiveDate
+        );
+
+        $row = (is_array($success) && isset($success[0])) ? $success[0] : [];
+        $ok  = strtoupper((string) ($row['status'] ?? 'N')) === 'Y';
+        return redirect()->to(site_url('payroll/salary_structure'))
+            ->with($ok ? 'success' : 'error', $row['remarks'] ?? ($ok ? 'Monthly CTC updated successfully.' : 'Unable to update Monthly CTC.'));
+    }
+
+    /**
+     * The old step pages (step1-step4) send the user to the payroll cycle page of the
+     * selected month; without a cycle for that month, to the payroll dashboard.
+     */
+    private function redirectToCycle()
+    {
+        $month = (int) ($this->request->getGetPost('month') ?: date('n'));
+        $year  = (int) ($this->request->getGetPost('year') ?: date('Y'));
+        $id = \App\Controllers\PayrollCycleController::cycleIdFor($month, $year);
+        $target = $id ? base_url('payroll/cycle/' . $id) : base_url('payroll/payroll_dashboard');
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'status'   => 'N',
+                'message'  => 'Payroll steps now run on the payroll cycle page.',
+                'remarks'  => 'Payroll steps now run on the payroll cycle page.',
+                'redirect' => $target,
+            ]);
+        }
+        return $id
+            ? redirect()->to($target)
+            : redirect()->to($target)->with('error', 'No payroll cycle exists for that month yet. Create one first.');
+    }
+
+
+
+    // public function step1()
+    // {
+    //     $session = session();
+
+    //     if (!$session->get('logged_in')) {
+    //         return redirect()->to(base_url('login'));
+    //     }
+
+    //     $model = new AdminModel();
+    //     $adminEmpId = $session->get('emp_id');
+
+    //     // Read the selected payroll month/year from GET or POST.
+    //     $month = (int) ($this->request->getPostGet('month') ?: date('m'));
+    //     $year  = (int) ($this->request->getPostGet('year') ?: date('Y'));
+
+    //     // Validate the selected period.
+    //     if ($month < 1 || $month > 12) {
+    //         $month = (int) date('m');
+    //     }
+    //     if ($year < 2000 || $year > 2100) {
+    //         $year = (int) date('Y');
+    //     }
+
+    //     // Step 1: Check whether attendance is finalized for the selected period.
+    //     $Attendance_generate = $model->get_attendance_finalized($month, $year);
+    //     $Attendance_generate = is_array($Attendance_generate) ? $Attendance_generate : [];
+
+    //     $attendance_status = $Attendance_generate[0]['attendance_status'] ?? 'N';
+    //     $attendanceStatus = strtoupper(trim((string) $attendance_status));
+    //     $is_status_true = in_array($attendanceStatus, ['Y', '1', 'TRUE'], true);
+
+    //     // Step 2: Fetch payroll attendance data only after attendance is finalized.
+    //     $records = [];
+    //     $is_finalized = false;
+
+    //     if ($is_status_true) {
+    //         $records = $model->get_payroll_attendance_data($month, $year, $adminEmpId);
+    //         $records = is_array($records) ? $records : [];
+
+    //         if (!empty($records)) {
+    //             $recordFinalized = strtoupper(trim((string) ($records[0]['is_finalized'] ?? 'N')));
+    //             $is_finalized = in_array($recordFinalized, ['Y', '1', 'TRUE'], true);
+    //         }
+    //     }
+
+    //     $data = [
+    //         'title'                 => 'Payroll Attendance Verification',
+    //         'records'               => $records,
+    //         'selectedMonth'         => $month,
+    //         'selectedYear'          => $year,
+    //         'is_finalized'          => $is_finalized,
+    //         'att_gen'               => $Attendance_generate,
+    //         'attendance_status'     => $attendance_status,
+    //          'attendanceFinalizeUrl' => base_url('admin/attendance_finalize')
+    //             . '?month=' . urlencode($month)
+    //             . '&year=' . urlencode($year),
+    //     ];
+
+    //     return view('Layouts/Header')
+    //         . view('Layouts/Sidebar')
+    //         . view('payroll/step1', $data)
+    //         . view('Layouts/Footer');
+    // }
+
+public function step1()
+{
+    $session = session();
+
+    if (!$session->get('logged_in')) {
+        return redirect()->to(base_url('login'));
+    }
+
+    // The payroll cycle page now runs every step; this old step page sends you there.
+    $toCycle = $this->redirectToCycle();
+    if ($toCycle) {
+        return $toCycle;
+    }
+
+    $model = new AdminModel();
+    $adminEmpId = $session->get('emp_id');
+
+    // Read query flags and month/year
+    $month    = (int) ($this->request->getPostGet('month') ?: date('m'));
+    $year     = (int) ($this->request->getPostGet('year') ?: date('Y'));
+    $isS1     = $this->request->getGet('s1');
+    $complete = $this->request->getGet('complete');
+
+    // Validate the selected period
+    if ($month < 1 || $month > 12) {
+        $month = (int) date('m');
+    }
+    if ($year < 2000 || $year > 2100) {
+        $year = (int) date('Y');
+    }
+
+    // Step 1: Check whether attendance is finalized
+    $Attendance_generate = $model->get_attendance_finalized($month, $year);
+    $Attendance_generate = is_array($Attendance_generate) ? $Attendance_generate : [];
+
+    $attendance_status = $Attendance_generate[0]['attendance_status'] ?? 'N';
+    $attendanceStatus  = strtoupper(trim((string) $attendance_status));
+    $is_status_true    = in_array($attendanceStatus, ['Y', '1', 'TRUE'], true);
+
+    // ONLY re-trigger create_payroll_cycle() if explicitly returned via the complete flow
+    if ($complete && $is_status_true && $session->has('pending_cycle')) {
+        return $this->create_payroll_cycle();
+    }
+
+    // Step 2: Fetch payroll attendance data only after attendance is finalized
+    $records = [];
+    $is_finalized = false;
+
+    if ($is_status_true) {
+        $records = $model->get_payroll_attendance_data($month, $year, $adminEmpId);
+        $records = is_array($records) ? $records : [];
+
+        if (!empty($records)) {
+            $recordFinalized = strtoupper(trim((string) ($records[0]['is_finalized'] ?? 'N')));
+            $is_finalized = in_array($recordFinalized, ['Y', '1', 'TRUE'], true);
+        }
+    }
+
+    // Base URL as per your original controller
+    $finalizeUrl = base_url('admin/attendance_finalize')
+        . '?month=' . urlencode($month)
+        . '&year=' . urlencode($year);
+
+    // ONLY append &s1=1 if the user came here through the s1 flow
+    if (!empty($isS1)) {
+        $finalizeUrl .= '&s1=1';
+    }
+
+    $data = [
+        'title'                 => 'Payroll Attendance Verification',
+        'records'               => $records,
+        'selectedMonth'         => $month,
+        'selectedYear'          => $year,
+        'is_finalized'          => $is_finalized,
+        'att_gen'               => $Attendance_generate,
+        'attendance_status'     => $attendance_status,
+        'attendanceFinalizeUrl' => $finalizeUrl,
+    ];
+
+    return view('Layouts/Header')
+        . view('Layouts/Sidebar')
+        . view('payroll/step1', $data)
+        . view('Layouts/Footer');
+}
+
+// public function step1()
+// {
+//     $session = session();
+//     if (!$session->get('logged_in')) {
+//         return redirect()->to(base_url('login'));
+//     }
+
+//     $model = new AdminModel();
+//     $adminEmpId = $session->get('emp_id');
+
+//     // Read selected payroll month/year and s1
+//     $month = (int) ($this->request->getPostGet('month') ?: date('m'));
+//     $year  = (int) ($this->request->getPostGet('year') ?: date('Y'));
+//     $s1 = $this->request->getPostGet('s1');
+
+//     // Validate selected period
+//     if ($month < 1 || $month > 12) {
+//         $month = (int) date('m');
+//     }
+//     if ($year < 2000 || $year > 2100) {
+//         $year = (int) date('Y');
+//     }
+
+//     // Check whether attendance is finalized for the selected period
+//     $Attendance_generate = $model->get_attendance_finalized($month, $year);
+//     $Attendance_generate = is_array($Attendance_generate) ? $Attendance_generate : [];
+
+//     $attendance_status = $Attendance_generate[0]['attendance_status'] ?? 'N';
+//     $attendanceStatus = strtoupper(trim((string) $attendance_status));
+//     $is_status_true = in_array($attendanceStatus, ['Y', '1', 'TRUE'], true);
+
+//     // Fetch payroll attendance data only after attendance is finalized
+//     $records = [];
+//     $is_finalized = false;
+
+//     if ($is_status_true) {
+//         $records = $model->get_payroll_attendance_data($month, $year, $adminEmpId);
+//         $records = is_array($records) ? $records : [];
+
+//         if (!empty($records)) {
+//             $recordFinalized = strtoupper(trim((string) ($records[0]['is_finalized'] ?? 'N')));
+//             $is_finalized = in_array($recordFinalized, ['Y', '1', 'TRUE'], true);
+//         }
+//     }
+
+//     // Build Attendance Finalize URL
+//     $attendanceFinalizeUrl = base_url('admin/attendance_finalize')
+//         . '?month=' . urlencode((string) $month)
+//         . '&year=' . urlencode((string) $year)
+//         . '&s1=' . urlencode((string) $s1);
+
+//     $data = [
+//         'title'                 => 'Payroll Attendance Verification',
+//         'records'               => $records,
+//         'selectedMonth'         => $month,
+//         'selectedYear'          => $year,
+//         'is_finalized'          => $is_finalized,
+//         'att_gen'               => $Attendance_generate,
+//         'attendance_status'     => $attendance_status,
+//         's1'                    => $s1,
+//         'attendanceFinalizeUrl' => $attendanceFinalizeUrl,
+//     ];
+
+//     return view('Layouts/Header')
+//         . view('Layouts/Sidebar')
+//         . view('payroll/step1', $data)
+//         . view('Layouts/Footer');
+// }
+
+
+    #step 2
+
+public function step2()
+{
+    $session = session();
+
+    // Check login session.
+    if (!$session->get('logged_in')) {
+        return redirect()->to(base_url('/'));
+    }
+
+    // The payroll cycle page now runs every step; this old step page sends you there.
+    $toCycle = $this->redirectToCycle();
+    if ($toCycle) {
+        return $toCycle;
+    }
+
+    $model = new SalaryModel();
+    $sessionId = $session->get('emp_id');
+
+    // Read selected payroll month and year from the URL.
+    $month = $this->request->getGet('month');
+    $year  = $this->request->getGet('year');
+
+    $month = ($month !== null && ctype_digit((string) $month))
+        ? (int) $month
+        : (int) date('m');
+
+    $year = ($year !== null && ctype_digit((string) $year))
+        ? (int) $year
+        : (int) date('Y');
+
+    // Validate selected period.
+    if ($month < 1 || $month > 12) {
+        $month = (int) date('m');
+    }
+
+    if ($year < 2000 || $year > 2100) {
+        $year = (int) date('Y');
+    }
+
+    // Load existing salary structure data.
+    $data['salary_structure'] = $model->salary_structure($sessionId, null);
+
+    // Send selected period to the view.
+    $data['selectedMonth'] = $month;
+    $data['selectedYear']  = $year;
+
+    return view('Layouts/Header')
+        . view('Layouts/Sidebar')
+        . view('payroll/step2', $data)
+        . view('Layouts/Footer');
+}
+
+
+
+    #step3
+    public function step3()
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+    // The payroll cycle page now runs every step; this old step page sends you there.
+    $toCycle = $this->redirectToCycle();
+    if ($toCycle) {
+        return $toCycle;
+    }
+
+        $sessionId = $session->get('emp_id');
+        $month = (int) ($this->request->getGet('month') ?? date('n'));
+        $year = (int) ($this->request->getGet('year') ?? date('Y'));
+
+        if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
+            return redirect()->back()->with('error', 'Invalid payroll month or year.');
+        }
+
+        $model = new SalaryModel();
+
+        $payrollDetails = $model->get_payroll_month_details(
+            $sessionId,
+            $month,
+            $year
+        );
+
+        $data = [
+            'payroll_month_details' => $payrollDetails,
+            'selectedMonth' => $month,
+            'selectedYear' => $year,
+            'sessionId' => $sessionId
+        ];
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/step3', $data)
+            . view('Layouts/Footer');
+    }
+
+
+
+    public function manage_payroll_status(
+        $requester_emp_id = null,
+        $payroll_month = null,
+        $payroll_year = null,
+        $action = null
+    ) {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON([
+                'status' => 'N',
+                'message' => 'Session expired. Please log in again.'
+            ])->setStatusCode(401);
+        }
+
+        $request = service('request');
+
+        // Use the authenticated session as the requester identity.
+        $requesterEmpId = $session->get('emp_id');
+
+        $pMonth = (int) (
+            $payroll_month
+            ?? $request->getPost('payroll_month')
+            ?? date('n')
+        );
+
+        $pYear = (int) (
+            $payroll_year
+            ?? $request->getPost('payroll_year')
+            ?? date('Y')
+        );
+
+        $actionType = strtoupper(trim(
+            $action ?? $request->getPost('action') ?? ''
+        ));
+
+        if ($pMonth < 1 || $pMonth > 12 || $pYear < 2000 || $pYear > 2100) {
+            return $this->response->setJSON([
+                'status' => 'N',
+                'message' => 'Invalid payroll month or year.'
+            ])->setStatusCode(400);
+        }
+
+        if (!in_array($actionType, ['FINALIZE', 'PAID'], true)) {
+            return $this->response->setJSON([
+                'status' => 'N',
+                'message' => 'Action must be FINALIZE or PAID.'
+            ])->setStatusCode(400);
+        }
+
+        $model = new SalaryModel();
+
+        $res = $model->manage_payroll_status(
+            $requesterEmpId,
+            $pMonth,
+            $pYear,
+            $actionType
+        );
+
+        // Handle either a single result row or a result list.
+        $resultRow = $res;
+
+        if (is_array($res) && isset($res[0]) && is_array($res[0])) {
+            $resultRow = $res[0];
+        }
+
+        $status = is_array($resultRow)
+            ? strtoupper(trim((string) ($resultRow['status'] ?? 'N')))
+            : 'N';
+
+        $remarks = is_array($resultRow)
+            ? ($resultRow['remarks'] ?? $resultRow['message'] ?? '')
+            : '';
+
+        if ($status !== 'Y') {
+            return $this->response->setJSON([
+                'status' => 'N',
+                'message' => $remarks ?: 'Payroll status update failed.',
+                'remarks' => $remarks,
+                'action' => $actionType,
+                'payroll_month' => $pMonth,
+                'payroll_year' => $pYear,
+                'csrf_token' => csrf_hash()
+            ])->setStatusCode(400);
+        }
+
+        return $this->response->setJSON([
+            'status' => 'Y',
+            'message' => $remarks ?: 'Payroll status updated successfully.',
+            'remarks' => $remarks ?: 'Payroll status updated successfully.',
+            'action' => $actionType,
+            'cycle_status' => $actionType,
+            'payroll_month' => $pMonth,
+            'payroll_year' => $pYear,
+            'csrf_token' => csrf_hash()
+        ]);
+    }
+
+     
+    #step 4
+
+public function step4($paramMonth = null, $paramYear = null)
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status' => 'N',
+                    'message' => 'Unauthorized or expired session. Please log in again.'
+                ])->setStatusCode(401);
+            }
+            return redirect()->to(base_url('/'));
+        }
+
+    // The payroll cycle page now runs every step; this old step page sends you there.
+    $toCycle = $this->redirectToCycle();
+    if ($toCycle) {
+        return $toCycle;
+    }
+
+        $sessionId = $session->get('emp_id');
+
+        // Read selected month & year from segment, POST or GET - same as rest of the steps
+        $month = $paramMonth
+            ?? $this->request->getPost('month')
+            ?? $this->request->getGet('month')
+            ?? $this->request->getPostGet('month');
+
+        $year = $paramYear
+            ?? $this->request->getPost('year')
+            ?? $this->request->getGet('year')
+            ?? $this->request->getPostGet('year');
+
+        $month = ($month !== null && $month !== '' && is_numeric($month))
+            ? (int) $month
+            : (int) date('n');
+
+        $year = ($year !== null && $year !== '' && is_numeric($year))
+            ? (int) $year
+            : (int) date('Y');
+
+        if ($month < 1 || $month > 12) {
+            $month = (int) date('n');
+        }
+        if ($year < 2000 || $year > 2100) {
+            $year = (int) date('Y');
+        }
+
+        $model = new SalaryModel();
+
+        // Generate/check payslips only on POST
+        $payrollDetails = null;
+        $status = null;
+        $remarks = null;
+
+        if (strtoupper($this->request->getMethod()) === 'POST') {
+            try {
+                $payrollDetails = $model->generate_payslips(
+                    $sessionId,
+                    $month,
+                    $year
+                );
+            } catch (\Throwable $e) {
+                if ($this->request->isAJAX()) {
+                    return $this->response->setJSON([
+                        'status' => 'N',
+                        'message' => 'Error generating payslips: ' . $e->getMessage(),
+                        'remarks' => 'Error generating payslips: ' . $e->getMessage(),
+                        'csrf_token' => csrf_hash()
+                    ])->setStatusCode(500);
+                }
+                return redirect()->back()->with('error', 'Error generating payslips: ' . $e->getMessage());
+            }
+
+            // Extract status and remarks from procedure result
+            $resultRow = $payrollDetails;
+            if (is_array($payrollDetails) && isset($payrollDetails[0]) && is_array($payrollDetails[0])) {
+                $resultRow = $payrollDetails[0];
+            }
+
+            if (is_array($resultRow)) {
+                $status = strtoupper(trim((string) ($resultRow['status'] ?? '')));
+                $remarks = (string) ($resultRow['remarks'] ?? ($resultRow['message'] ?? ''));
+            } elseif (is_bool($payrollDetails)) {
+                $status = $payrollDetails ? 'Y' : 'N';
+                $remarks = $payrollDetails ? 'Payslips generated successfully.' : 'Procedure returned false.';
+            }
+
+            if (empty($status)) {
+                $status = 'Y';
+            }
+            if (empty($remarks)) {
+                $remarks = ($status === 'Y')
+                    ? 'Payslips generated successfully.'
+                    : 'Payslip generation failed.';
+            }
+
+            // AJAX response for toaster display
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status' => $status,
+                    'remarks' => $remarks,
+                    'message' => $remarks,
+                    'data' => $payrollDetails,
+                    'selectedMonth' => $month,
+                    'selectedYear' => $year,
+                    'csrf_token' => csrf_hash()
+                ]);
+            }
+        }
+
+        $data = [
+            'generate_payslip' => $payrollDetails,
+            'payslip_status' => $status,
+            'payslip_remarks' => $remarks,
+            'selectedMonth' => $month,
+            'selectedYear' => $year,
+            'sessionId' => $sessionId,
+        ];
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/step4', $data)
+            . view('Layouts/Footer');
+    }
+
+
+public function payroll_summary()
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $sessionId = $session->get('emp_id');
+        $month = (int) ($this->request->getGet('month') ?? date('n'));
+        $year = (int) ($this->request->getGet('year') ?? date('Y'));
+
+        if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
+            return redirect()->back()->with('error', 'Invalid payroll month or year.');
+        }
+
+        $model = new SalaryModel();
+
+        $payrollDetails = $model->get_payroll_month_details(
+            $sessionId,
+            $month,
+            $year
+        );
+
+        $data = [
+            'payroll_month_details' => $payrollDetails,
+            'selectedMonth' => $month,
+            'selectedYear' => $year,
+            'sessionId' => $sessionId
+        ];
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/payroll_summary', $data)
+            . view('Layouts/Footer');
+    }
+
+    // public function payslips_new()
+    // {
+    //     $session = session();
+
+    //     if (!$session->get('logged_in')) {
+    //         return redirect()->to(base_url('/'));
+    //     }
+
+    //     $sessionId = $session->get('emp_id');
+    //     $empid = null;
+    //     $month = (int) ($this->request->getGetPost('month') ?? date('n'));
+    //     $year = (int) ($this->request->getGetPost('year') ?? date('Y')); 
+
+    //     $model = new SalaryModel();
+    //     // d($sessionId,$empid,$month,$year);
+    //     $data['payslips'] = $model->payslips_new($sessionId, $empid, $month, $year);
+    //     // dd($data['payslips']);
+        
+    //    return view('Layouts/Header')
+    //         . view('Layouts/Sidebar')
+    //         . view('payroll/payslips_new', $data)
+    //         . view('Layouts/Footer'); 
+    // }
+
+    public function payslips_new($paramEmpId = null, $paramMonth = null, $paramYear = null)
+    {
+        $session = session();
+
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $sessionId = $session->get('emp_id');
+
+        // Retrieve emp_id from route parameter, GET query, or POST body
+        $rawEmpId = $paramEmpId 
+            ?? $this->request->getGetPost('emp_id') 
+            ?? $this->request->getGetPost('staff_id') 
+            ?? $this->request->getGetPost('staff_d');
+
+        // Sanitize emp_id: empty string, whitespace, or 'all' treated as null
+        $empid = (!empty($rawEmpId) && trim($rawEmpId) !== '' && strtolower(trim($rawEmpId)) !== 'all') 
+            ? trim($rawEmpId) 
+            : null;
+
+        $monthInput = $paramMonth ?? $this->request->getGetPost('month') ?? date('n');
+        $yearInput  = $paramYear  ?? $this->request->getGetPost('year')  ?? date('Y');
+
+        $month = (int) $monthInput;
+        if ($month < 1 || $month > 12) {
+            $month = (int) date('n');
+        }
+
+        $year = (int) $yearInput;
+        if ($year < 2000 || $year > 2100) {
+            $year = (int) date('Y');
+        }
+
+        $model = new SalaryModel();
+
+        // Case one: when admin wants to see all employees payslip list, $empid is null
+        // Case two: when admin wants to see a particular employee payslip, send $empid of that selected row
+        if (empty($empid)) {
+            $empid = null;
+            $payslips = $model->payslips_new($sessionId, null, $month, $year);
+            // dd($payslips);
+            $isSingle = false;
+        } else {
+            $payslips = $model->payslips_new($sessionId, $empid, $month, $year);
+            $isSingle = true;
+        }
+
+        // Normalize array structure if a single associative row was returned
+        if (!empty($payslips) && is_array($payslips) && isset($payslips['emp_id'])) {
+            $payslips = [$payslips];
+        }
+
+        $data = [
+            'payslips'      => $payslips ?? [],
+            'selectedMonth' => $month,
+            'selectedYear'  => $year,
+            'month'         => $month,
+            'year'          => $year,
+            'selectedEmpId' => $empid,
+            'isSingle'      => $isSingle,
+            'sessionId'     => $sessionId,
+        ];
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/payslips_new', $data)
+            . view('Layouts/Footer');
+    }
+
+
+}

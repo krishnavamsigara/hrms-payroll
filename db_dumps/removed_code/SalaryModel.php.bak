@@ -1,0 +1,298 @@
+<?php
+
+namespace App\Models;
+
+use CodeIgniter\Model;
+
+class SalaryModel extends Model
+{
+
+    protected $db;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->db = \Config\Database::connect();
+    }
+
+    // Common Procedure Caller
+
+    protected function callProcedure(
+        string $procedureName,
+        array $params = [],
+        bool $isQuery = true
+    ) {
+        try {
+            if (!empty($params)) {
+                $escapedParams = array_map(function ($param) {
+                    return "'" . $this->db->escapeString((string)$param) . "'";
+                }, $params);
+                $sql = "CALL {$procedureName}(" . implode(',', $escapedParams) . ")";
+                $query = $this->db->query($sql);
+            } else {
+                $sql = "CALL {$procedureName}()";
+                $query = $this->db->query($sql);
+            }
+
+            if ($isQuery && $query) {
+                $result = $query->getResultArray();
+
+                if ($this->db->connID instanceof \mysqli) {
+                    try {
+                        while (@mysqli_more_results($this->db->connID) && @mysqli_next_result($this->db->connID)) {
+                            // Drain extra result sets left by MySQL stored procedure CALL
+                        }
+                    } catch (\Throwable $ex) {
+                        // Suppress PHP 8.1+ strict mysqli exception
+                    }
+                }
+
+                return $result;
+            }
+
+            return $query ? ($this->db->affectedRows() > 0) : false;
+        } catch (\Throwable $e) {
+            log_message('error', 'callProcedure Error [' . $procedureName . ']: ' . $e->getMessage());
+            return $isQuery ? [] : false;
+        }
+    }
+
+    /**
+     * Procedure caller for the component / slab engine procedures.
+     * Unlike callProcedure(), a PHP null or '' is sent as SQL NULL (so numeric
+     * parameters work in strict SQL mode) and a database error is returned as
+     * a row ['status' => 'N', 'remarks' => message] instead of being hidden.
+     */
+    protected function callProcedureRows(string $procedureName, array $params = []): array
+    {
+        try {
+            $parts = array_map(function ($param) {
+                if ($param === null || $param === '') {
+                    return 'NULL';
+                }
+                return "'" . $this->db->escapeString((string) $param) . "'";
+            }, $params);
+
+            $query  = $this->db->query("CALL {$procedureName}(" . implode(',', $parts) . ")");
+            $result = $query ? $query->getResultArray() : [];
+
+            if ($this->db->connID instanceof \mysqli) {
+                try {
+                    while (@mysqli_more_results($this->db->connID) && @mysqli_next_result($this->db->connID)) {
+                        // Drain extra result sets left by the stored procedure CALL
+                    }
+                } catch (\Throwable $ex) {
+                    // Nothing more to read
+                }
+            }
+
+            return $result;
+        } catch (\Throwable $e) {
+            log_message('error', 'callProcedureRows Error [' . $procedureName . ']: ' . $e->getMessage());
+            return [['status' => 'N', 'remarks' => 'Database error: ' . $e->getMessage()]];
+        }
+    }
+
+    public function get_emp_payslip($empid,$month,$year)
+    {
+        return $this->callProcedure('new_pay_slip', [$empid,$month,$year]);
+    }
+
+    public function get_emp_allowance($empid,$month,$year)
+    {
+        return $this->callProcedure('new_payslip_allowance', [$empid,$month,$year]);
+    }
+
+    public function get_emp_deductions($empid,$month,$year)
+    {
+        return $this->callProcedure('new_payslip_deductions', [$empid,$month,$year]);
+    }
+
+    public function get_view_salary()
+    {
+        return $this->callProcedure('view_all_salary', []);
+    }
+
+    # Create a new payroll cycle.
+    public function create_payroll_cycle($id,$month,$year,$paydate,$fromdate,$todate,$remarks,$cyclecode)
+    {
+        return $this->callProcedure('hrms_create_payroll_cycle_complete', [$id,$month,$year,$paydate,$fromdate,$todate,$remarks,$cyclecode]);
+    }
+    # Salary Components
+    public function salary_components($emp_id)
+    {
+        return $this->callProcedure('hrms_get_salary_components', [$emp_id]);
+    }
+    # Salary Components adding new component, Editing existing component, managing existing component
+    public function manage_salary_components(
+        $emp_id,
+        $action,
+        $component_id,
+        $code,
+        $name,
+        $type,
+        $calculation_type,
+        $percentage_base,
+        $percentage,
+        $taxable ,
+        $active,
+        $formula_expression = null,
+        $minimum_amount = null,
+        $maximum_amount = null,
+        $calculation_scope = null,
+        $calculation_order = null,
+        $eligibility_parameter = null,
+        $eligibility_required_value = null,
+        $is_slab = null,
+        $rounding_precision = null,
+        $is_manual = null,
+        $slab_json = null,   // null = leave slabs as they are; JSON array string = replace them
+        $dry_run = 0         // 1 = check only, nothing is saved
+        )
+    {
+        return $this->callProcedureRows('hrms_update_component_master', [
+            $emp_id, $action, $component_id, $code, $name, $type, $calculation_type, $percentage_base, $percentage, $taxable, $active,
+            $formula_expression, $minimum_amount, $maximum_amount, $calculation_scope, $calculation_order,
+            $eligibility_parameter, $eligibility_required_value, $is_slab, $rounding_precision,
+            $is_manual, $slab_json, $dry_run ? 1 : 0,
+        ]);
+    }
+
+    # Salary structure page: what the engine would calculate with a new CTC and/or
+    # changed components ($changes = JSON array). Nothing is saved.
+    public function preview_salary_structure($id, $emp_id, $monthly_ctc, $changes, $structure_id = null)
+    {
+        return $this->callProcedureRows('hrms_preview_employee_salary', [$id, $emp_id, $structure_id, $monthly_ctc, $changes]);
+    }
+
+    # Employee salary edit page: header + every salary period (newest first)
+    public function salary_periods($id, $emp_id)
+    {
+        return $this->callProcedureRows('hrms_salary_periods', [$id, $emp_id]);
+    }
+
+    # Employee salary edit page: components, company rules, own settings and amounts of one period
+    public function salary_period_components($id, $structure_id)
+    {
+        return $this->callProcedureRows('hrms_salary_components_for_structure', [$id, $structure_id]);
+    }
+
+    # Active employees with no salary at all (new joiners)
+    public function employees_without_salary($id)
+    {
+        $rows = $this->callProcedureRows('hrms_employees_without_salary', [$id]);
+        return array_values(array_filter($rows, fn($r) => !empty($r['emp_id'])));
+    }
+
+    # Payslips of paid employees from the payroll cycles (employee Pay Roll page and admin payslips page).
+    # $target null = everyone (ADMIN / HR); $month 'ALL' / name / 1-12; $year '2026-27' or '2026'.
+    # Returns the rows, or one row with status N and remarks when nothing is found.
+    public function employee_payslip_list($requester, $target, $month, $year)
+    {
+        return $this->callProcedureRows('hrms_employee_payslip_list', [$requester, $target, $month, $year]);
+    }
+
+    # Current salaries with ESI off although GROSS is within the ESI wage limit, keyed by emp_id
+    public function esi_review($id)
+    {
+        $rows = $this->callProcedureRows('hrms_salary_esi_review', [$id]);
+        $out = [];
+        foreach ($rows as $r) {
+            if (($r['status'] ?? '') === 'Y' && !empty($r['emp_id'])) {
+                $out[$r['emp_id']] = $r;
+            }
+        }
+        return $out;
+    }
+
+    # ESI wage limit from the ESI slabs
+    public function esi_wage_limit(): float
+    {
+        $row = $this->db->query('SELECT hrms_esi_wage_limit() AS lim')->getRowArray();
+        return (float) ($row['lim'] ?? 21000);
+    }
+
+    # Add salary page: amounts of a new salary with every active component (nothing saved)
+    public function preview_new_salary($id, $emp_id, $monthly_ctc, $esi)
+    {
+        return $this->callProcedureRows('hrms_preview_new_salary', [$id, $emp_id, $monthly_ctc, $esi]);
+    }
+
+    # Add salary page: create the salary with every active component attached and calculated
+    public function create_employee_salary($id, $emp_id, $monthly_ctc, $effective_from, $esi)
+    {
+        return $this->callProcedureRows('hrms_create_employee_salary', [$id, $emp_id, $monthly_ctc, $effective_from, $esi]);
+    }
+
+    # Employee salary edit page: save CTC, applies-from date and all changed components at once
+    public function save_employee_salary($id, $emp_id, $structure_id, $monthly_ctc, $effective_from, $changes)
+    {
+        return $this->callProcedureRows('hrms_save_employee_salary', [$id, $emp_id, $structure_id, $monthly_ctc, $effective_from, $changes]);
+    }
+
+    # Formula checking for the components page ("Check formula" button).
+    public function validate_component_formula($emp_id, $component_id, $code, $calculation_order, $formula)
+    {
+        return $this->callProcedureRows('hrms_formula_validate', [$emp_id, $component_id, $code, $calculation_order, $formula]);
+    }
+
+    # Slabs of one component.
+    public function component_slabs($emp_id, $component_id)
+    {
+        return $this->callProcedureRows('hrms_component_slab_list', [$emp_id, $component_id]);
+    }
+
+    # Replace all slabs of one component ($slab_json is a JSON array string).
+    public function save_component_slabs($emp_id, $component_id, $slab_json)
+    {
+        return $this->callProcedureRows('hrms_component_slab_save', [$emp_id, $component_id, $slab_json]);
+    }
+
+    public function salary_structure($id, $emp_id)
+    {
+        return $this->callProcedure('hrms_get_employee_salary_structure', [$id, $emp_id]);
+    } 
+
+    # Edit Salary Structure of an Employee.
+    public function edit_salary_structure($id, $emp_id, $component_id, $calculation_type, $component_value, $percentage_base, $formula_expression) 
+    {
+        return $this->callProcedure('hrms_update_employee_salary_component', [$id, $emp_id, $component_id, $calculation_type, $component_value, $percentage_base, $formula_expression]);
+    } 
+
+    #Edit CTC and Effective Date of Salary Structures
+    public function update_salary_structure($id, $emp_id, $salary,$date) 
+    {
+        return $this->callProcedure('hrms_update_salary_structure', [$id, $emp_id, $salary, $date]);
+    }
+
+    #payroll cycles.
+    public function get_payroll_cycles($emp_id, $year)
+    {
+        return $this->callProcedure('hrms_get_payroll_cycles', [$emp_id, $year]);
+    }
+
+    #get payroll month details.
+    public function get_payroll_month_details($emp_id, $month, $year)
+    {
+        return $this->callProcedure('hrms_get_payroll_month_details', [$emp_id, $month, $year]);
+    }
+
+    #manage payroll status.
+    public function manage_payroll_status($requester_emp_id, $payroll_month, $payroll_year, $action)
+    {
+        return $this->callProcedure('hrms_manage_payroll_status', [$requester_emp_id, $payroll_month, $payroll_year, $action]);
+    }
+
+    
+    public function generate_payslips($emp_id, $month, $year)
+    {
+        return $this->callProcedure('hrms_generate_employee_payslips', [$emp_id, $month, $year]);
+    }
+
+    public function payslips_new($id, $emp_id, $month, $year)
+    {
+        return $this->callProcedure('hrms_get_payslip', [$id, $emp_id, $month, $year]);
+    }
+
+
+}

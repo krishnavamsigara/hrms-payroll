@@ -1,0 +1,1008 @@
+<?php
+/**
+ * Payroll cycle page: walks one cycle through every step.
+ * Data: $cycleId, $cycle (hrms_payroll_cycle_get row), $manualComponents.
+ * Everything else is loaded as JSON from payroll/cycle_data/{id}; every rule is
+ * checked again by the hrms_payroll_* procedures.
+ */
+$monthName = $cycle['month_name'] ?? '';
+$title = trim($monthName . ' ' . ($cycle['payroll_year'] ?? ''));
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BloomHR | Payroll <?= esc($title) ?></title>
+  <?php if (function_exists('csrf_token')): ?>
+    <meta name="csrf-token-name" content="<?= csrf_token() ?>">
+    <meta name="csrf-token-hash" content="<?= csrf_hash() ?>">
+  <?php endif; ?>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+  <style>
+    :root {
+      --bloom-purple: #4a00e0;
+      --bloom-dark: #2d0a8c;
+      --ok: #15803d;
+      --ok-bg: #dcfce7;
+      --warn: #b45309;
+      --warn-bg: #fef3c7;
+      --bad: #b91c1c;
+      --bad-bg: #fee2e2;
+      --info: #0369a1;
+      --info-bg: #e0f2fe;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --soft: #f8fafc;
+      --text: #0f172a;
+    }
+
+    body, .content-wrapper { font-family: 'Plus Jakarta Sans', sans-serif; color: var(--text); }
+    .content-wrapper { background: #f4f6fb; }
+    .card-bloom { background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, .04); }
+    .pc-btn {
+      border: 1px solid var(--line); border-radius: 9px; background: #fff; color: #334155;
+      padding: 8px 14px; font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;
+      cursor: pointer; text-decoration: none; transition: background .15s;
+    }
+    .pc-btn:hover { background: #f1f5f9; color: var(--bloom-purple); text-decoration: none; }
+    .pc-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .pc-btn-primary { background: var(--bloom-purple); border-color: var(--bloom-purple); color: #fff; }
+    .pc-btn-primary:hover { background: var(--bloom-dark); color: #fff; }
+    .pc-btn-success { background: #059669; border-color: #059669; color: #fff; }
+    .pc-btn-success:hover { background: #047857; color: #fff; }
+    .pc-btn-danger { background: #fff; border-color: #fecaca; color: var(--bad); }
+    .pc-btn-sm { padding: 4px 9px; font-size: 11.5px; border-radius: 7px; }
+
+    .chip { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .chip-ok { background: var(--ok-bg); color: var(--ok); }
+    .chip-warn { background: var(--warn-bg); color: var(--warn); }
+    .chip-bad { background: var(--bad-bg); color: var(--bad); }
+    .chip-info { background: var(--info-bg); color: var(--info); }
+    .chip-muted { background: #f1f5f9; color: var(--muted); }
+    .chip-primary { background: #eef2ff; color: var(--bloom-purple); }
+
+    /* step bar */
+    .steps { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 8px; }
+    .step {
+      flex: 1 0 118px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px; background: #fff;
+      text-align: left; cursor: pointer; font-size: 12px; min-width: 118px;
+    }
+    .step .num {
+      width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 11.5px; background: #f1f5f9; color: var(--muted); margin-bottom: 4px;
+    }
+    .step .lbl { display: block; font-weight: 700; color: #334155; line-height: 1.25; }
+    .step.done .num { background: var(--ok-bg); color: var(--ok); }
+    .step.current { border-color: var(--bloom-purple); box-shadow: 0 0 0 3px rgba(74, 0, 224, .12); }
+    .step.current .num { background: var(--bloom-purple); color: #fff; }
+    .step.future { cursor: default; opacity: .6; }
+    .step.viewing { background: #faf8ff; }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .kpi { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--soft); }
+    .kpi .k { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .kpi .v { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+    .tbl-wrap { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table.tbl { width: 100%; font-size: 12.5px; border-collapse: separate; border-spacing: 0; }
+    table.tbl th {
+      position: sticky; top: 0; background: #f8fafc; z-index: 1; font-size: 11px; text-transform: uppercase;
+      letter-spacing: .03em; color: var(--muted); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+    }
+    table.tbl td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.tbl tr.row-bad td { background: #fff7f7; }
+
+    .progress-outer { height: 14px; border-radius: 8px; background: #eef2ff; overflow: hidden; }
+    .progress-inner { height: 100%; width: 0; background: linear-gradient(90deg, var(--bloom-purple), #8e2de2); transition: width .2s; }
+    .notice { border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+    .notice-warn { background: var(--warn-bg); color: #7c2d12; }
+    .notice-bad { background: var(--bad-bg); color: #7f1d1d; }
+    .notice-ok { background: var(--ok-bg); color: #14532d; }
+    .notice-info { background: var(--info-bg); color: #0c4a6e; }
+    .form-control-sm, .custom-select-sm { border-radius: 8px; font-size: 12.5px; }
+
+    #toastBox { position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
+    .toast-msg { border-radius: 10px; padding: 11px 14px; font-size: 13px; font-weight: 600; box-shadow: 0 10px 25px rgba(0, 0, 0, .18); color: #fff; }
+    .toast-ok { background: #059669; }
+    .toast-bad { background: #dc2626; }
+    .toast-info { background: #334155; }
+    .muted { color: var(--muted); }
+    table.bd th.g { text-align: center; font-size: 10.5px; letter-spacing: .05em; border-bottom: 2px solid var(--line); }
+    table.bd th.g-earn { color: #4338ca; background: #eef2ff; } table.bd th.g-er { color: #0369a1; background: #e0f2fe; }
+    table.bd th.g-ded { color: #b91c1c; background: #fee2e2; } table.bd th.g-tot { color: #15803d; background: #dcfce7; }
+    table.bd thead tr:nth-child(2) th { top: 31px; }
+    table.bd .stick { position: sticky; left: 0; background: #fff; z-index: 2; box-shadow: 3px 0 6px -3px rgba(0,0,0,.12); min-width: 190px; }
+    table.bd thead .stick { background: #f8fafc; z-index: 4; }
+    table.bd td.own { background: #eef2ff; }
+    table.bd td.own::after { content: '•'; color: var(--bloom-purple); font-weight: 800; margin-left: 3px; }
+    table.bd td.tot { font-weight: 700; }
+    table.bd tfoot td { position: sticky; bottom: 0; background: #f8fafc; font-weight: 800; border-top: 2px solid var(--line); }
+    .bd-toggles label { font-size: 12px; font-weight: 700; margin: 0 10px 0 0; cursor: pointer; }
+    .mono { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+
+<body class="hold-transition sidebar-mini layout-fixed">
+  <div class="wrapper">
+    <div class="content-wrapper">
+      <section class="content pt-3">
+        <div class="container-fluid px-2 px-md-3">
+
+          <div class="d-flex flex-wrap align-items-center justify-content-between mb-3" style="gap: 10px;">
+            <div>
+              <a href="<?= site_url('payroll/payroll_dashboard') ?>" class="small font-weight-bold"><i class="fas fa-arrow-left mr-1"></i> Payroll dashboard</a>
+              <h4 class="font-weight-bold mb-0 mt-1">Payroll <?= esc($title) ?></h4>
+              <div class="small muted" id="cycleMeta"></div>
+            </div>
+            <div class="d-flex align-items-center" style="gap: 8px;">
+              <span id="cycleStatusChip"></span>
+              <button type="button" class="pc-btn pc-btn-danger" id="btnDeleteCycle" style="display:none;" title="Delete this payroll cycle"><i class="fas fa-trash-alt"></i> Delete this payroll</button>
+              <button type="button" class="pc-btn" id="btnReload" title="Reload"><i class="fas fa-sync-alt"></i></button>
+            </div>
+          </div>
+
+          <div class="card-bloom p-2 mb-3">
+            <div class="steps" id="stepBar"></div>
+          </div>
+
+          <div class="card-bloom p-3 mb-3">
+            <div class="kpis" id="kpis"></div>
+          </div>
+
+          <div class="card-bloom p-3 mb-3" id="stepPanel">
+            <div class="muted small">Loading...</div>
+          </div>
+
+          <div class="card-bloom p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="font-weight-bold mb-0">History</h6>
+              <button type="button" class="pc-btn pc-btn-sm" id="btnToggleLog">Show</button>
+            </div>
+            <div id="logBox" class="mt-2" style="display: none;"></div>
+          </div>
+
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toastBox"></div>
+
+  <?= view('payroll/_dialog') ?>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      const CFG = {
+        id: <?= (int) $cycleId ?>,
+        dataUrl: '<?= site_url('payroll/cycle_data/' . (int) $cycleId) ?>',
+        actionUrl: '<?= site_url('payroll/cycle_action') ?>',
+        deleteUrl: '<?= site_url('payroll/cycle_delete') ?>',
+        dashboardUrl: '<?= site_url('payroll/payroll_dashboard') ?>',
+        deletable: <?= json_encode(\App\Models\PayrollCycleModel::DELETABLE) ?>,
+        calcUrl: '<?= site_url('payroll/cycle_calculate_employee') ?>',
+        holdUrl: '<?= site_url('payroll/cycle_hold') ?>',
+        payUrl: '<?= site_url('payroll/cycle_pay_employee') ?>',
+        inputUrl: '<?= site_url('payroll/cycle_manual_input') ?>',
+        attendanceUrl: '<?= site_url('admin/attendance_cycle') ?>',
+        attendanceFinalizeUrl: '<?= site_url('admin/attendance_finalize') ?>',
+        structureUrl: '<?= site_url('payroll/salary_structure') ?>',
+        payslipsUrl: '<?= site_url('payroll/payslips_new') ?>',
+        summaryUrl: '<?= site_url('payroll/payroll_summary') ?>',
+        breakdownUrl: '<?= site_url('payroll/cycle_breakdown/' . (int) $cycleId) ?>',
+        salaryEditUrl: '<?= site_url('payroll/salary_structure/edit') ?>/',
+        salaryNewUrl: '<?= site_url('payroll/salary_structure/new') ?>/',
+        salaryListUrl: '<?= site_url('payroll/salary_structure') ?>',
+        manualComponents: <?= json_encode(array_values($manualComponents ?? [])) ?>,
+        flashSuccess: <?= json_encode(session()->getFlashdata('success')) ?>,
+        flashError: <?= json_encode(session()->getFlashdata('error')) ?>
+      };
+
+      // ---------- steps of a cycle ----------
+      const STEPS = [
+        { key: 'create', label: 'Cycle created' },
+        { key: 'attendance', label: 'Attendance' },
+        { key: 'structure', label: 'Salary structures' },
+        { key: 'calculate', label: 'Calculate salaries' },
+        { key: 'review', label: 'Review & approve' },
+        { key: 'finalize', label: 'Finalize' },
+        { key: 'pay', label: 'Mark as paid' },
+        { key: 'close', label: 'Payslips & close' }
+      ];
+      const STATUS_STEP = {
+        OPEN: 1, ATTENDANCE_VERIFIED: 2, STRUCTURE_VERIFIED: 3, PROCESSING: 3, CALCULATED: 4,
+        APPROVED: 5, FINALIZED: 6, PARTIALLY_PAID: 7, PAID: 7, CLOSED: 8
+      };
+      const STATUS_CHIP = {
+        OPEN: ['chip-primary', 'Open'], ATTENDANCE_VERIFIED: ['chip-primary', 'Attendance verified'],
+        STRUCTURE_VERIFIED: ['chip-primary', 'Structures verified'], PROCESSING: ['chip-warn', 'Calculating'],
+        CALCULATED: ['chip-warn', 'Calculated'], APPROVED: ['chip-info', 'Approved'], FINALIZED: ['chip-info', 'Finalized'],
+        PARTIALLY_PAID: ['chip-bad', 'Partially paid'], PAID: ['chip-ok', 'Paid'], CLOSED: ['chip-muted', 'Closed']
+      };
+
+      let state = null;          // JSON from cycle_data
+      let viewStep = null;       // step shown in the panel
+      let busy = false;          // an action or the calculation is running
+      let stopRequested = false;
+      let tableFilter = { text: '', kind: 'ALL' };
+
+      // ---------- helpers ----------
+      const $id = (x) => document.getElementById(x);
+      function esc(v) {
+        return String(v === null || v === undefined ? '' : v)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      const inr = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const money = (v) => '₹ ' + inr.format(parseFloat(v || 0));
+      const num = (v) => parseFloat(v || 0);
+      function fmtDate(d) {
+        if (!d) return '-';
+        const t = new Date(String(d).replace(' ', 'T'));
+        return isNaN(t) ? esc(d) : t.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      function fmtDateTime(d) {
+        if (!d) return '';
+        const t = new Date(String(d).replace(' ', 'T'));
+        return isNaN(t) ? esc(d) : t.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      }
+      function toast(msg, kind) {
+        const el = document.createElement('div');
+        el.className = 'toast-msg ' + (kind === 'bad' ? 'toast-bad' : kind === 'info' ? 'toast-info' : 'toast-ok');
+        el.textContent = msg;
+        $id('toastBox').appendChild(el);
+        setTimeout(() => el.remove(), kind === 'bad' ? 9000 : 5000);
+      }
+      function allowed(action) {
+        return state && (',' + (state.cycle.allowed_actions || '') + ',').indexOf(',' + action + ',') >= 0;
+      }
+      function currentStep() {
+        return STATUS_STEP[state.cycle.cycle_status] ?? 1;
+      }
+
+      async function post(url, data) {
+        const fd = new FormData();
+        Object.keys(data).forEach((k) => fd.append(k, data[k] === null || data[k] === undefined ? '' : data[k]));
+        const name = document.querySelector('meta[name="csrf-token-name"]');
+        const hash = document.querySelector('meta[name="csrf-token-hash"]');
+        if (name && hash) fd.append(name.content, hash.content);
+        try {
+          const res = await fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const json = await res.json();
+          if (json.csrf_token && hash) hash.content = json.csrf_token;
+          return json;
+        } catch (e) {
+          return { status: false, message: 'The server did not answer (' + e.message + ').' };
+        }
+      }
+
+      async function load(keepStep) {
+        try {
+          const res = await fetch(CFG.dataUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const json = await res.json();
+          if (!json.status) {
+            $id('stepPanel').innerHTML = '<div class="notice notice-bad">' + esc(json.message || 'The payroll cycle could not be loaded.') + '</div>';
+            return;
+          }
+          state = json;
+          breakdown = null;
+          if (!keepStep || viewStep === null) viewStep = Math.min(currentStep(), STEPS.length - 1);
+          render();
+        } catch (e) {
+          $id('stepPanel').innerHTML = '<div class="notice notice-bad">The payroll cycle could not be loaded: ' + esc(e.message) + '</div>';
+        }
+      }
+
+      function financialYear(month, year) {
+        const m = parseInt(month, 10), y = parseInt(year, 10);
+        return m >= 4 ? (y + '-' + (y + 1)) : ((y - 1) + '-' + y);
+      }
+      function attendanceCycleUrl() {
+        return CFG.attendanceUrl + '?year=' + financialYear(state.cycle.payroll_month, state.cycle.payroll_year);
+      }
+      // finalize page of this cycle's month; cycle=ID brings the user back here after finalizing
+      function attendanceFinalizeUrl() {
+        return CFG.attendanceFinalizeUrl + '?month=' + encodeURIComponent(state.cycle.payroll_month) +
+               '&year=' + encodeURIComponent(state.cycle.payroll_year) + '&cycle=' + encodeURIComponent(CFG.id);
+      }
+
+      async function doAction(action, confirmText, remarks) {
+        if (busy) return null;
+        if (confirmText) {
+          // in-page popup box: title and button per action
+          const boxes = {
+            BACK: { title: 'Go back one step', okText: 'Go back' },
+            RECALCULATE: { title: 'Recalculate all employees', okText: 'Recalculate' },
+            FINALIZE: { title: 'Finalize payroll', okText: 'Finalize' },
+            MARK_PAID: { title: 'Mark as paid', okText: 'Mark as paid' },
+            CLOSE: { title: 'Close payroll cycle', okText: 'Close cycle' }
+          };
+          const ans = await payrollDialog.ask(Object.assign({ title: 'Please confirm', okText: 'Continue' },
+                                                             boxes[action] || {}, { message: confirmText }));
+          if (!ans.ok) return null;
+        }
+        busy = true;
+        render();
+        const r = await post(CFG.actionUrl, { cycle_id: CFG.id, action: action, remarks: remarks || '' });
+        busy = false;
+        toast(r.message || (r.status ? 'Done.' : 'Not done.'), r.status ? 'ok' : 'bad');
+        if (!r.status && /finalized attendance/i.test(r.message || '') && state) {
+          const go = await payrollDialog.ask({
+            title: 'Attendance not finalized',
+            message: 'Attendance for ' + state.cycle.month_name + ' ' + state.cycle.payroll_year + ' is not finalized.\n\n' +
+                     'Open the attendance finalize page for this month? After finalizing you come back to this payroll cycle.',
+            okText: 'Finalize attendance', cancelText: 'Stay here'
+          });
+          if (go.ok) {
+            window.location.href = attendanceFinalizeUrl();
+            return r;
+          }
+        }
+        await load(false);
+        return r;
+      }
+
+      // ---------- header, steps, KPIs ----------
+      function render() {
+        const c = state.cycle;
+        const chip = STATUS_CHIP[c.cycle_status] || ['chip-muted', c.cycle_status];
+        $id('cycleStatusChip').innerHTML = '<span class="chip ' + chip[0] + '" style="font-size:12.5px;padding:5px 12px;">' + esc(chip[1]) + '</span>';
+        $id('btnDeleteCycle').style.display = (CFG.deletable.indexOf(c.cycle_status) >= 0 && !busy) ? '' : 'none';
+        $id('cycleMeta').innerHTML = 'Code <b>' + esc(c.cycle_code) + '</b> &middot; Pay period ' + fmtDate(c.period_start) + ' &ndash; ' +
+          fmtDate(c.period_end) + ' &middot; Payment date ' + fmtDate(c.payment_date);
+
+        const cur = currentStep();
+        const closed = c.cycle_status === 'CLOSED';
+        $id('stepBar').innerHTML = STEPS.map((s, i) => {
+          const done = closed || i < cur;
+          const isCur = !closed && i === cur;
+          const cls = 'step ' + (done ? 'done' : isCur ? 'current' : 'future') + (i === viewStep ? ' viewing' : '');
+          return '<button type="button" class="' + cls + '" data-step="' + i + '"' + (done || isCur ? '' : ' disabled') + '>' +
+            '<span class="num">' + (done ? '<i class="fas fa-check"></i>' : (i + 1)) + '</span>' +
+            '<span class="lbl">' + esc(s.label) + '</span></button>';
+        }).join('');
+
+        const k = [];
+        k.push(['Employees', (c.detail_count > 0 ? c.detail_count : c.active_employees)]);
+        if (num(c.detail_count) > 0) {
+          k.push(['Gross', money(c.total_earnings)]);
+          k.push(['Deductions', money(c.total_deductions)]);
+          k.push(['Employer contribution', money(c.total_employer_contributions)]);
+          k.push(['Net pay', money(c.total_net_pay)]);
+          if (num(c.on_hold_count) > 0) k.push(['On hold', c.on_hold_count + ' (' + money(c.on_hold_net_pay) + ')']);
+          if (num(c.paid_count) > 0) k.push(['Paid', c.paid_count + ' (' + money(c.paid_net_pay) + ')']);
+          if (num(c.payslip_count) > 0) k.push(['Payslips', c.payslip_count]);
+        } else {
+          k.push(['Attendance finalized', c.attendance_finalized + ' / ' + c.active_employees]);
+          k.push(['Salary structures ready', c.structures_ready + ' / ' + c.active_employees]);
+        }
+        $id('kpis').innerHTML = k.map((x) => '<div class="kpi"><div class="k">' + esc(x[0]) + '</div><div class="v">' + esc(x[1]) + '</div></div>').join('');
+
+        renderPanel();
+        renderLog();
+      }
+
+      function nav(backAction, backLabel, nextAction, nextLabel, nextConfirm, extra) {
+        const isCur = viewStep === currentStep() && state.cycle.cycle_status !== 'CLOSED';
+        if (!isCur) {
+          return '<div class="notice notice-info mt-3">This step is complete. The buttons are on the current step.</div>';
+        }
+        let h = '<div class="d-flex flex-wrap justify-content-between align-items-center border-top pt-3 mt-3" style="gap:8px;"><div>';
+        if (backAction && allowed(backAction)) {
+          h += '<button type="button" class="pc-btn" data-action="' + backAction + '"' + (busy ? ' disabled' : '') + '><i class="fas fa-arrow-left"></i> ' + esc(backLabel) + '</button>';
+        }
+        h += '</div><div class="d-flex flex-wrap" style="gap:8px;">' + (extra || '');
+        if (nextAction && allowed(nextAction)) {
+          h += '<button type="button" class="pc-btn pc-btn-primary" data-action="' + nextAction + '"' +
+            (nextConfirm ? ' data-confirm="' + esc(nextConfirm) + '"' : '') + (busy ? ' disabled' : '') + '>' + esc(nextLabel) + ' <i class="fas fa-arrow-right"></i></button>';
+        }
+        return h + '</div></div>';
+      }
+
+      // ---------- panels ----------
+      function renderPanel() {
+        const p = $id('stepPanel');
+        const key = STEPS[viewStep].key;
+        if (key === 'create') p.innerHTML = panelCreate();
+        else if (key === 'attendance') p.innerHTML = panelAttendance();
+        else if (key === 'structure') p.innerHTML = panelStructure();
+        else if (key === 'calculate') p.innerHTML = panelCalculate();
+        else if (key === 'review') p.innerHTML = panelReview();
+        else if (key === 'finalize') p.innerHTML = panelFinalize();
+        else if (key === 'pay') p.innerHTML = panelPay();
+        else p.innerHTML = panelClose();
+        bindTableFilter();
+      }
+
+      function panelCreate() {
+        const c = state.cycle;
+        return '<h5 class="font-weight-bold">Cycle created</h5>' +
+          '<div class="small">Created by <b>' + esc(c.created_by) + '</b> on ' + fmtDateTime(c.created_at) + '.' +
+          (c.cycle_remarks ? ' Remarks: ' + esc(c.cycle_remarks) : '') + '</div>' +
+          '<div class="small muted mt-1">Month, year, code and dates are fixed once the cycle exists. ' +
+          'Cycles move forward one step at a time; until approval you can always go back.</div>';
+      }
+
+      function panelAttendance() {
+        const c = state.cycle;
+        const ready = state.readiness || [];
+        const att = state.attendance || [];
+        const activeIds = {};
+        ready.forEach((r) => { activeIds[r.emp_id] = r; });
+        const missing = ready.filter((r) => num(r.att_final) !== 1);
+        const finalized = att.filter((a) => a.is_finalized === 'Y').length;
+
+        let h = '<h5 class="font-weight-bold">Attendance for ' + esc(c.month_name + ' ' + c.payroll_year) + '</h5>' +
+          '<div class="small muted mb-2">Payroll attendance summary of the month (payroll_attendance_summary). Pay days = 30 &minus; unpaid (LOP) days, so a full month is always paid in full, whatever the length of the period. Every day must have a status: paid + unpaid days = days of the period.</div>';
+        h += !att.length
+          ? '<div class="notice notice-bad mb-2">No attendance has been generated for ' + esc(c.month_name + ' ' + c.payroll_year) + ' yet. Generate and finalize it on the attendance cycle page, then press <b>Verify attendance</b>.</div>'
+          : missing.length
+          ? '<div class="notice notice-warn mb-2"><b>' + missing.length + ' of ' + ready.length + '</b> active employees have no finalized attendance for this month. ' +
+            'Generate or finalize it on the attendance page, then come back and press <b>Verify attendance</b>.</div>'
+          : '<div class="notice notice-ok mb-2">Attendance of all <b>' + ready.length + '</b> active employees is finalized.</div>';
+        // days without a status would be paid (pay days = 30 - unpaid days), so payroll refuses them
+        const daysOff = (a) => Math.abs(num(a.paid_days) + num(a.unpaid_days) - num(a.total_days)) > 0.01;
+        const notAdding = att.filter((a) => a.is_finalized === 'Y' && activeIds[a.emp_id] && daysOff(a));
+        if (notAdding.length) {
+          h += '<div class="notice notice-bad mb-2"><b>' + notAdding.length + '</b> employee(s) have days with no attendance status (paid + unpaid is not the ' +
+            'days of the period). Payroll cannot use this attendance until it is corrected on the attendance page.</div>';
+        }
+
+        const sum = (k) => att.reduce((t, a) => t + num(a[k]), 0);
+        const stats = [['Rows', att.length], ['Finalized', finalized + ' / ' + att.length], ['Present days', sum('present_days')],
+          ['WFH days', sum('wfh_days')], ['Leave days', sum('leave_days')], ['Absent days', sum('absent_days')],
+          ['Paid days', sum('paid_days')], ['Unpaid days', sum('unpaid_days')]];
+        h += '<div class="kpis mb-2">' + stats.map((x) => '<div class="kpi"><div class="k">' + esc(x[0]) + '</div><div class="v">' +
+          esc(typeof x[1] === 'number' ? (Math.round(x[1] * 100) / 100) : x[1]) + '</div></div>').join('') + '</div>';
+
+        const fy = financialYear(c.payroll_month, c.payroll_year);
+        h += '<div class="mb-2 d-flex flex-wrap align-items-center" style="gap:8px;"><a class="pc-btn' + (missing.length || !att.length ? ' pc-btn-primary' : '') +
+          '" href="' + attendanceFinalizeUrl() + '"><i class="fas fa-user-check"></i> ' +
+          (missing.length || !att.length ? 'Finalize attendance' : 'Open attendance') + ' for ' + esc(c.month_name + ' ' + c.payroll_year) + '</a>' +
+          '<a class="pc-btn" href="' + attendanceCycleUrl() + '"><i class="fas fa-calendar-alt"></i> Attendance cycle ' + esc(fy) + '</a>' +
+          '<button type="button" class="pc-btn" id="btnRefreshData"><i class="fas fa-sync-alt"></i> Refresh</button>' +
+          '<span class="small muted">After finalizing you are brought back to this payroll cycle.</span></div>';
+
+        const cols = [['total_days', 'Total'], ['working_days', 'Working'], ['present_days', 'Present'], ['wfh_days', 'WFH'],
+          ['leave_days', 'Leave'], ['holiday_days', 'Holidays'], ['weekly_off_days', 'Week off'], ['absent_days', 'Absent'],
+          ['half_days', 'Half days'], ['late_count', 'Late'], ['overtime_hours', 'OT hrs'], ['paid_days', 'Paid'], ['unpaid_days', 'Unpaid'], ['_pay', 'Pay days']];
+        const cellVal = (a, k) => k === '_pay' ? Math.max(30 - num(a.unpaid_days), 0) : a[k];
+        h += tableToolbar(false) + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Employee</th><th>Department</th><th>Designation</th>' +
+          cols.map((x) => '<th class="num">' + esc(x[1]) + '</th>').join('') + '<th>Status</th></tr></thead><tbody>';
+
+        // employees with no attendance row first, then the summary rows
+        const noRow = ready.filter((r) => num(r.has_att) !== 1);
+        h += noRow.map((r) => '<tr class="row-bad" data-s="' + esc((r.emp_id + ' ' + r.emp_name).toLowerCase()) + '"><td><b>' + esc(r.emp_id) + '</b> ' +
+          esc(r.emp_name) + '</td><td>-</td><td>-</td>' + cols.map(() => '<td class="num muted">-</td>').join('') +
+          '<td><span class="chip chip-bad">Not generated</span></td></tr>').join('');
+        const sorted = att.slice().sort((x, y) => (x.is_finalized === 'Y') - (y.is_finalized === 'Y') || String(x.emp_id).localeCompare(String(y.emp_id)));
+        h += sorted.map((a) => {
+          const fin = a.is_finalized === 'Y';
+          const inactive = !activeIds[a.emp_id];
+          const bad = fin && daysOff(a);
+          const st = (fin ? '<span class="chip chip-ok">Finalized</span>' : '<span class="chip chip-warn">Not finalized</span>') +
+            (bad ? ' <span class="chip chip-bad" title="Paid + unpaid days is not the days of the period">Days missing</span>' : '') +
+            (inactive ? ' <span class="chip chip-muted" title="Not an active employee: not part of this payroll">Inactive</span>' : '');
+          return '<tr class="' + (fin && !bad ? '' : 'row-bad') + '" data-s="' + esc((a.emp_id + ' ' + a.emp_name).toLowerCase()) + '"><td><b>' + esc(a.emp_id) + '</b> ' +
+            esc(a.emp_name) + '</td><td>' + esc(a.department) + '</td><td>' + esc(a.designation) + '</td>' +
+            cols.map((x) => '<td class="num">' + esc(cellVal(a, x[0]) === null || cellVal(a, x[0]) === undefined ? '-' : cellVal(a, x[0])) + '</td>').join('') +
+            '<td style="white-space:nowrap;">' + st + '</td></tr>';
+        }).join('');
+        if (!att.length && !noRow.length) {
+          h += '<tr><td colspan="' + (cols.length + 4) + '" class="muted">No attendance summary for this month yet.</td></tr>';
+        }
+        h += '</tbody></table></div>';
+        return h + nav(null, '', 'VERIFY_ATTENDANCE', 'Verify attendance');
+      }
+
+      // ---------- salary breakdown (salary structures step) ----------
+      let breakdown = null;          // {columns, employees} from payroll/cycle_breakdown
+      let breakdownLoading = false;
+      const bdShow = { EARNING: true, EMPLOYER_CONTRIBUTION: true, DEDUCTION: true, TOTAL: true };
+      const EDITABLE = ['OPEN', 'ATTENDANCE_VERIFIED', 'STRUCTURE_VERIFIED', 'PROCESSING', 'CALCULATED'];
+
+      async function loadBreakdown() {
+        if (breakdownLoading) return;
+        breakdownLoading = true;
+        try {
+          const res = await fetch(CFG.breakdownUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const json = await res.json();
+          breakdown = json.status ? json : { columns: [], employees: [], error: json.message || 'The breakdown could not be loaded.' };
+        } catch (e) {
+          breakdown = { columns: [], employees: [], error: 'The breakdown could not be loaded: ' + e.message };
+        }
+        breakdownLoading = false;
+        if (STEPS[viewStep].key === 'structure') renderPanel();
+      }
+
+      function bdColumns() {
+        const cols = breakdown.columns || [];
+        const pick = (t) => cols.filter((c) => c.scope !== 'AGGREGATE' && c.type === t);
+        return [
+          { key: 'EARNING', label: 'Earnings', cls: 'g-earn', cols: pick('EARNING') },
+          { key: 'EMPLOYER_CONTRIBUTION', label: 'Employer contributions', cls: 'g-er', cols: pick('EMPLOYER_CONTRIBUTION') },
+          { key: 'DEDUCTION', label: 'Deductions', cls: 'g-ded', cols: pick('DEDUCTION') },
+          { key: 'TOTAL', label: 'Totals', cls: 'g-tot', cols: cols.filter((c) => c.scope === 'AGGREGATE') }
+        ].filter((g) => g.cols.length && bdShow[g.key]);
+      }
+
+      function shortDate(d) {
+        if (!d) return '';
+        const t = new Date(String(d) + 'T00:00:00');
+        return isNaN(t) ? esc(d) : t.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+      }
+
+      function panelStructure() {
+        const c = state.cycle;
+        const rows = state.readiness;
+        const missing = rows.filter((r) => !r.structure_id || num(r.components) === 0);
+        const canEdit = EDITABLE.indexOf(c.cycle_status) >= 0;
+        let h = '<h5 class="font-weight-bold">Salary structures</h5>' +
+          '<div class="small muted mb-2">Full-month salary of every employee for this pay period (' + fmtDate(c.period_start) + ' &ndash; ' + fmtDate(c.period_end) +
+          '), from the salary valid in that period. Attendance is applied later, at <b>Calculate salaries</b>. ' +
+          'A <span style="background:#eef2ff;padding:0 4px;border-radius:4px;">shaded&bull;</span> amount uses the employee\'s own setting instead of the company rule.</div>';
+        h += missing.length
+          ? '<div class="notice notice-warn mb-2"><b>' + missing.length + '</b> employee(s) have no active salary structure for this pay period. Add or correct it on the salary structure page.</div>'
+          : '<div class="notice notice-ok mb-2">All <b>' + rows.length + '</b> employees have a salary for this pay period.' +
+            (canEdit ? ' Use <b>Edit</b> to change one employee; you come back here after saving.' : '') + '</div>';
+        if (!canEdit) {
+          h += '<div class="notice notice-info mb-2">The payroll is ' + esc(c.cycle_status) + ': it keeps its own copy of the salaries, so editing is closed here.</div>';
+        } else if (['PROCESSING', 'CALCULATED'].indexOf(c.cycle_status) >= 0) {
+          h += '<div class="notice notice-warn mb-2">Salaries are already calculated. After changing an employee, recalculate them at <b>Review &amp; approve</b>.</div>';
+        }
+
+        h += '<div class="d-flex flex-wrap align-items-center mb-2" style="gap:8px;">' +
+          '<a class="pc-btn" target="_blank" href="' + CFG.salaryListUrl + '"><i class="fas fa-sitemap"></i> All salary structures</a>' +
+          '<button type="button" class="pc-btn" id="btnRefreshData"><i class="fas fa-sync-alt"></i> Refresh</button>' +
+          '<button type="button" class="pc-btn" id="btnBdCsv"><i class="fas fa-file-csv"></i> Export CSV</button>' +
+          '<span class="bd-toggles ml-2">' + [['EARNING', 'Earnings'], ['EMPLOYER_CONTRIBUTION', 'Employer'], ['DEDUCTION', 'Deductions'], ['TOTAL', 'Totals']]
+            .map((g) => '<label><input type="checkbox" data-bd-group="' + g[0] + '"' + (bdShow[g[0]] ? ' checked' : '') + '> ' + g[1] + '</label>').join('') + '</span></div>';
+
+        if (!breakdown) {
+          if (!breakdownLoading) loadBreakdown();
+          h += '<div class="notice notice-info"><i class="fas fa-spinner fa-spin mr-1"></i> Loading the salary breakdown...</div>';
+        } else if (breakdown.error) {
+          h += '<div class="notice notice-bad">' + esc(breakdown.error) + '</div>';
+        } else {
+          h += tableToolbar(false) + breakdownTable(canEdit);
+        }
+        h += manualInputsBlock();
+        return h + nav('BACK', 'Back to attendance', 'VERIFY_STRUCTURE', 'Confirm salary structures');
+      }
+
+      function breakdownTable(canEdit) {
+        const groups = bdColumns();
+        const flat = [].concat(...groups.map((g) => g.cols));
+        const emps = breakdown.employees || [];
+        const sums = {};
+        let ctcSum = 0;
+        let h = '<div class="tbl-wrap" style="max-height:540px;"><table class="tbl bd"><thead><tr>' +
+          '<th class="stick" rowspan="2">Employee</th><th rowspan="2">Salary period</th><th class="num" rowspan="2">Monthly CTC</th>' +
+          groups.map((g) => '<th class="g ' + g.cls + '" colspan="' + g.cols.length + '">' + esc(g.label) + '</th>').join('') +
+          '<th rowspan="2">Check</th><th rowspan="2"></th></tr><tr>' +
+          flat.map((col) => '<th class="num" title="' + esc(col.name) + '">' + esc(col.code) + '</th>').join('') + '</tr></thead><tbody>';
+        h += emps.map((e) => {
+          const s = ' data-s="' + esc((e.emp_id + ' ' + e.emp_name).toLowerCase()) + '"';
+          const who = '<td class="stick"><b>' + esc(e.emp_id) + '</b> ' + esc(e.emp_name) + '</td>';
+          if (!e.structure_id) {
+            const add = canEdit
+              ? ' <a class="pc-btn pc-btn-sm pc-btn-primary ml-2" href="' + CFG.salaryNewUrl + encodeURIComponent(e.emp_id) + '?from=' +
+                encodeURIComponent(state.cycle.period_start) + '&return=' + encodeURIComponent('cycle/' + CFG.id) + '"><i class="fas fa-plus-circle"></i> Add salary</a>'
+              : '';
+            return '<tr class="row-bad"' + s + '>' + who + '<td colspan="' + (flat.length + 4) + '"><span class="chip chip-bad">No salary for this pay period</span>' + add + '</td></tr>';
+          }
+          ctcSum += num(e.ctc);
+          const cells = flat.map((col) => {
+            const v = num(e.a[col.code]);
+            sums[col.code] = (sums[col.code] || 0) + v;
+            const own = e.own && e.own[col.code];
+            return '<td class="num' + (own ? ' own' : '') + (col.scope === 'AGGREGATE' ? ' tot' : '') + '"' +
+              (own ? ' title="Own setting: ' + esc(own) + '"' : '') + '>' + inr.format(v) + '</td>';
+          }).join('');
+          const total = e.a.TOTAL_CTC !== undefined ? num(e.a.TOTAL_CTC) : null;
+          const check = total === null ? '' : (Math.abs(total - num(e.ctc)) <= 0.05
+            ? '<span class="chip chip-ok" title="Gross + employer contribution = CTC">&#10003;</span>'
+            : '<span class="chip chip-warn" title="Total cost ' + inr.format(total) + ' vs CTC ' + inr.format(num(e.ctc)) + '">&#9888; ' + inr.format(total - num(e.ctc)) + '</span>');
+          const edit = canEdit
+            ? '<a class="pc-btn pc-btn-sm pc-btn-primary" href="' + CFG.salaryEditUrl + encodeURIComponent(e.emp_id) + '?period=' + encodeURIComponent(e.structure_id) +
+              '&return=' + encodeURIComponent('cycle/' + CFG.id) + '"><i class="fas fa-pen"></i> Edit</a>'
+            : '';
+          return '<tr' + s + '>' + who + '<td style="white-space:nowrap;"><span class="chip chip-muted">#' + esc(e.structure_id) + '</span> ' +
+            shortDate(e.from) + ' &ndash; ' + (e.to ? shortDate(e.to) : 'onwards') + '</td><td class="num"><b>' + inr.format(num(e.ctc)) + '</b></td>' +
+            cells + '<td>' + check + '</td><td class="text-right">' + edit + '</td></tr>';
+        }).join('');
+        h += '</tbody><tfoot><tr><td class="stick">Total (' + emps.length + ' employees)</td><td></td><td class="num">' + inr.format(ctcSum) + '</td>' +
+          flat.map((col) => '<td class="num">' + inr.format(sums[col.code] || 0) + '</td>').join('') + '<td></td><td></td></tr></tfoot></table></div>';
+        return h;
+      }
+
+      function exportBreakdownCsv() {
+        if (!breakdown || breakdown.error) return;
+        const cols = (breakdown.columns || []);
+        const q = (v) => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+        const lines = [['Emp ID', 'Employee', 'Structure', 'From', 'To', 'Monthly CTC'].concat(cols.map((c) => c.code)).map(q).join(',')];
+        (breakdown.employees || []).forEach((e) => {
+          lines.push([e.emp_id, e.emp_name, e.structure_id, e.from, e.to || '', e.ctc].concat(cols.map((c) => (e.a[c.code] !== undefined ? e.a[c.code] : ''))).map(q).join(','));
+        });
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'salary_breakdown_' + state.cycle.cycle_code + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      function manualInputsBlock() {
+        const editable = ['OPEN', 'ATTENDANCE_VERIFIED', 'STRUCTURE_VERIFIED', 'PROCESSING', 'CALCULATED'].indexOf(state.cycle.cycle_status) >= 0;
+        let h = '<div class="border rounded p-2 mt-3" style="background:var(--soft);"><div class="font-weight-bold small text-uppercase muted mb-1">Manual amounts for this month</div>' +
+          '<div class="small muted mb-2">TDS, salary advance, other earnings and every other manual component. ' +
+          (state.cycle.cycle_status === 'CALCULATED' ? 'Saving recalculates that employee straight away.' : 'They are used when salaries are calculated.') + '</div>';
+        if (editable && CFG.manualComponents.length) {
+          const emps = (state.readiness || []).map((r) => '<option value="' + esc(r.emp_id) + '">' + esc(r.emp_id + ' ' + r.emp_name) + '</option>').join('');
+          const comps = CFG.manualComponents.map((m) => '<option value="' + esc(m.component_id) + '">' + esc(m.component_code + ' - ' + m.component_name) + '</option>').join('');
+          h += '<div class="form-row align-items-end">' +
+            '<div class="col-md-4 mb-2"><label class="small font-weight-bold mb-0">Employee</label><select class="custom-select custom-select-sm" id="miEmp">' + emps + '</select></div>' +
+            '<div class="col-md-3 mb-2"><label class="small font-weight-bold mb-0">Component</label><select class="custom-select custom-select-sm" id="miComp">' + comps + '</select></div>' +
+            '<div class="col-md-2 mb-2"><label class="small font-weight-bold mb-0">Amount (₹)</label><input type="number" min="0" step="0.01" class="form-control form-control-sm" id="miAmount" placeholder="0 = remove"></div>' +
+            '<div class="col-md-2 mb-2"><label class="small font-weight-bold mb-0">Remarks</label><input type="text" maxlength="255" class="form-control form-control-sm" id="miRemarks"></div>' +
+            '<div class="col-md-1 mb-2"><button type="button" class="pc-btn pc-btn-primary w-100 justify-content-center" id="btnSaveInput"' + (busy ? ' disabled' : '') + '>Save</button></div></div>';
+        } else if (!editable) {
+          h += '<div class="small muted mb-2">The payroll is ' + esc(state.cycle.cycle_status) + ': manual amounts can no longer change.</div>';
+        }
+        const inputs = state.inputs || [];
+        h += inputs.length
+          ? '<table class="tbl" style="background:#fff;"><thead><tr><th>Employee</th><th>Component</th><th class="num">Amount</th><th>Remarks</th><th></th></tr></thead><tbody>' +
+            inputs.map((i) => '<tr><td><b>' + esc(i.emp_id) + '</b> ' + esc(i.emp_name) + '</td><td>' + esc(i.component_code) + '</td><td class="num">' + money(i.amount) +
+              '</td><td>' + esc(i.input_remarks) + '</td><td class="text-right">' + (editable ? '<button type="button" class="pc-btn pc-btn-sm pc-btn-danger" data-remove-input="1" data-emp="' + esc(i.emp_id) +
+              '" data-comp="' + esc(i.component_id) + '">Remove</button>' : '') + '</td></tr>').join('') + '</tbody></table>'
+          : '<div class="small muted">No manual amounts entered for this month.</div>';
+        return h + '</div>';
+      }
+
+      function panelCalculate() {
+        const c = state.cycle;
+        const st = c.cycle_status;
+        let h = '<h5 class="font-weight-bold">Calculate salaries</h5>' +
+          '<div class="small muted mb-2">Every employee is calculated one after another by the salary engine: components in calculation order, slabs by priority, formulas, ' +
+          'attendance (paid days of 30) and the manual amounts of the month.</div>';
+        h += '<div id="calcBox" class="mb-2">' + calcBoxHtml() + '</div>';
+        let extra = '';
+        if (st === 'STRUCTURE_VERIFIED' && allowed('START_CALCULATION')) {
+          extra += '<button type="button" class="pc-btn pc-btn-primary" id="btnStartCalc"' + (busy ? ' disabled' : '') + '><i class="fas fa-play"></i> Start calculation</button>';
+        }
+        if (st === 'PROCESSING') {
+          const left = num(c.pending_count) + num(c.error_count);
+          if (left > 0) {
+            extra += '<button type="button" class="pc-btn pc-btn-primary" id="btnContinueCalc"' + (busy ? ' disabled' : '') + '><i class="fas fa-play"></i> ' +
+              (num(c.pending_count) > 0 ? 'Calculate ' + left + ' remaining' : 'Retry ' + left + ' failed') + '</button>';
+          }
+        }
+        h += errorList();
+        return h + nav('BACK', st === 'PROCESSING' ? 'Back to salary structures' : 'Back to salary structures',
+          st === 'PROCESSING' ? 'FINISH_CALCULATION' : null, 'Finish calculation', null, extra);
+      }
+
+      function calcBoxHtml() {
+        const c = state.cycle;
+        const total = num(c.detail_count);
+        const done = total - num(c.pending_count) - num(c.error_count);
+        if (!total) return '<div class="notice notice-info">Not started yet.</div>';
+        const pct = total ? Math.round(done * 100 / total) : 0;
+        return '<div class="d-flex justify-content-between small font-weight-bold mb-1"><span id="calcLabel">' + done + ' of ' + total + ' calculated' +
+          (num(c.error_count) ? ', ' + c.error_count + ' failed' : '') + '</span><span id="calcPct">' + pct + '%</span></div>' +
+          '<div class="progress-outer"><div class="progress-inner" id="calcBar" style="width:' + pct + '%"></div></div>' +
+          '<div class="small muted mt-1" id="calcNow"></div>';
+      }
+
+      function errorList() {
+        const bad = (state.employees || []).filter((e) => e.employee_payroll_status === 'ERROR');
+        if (!bad.length) return '';
+        return '<div class="notice notice-bad mt-2"><b>' + bad.length + ' employee(s) could not be calculated:</b><ul class="mb-0 pl-3">' +
+          bad.slice(0, 30).map((e) => '<li><b>' + esc(e.emp_id) + '</b> ' + esc(e.emp_name) + ': ' + esc(e.calculation_remarks) + '</li>').join('') +
+          (bad.length > 30 ? '<li>... and ' + (bad.length - 30) + ' more</li>' : '') + '</ul>' +
+          '<div class="small mt-1">Fix the cause (attendance, salary structure or a component formula), then retry.</div></div>';
+      }
+
+      function panelReview() {
+        const st = state.cycle.cycle_status;
+        let h = '<h5 class="font-weight-bold">Review & approve</h5><div class="small muted mb-2">Check every employee. ' +
+          'Put a salary on hold if it must not be paid with the others; recalculate one employee after changing their salary structure or manual amounts. ' +
+          'You can go back to change salary structures; after approval you can still withdraw it until the payroll is finalized.</div>';
+        h += employeesTable({ hold: true, recalc: st === 'CALCULATED' });
+        if (st === 'CALCULATED') h += manualInputsBlock();
+        let extra = '';
+        if (allowed('RECALCULATE')) extra += '<button type="button" class="pc-btn" id="btnRecalcAll"' + (busy ? ' disabled' : '') + '><i class="fas fa-redo"></i> Recalculate everyone</button>';
+        return h + nav('BACK', 'Back to salary structures', 'APPROVE', 'Approve payroll', null, extra);
+      }
+
+      function panelFinalize() {
+        const c = state.cycle;
+        let h = '<h5 class="font-weight-bold">Finalize</h5>';
+        h += '<div class="notice notice-warn mb-2">After finalizing, the payroll is locked and <b>cannot go back</b>. ' +
+          (num(c.on_hold_count) ? '<b>' + c.on_hold_count + '</b> salary(ies) on hold (' + money(c.on_hold_net_pay) + ') will stay unpaid when the payroll is marked paid.' : 'No salaries are on hold.') + '</div>';
+        h += employeesTable({ hold: true, recalc: false, onlyHeldFirst: true });
+        return h + nav('BACK', 'Withdraw approval', 'FINALIZE', 'Finalize payroll',
+          'Finalize the payroll for ' + c.month_name + ' ' + c.payroll_year + '? After this it cannot go back.');
+      }
+
+      function panelPay() {
+        const c = state.cycle;
+        const toPay = num(c.detail_count) - num(c.on_hold_count);
+        let h = '<h5 class="font-weight-bold">Mark as paid</h5>';
+        h += '<div class="notice notice-info mb-2"><b>' + toPay + '</b> employees will be marked as paid (' + money(num(c.total_net_pay) - num(c.on_hold_net_pay)) + '). ' +
+          (num(c.on_hold_count) ? '<b>' + c.on_hold_count + '</b> on hold stay unpaid and can be paid later from the hold list.' : '') + '</div>';
+        h += employeesTable({ hold: true, recalc: false, onlyHeldFirst: true });
+        return h + nav(null, '', 'MARK_PAID', 'Mark as paid', 'Mark ' + toPay + ' employees as paid? This cannot be undone.');
+      }
+
+      function panelClose() {
+        const c = state.cycle;
+        const st = c.cycle_status;
+        const held = (state.employees || []).filter((e) => e.payment_status !== 'PAID');
+        const noSlip = (state.employees || []).filter((e) => e.payment_status === 'PAID' && !e.payslip_number).length;
+        let h = '<h5 class="font-weight-bold">Payslips & close</h5>';
+        if (st === 'CLOSED') {
+          h += '<div class="notice notice-ok mb-2">The cycle was closed by <b>' + esc(c.closed_by) + '</b> on ' + fmtDateTime(c.closed_at) + '.</div>';
+        } else if (held.length) {
+          h += '<div class="notice notice-bad mb-2"><b>' + held.length + '</b> salary(ies) are still unpaid (on hold). The cycle stays open until they are paid. ' +
+            'Use <b>Release & pay</b> when a salary can be paid: it is marked paid and its payslip is generated.</div>';
+        } else if (noSlip) {
+          h += '<div class="notice notice-warn mb-2"><b>' + noSlip + '</b> paid employee(s) have no payslip yet. Generate payslips, then close the cycle.</div>';
+        } else {
+          h += '<div class="notice notice-ok mb-2">Everybody is paid and has a payslip. The cycle can be closed.</div>';
+        }
+        h += '<div class="mb-2 d-flex flex-wrap" style="gap:8px;"><a class="pc-btn" target="_blank" href="' + CFG.payslipsUrl + '?month=' + c.payroll_month + '&year=' + c.payroll_year +
+          '"><i class="fas fa-file-invoice"></i> View payslips</a><a class="pc-btn" target="_blank" href="' + CFG.summaryUrl + '?month=' + c.payroll_month + '&year=' + c.payroll_year +
+          '"><i class="fas fa-table"></i> Payroll summary</a></div>';
+        if (held.length) {
+          h += '<h6 class="font-weight-bold mt-2">Unpaid / on hold</h6>' + employeesTable({ rows: held, pay: st === 'PARTIALLY_PAID', hold: st === 'PARTIALLY_PAID' });
+        }
+        h += '<h6 class="font-weight-bold mt-3">All employees</h6>' + employeesTable({});
+        let extra = '';
+        if (allowed('GENERATE_PAYSLIPS')) extra += '<button type="button" class="pc-btn pc-btn-success" data-action="GENERATE_PAYSLIPS"' + (busy ? ' disabled' : '') + '><i class="fas fa-file-invoice"></i> Generate payslips</button>';
+        return h + nav(null, '', 'CLOSE', 'Close cycle', 'Close the payroll cycle? A closed cycle cannot be changed.', extra);
+      }
+
+      // ---------- employees table ----------
+      function tableToolbar(withKinds) {
+        let h = '<div class="d-flex flex-wrap align-items-center mb-2" style="gap:8px;"><input type="search" class="form-control form-control-sm" style="max-width:260px;" ' +
+          'placeholder="Search employee..." data-filter-text value="' + esc(tableFilter.text) + '">';
+        if (withKinds) {
+          const kinds = [['ALL', 'All'], ['HOLD', 'On hold'], ['ERROR', 'Not calculated'], ['UNPAID', 'Unpaid']];
+          h += '<select class="custom-select custom-select-sm" style="max-width:170px;" data-filter-kind>' +
+            kinds.map((k) => '<option value="' + k[0] + '"' + (tableFilter.kind === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select>';
+        }
+        return h + '</div>';
+      }
+
+      function matchRow(r) {
+        const t = tableFilter.text.trim().toLowerCase();
+        if (t && (String(r.emp_id) + ' ' + String(r.emp_name)).toLowerCase().indexOf(t) < 0) return false;
+        if (r.payroll_detail_id === undefined) return true;
+        if (tableFilter.kind === 'HOLD') return r.payment_decision === 'HOLD' && r.payment_status !== 'PAID';
+        if (tableFilter.kind === 'ERROR') return ['PENDING', 'ERROR'].indexOf(r.employee_payroll_status) >= 0;
+        if (tableFilter.kind === 'UNPAID') return r.payment_status !== undefined && r.payment_status !== 'PAID';
+        return true;
+      }
+
+      function employeesTable(opt) {
+        let rows = opt.rows || (state.employees || []);
+        if (!rows.length) return '<div class="notice notice-info">No employees in this payroll yet.</div>';
+        if (opt.onlyHeldFirst) rows = rows.slice().sort((a, b) => (b.payment_decision === 'HOLD') - (a.payment_decision === 'HOLD'));
+        const st = state.cycle.cycle_status;
+        const canHold = opt.hold && ['CALCULATED', 'APPROVED', 'FINALIZED', 'PARTIALLY_PAID'].indexOf(st) >= 0;
+        let h = (opt.rows ? '' : tableToolbar(true)) + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Employee</th><th class="num">Pay days</th>' +
+          '<th class="num">Earned CTC</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Employer</th><th class="num">Net pay</th>' +
+          '<th>Status</th><th>Payment</th><th></th></tr></thead><tbody>';
+        h += rows.filter(opt.rows ? () => true : matchRow).map((e) => {
+          const calc = e.employee_payroll_status;
+          const calcChip = calc === 'ERROR' ? '<span class="chip chip-bad" title="' + esc(e.calculation_remarks) + '">Error</span>'
+            : calc === 'PENDING' ? '<span class="chip chip-warn">Pending</span>'
+            : '<span class="chip chip-ok">' + esc(calc.charAt(0) + calc.slice(1).toLowerCase()) + '</span>';
+          let pay;
+          if (e.payment_status === 'PAID') pay = '<span class="chip chip-ok">Paid</span>' + (e.payslip_number ? ' <span class="chip chip-muted" title="' + esc(e.payslip_number) + '"><i class="fas fa-file-invoice"></i></span>' : '');
+          else if (e.payment_decision === 'HOLD') pay = '<span class="chip chip-bad" title="' + esc(e.hold_reason) + '">On hold</span><div class="small muted">' + esc(e.hold_reason) + '</div>';
+          else pay = '<span class="chip chip-muted">' + (e.payment_status === 'NOT_PAID' ? 'Not paid' : esc(e.payment_status)) + '</span>';
+          let act = '';
+          if (opt.recalc && ['PENDING', 'ERROR', 'CALCULATED'].indexOf(calc) >= 0) {
+            act += '<button type="button" class="pc-btn pc-btn-sm" data-recalc="' + esc(e.payroll_detail_id) + '" title="Recalculate this employee"' + (busy ? ' disabled' : '') + '><i class="fas fa-redo"></i></button> ';
+          }
+          if (canHold && e.payment_status !== 'PAID') {
+            act += e.payment_decision === 'HOLD'
+              ? (opt.pay ? '' : '<button type="button" class="pc-btn pc-btn-sm" data-release="' + esc(e.payroll_detail_id) + '"' + (busy ? ' disabled' : '') + '>Release</button> ')
+              : '<button type="button" class="pc-btn pc-btn-sm pc-btn-danger" data-hold="' + esc(e.payroll_detail_id) + '" data-name="' + esc(e.emp_id + ' ' + e.emp_name) + '"' + (busy ? ' disabled' : '') + '>Hold</button> ';
+          }
+          if (opt.pay && e.payment_status !== 'PAID') {
+            act += '<button type="button" class="pc-btn pc-btn-sm pc-btn-success" data-pay="' + esc(e.payroll_detail_id) + '" data-name="' + esc(e.emp_id + ' ' + e.emp_name) + '"' + (busy ? ' disabled' : '') + '>Release & pay</button>';
+          }
+          return '<tr class="' + (calc === 'ERROR' ? 'row-bad' : '') + '"' + ' data-s="' + esc((e.emp_id + ' ' + e.emp_name).toLowerCase()) + '"' + '><td><b>' + esc(e.emp_id) + '</b> ' + esc(e.emp_name) + '</td>' +
+            '<td class="num">' + esc(e.payable_days) + '</td><td class="num">' + money(e.ctc1) + '</td><td class="num">' + money(e.gross_earnings) +
+            '</td><td class="num">' + money(e.total_deductions) + '</td><td class="num">' + money(e.employer_contributions) + '</td><td class="num"><b>' + money(e.net_pay) +
+            '</b></td><td>' + calcChip + '</td><td>' + pay + '</td><td class="text-right" style="white-space:nowrap;">' + act + '</td></tr>';
+        }).join('');
+        return h + '</tbody></table></div>';
+      }
+
+      function bindTableFilter() {
+        const t = document.querySelector('[data-filter-text]');
+        if (t) t.addEventListener('input', function () {
+          tableFilter.text = this.value;
+          const q = this.value.trim().toLowerCase();
+          document.querySelectorAll('#stepPanel tr[data-s]').forEach(function (tr) {
+            tr.style.display = (!q || tr.dataset.s.indexOf(q) >= 0) ? '' : 'none';
+          });
+        });
+        document.querySelectorAll('[data-bd-group]').forEach((cb) => cb.addEventListener('change', function () { bdShow[this.dataset.bdGroup] = this.checked; renderPanel(); }));
+        const k = document.querySelector('[data-filter-kind]');
+        if (k) k.addEventListener('change', function () { tableFilter.kind = this.value; renderPanel(); });
+      }
+
+      // ---------- history ----------
+      function renderLog() {
+        const rows = state.log || [];
+        $id('logBox').innerHTML = rows.length
+          ? '<div class="tbl-wrap" style="max-height:320px;"><table class="tbl"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Status</th><th>Details</th></tr></thead><tbody>' +
+            rows.map((l) => '<tr><td style="white-space:nowrap;">' + fmtDateTime(l.performed_at) + '</td><td>' + esc(l.performed_by_name) + '</td><td>' +
+              esc(String(l.action).replace(/_/g, ' ').toLowerCase()) + (l.emp_id ? ' <b>' + esc(l.emp_id) + '</b>' : '') + '</td><td style="white-space:nowrap;">' +
+              esc(l.from_status || '') + (l.to_status ? ' &rarr; ' + esc(l.to_status) : '') + '</td><td>' + esc(l.log_remarks) + '</td></tr>').join('') + '</tbody></table></div>'
+          : '<div class="small muted">No history yet.</div>';
+      }
+
+      // ---------- calculation loop with progress ----------
+      async function runCalculation(startAction) {
+        if (busy) return;
+        if (startAction) {
+          const r = await doAction(startAction, startAction === 'RECALCULATE'
+            ? 'Recalculate every employee? Their current results are replaced (holds are kept).' : null);
+          if (!r || !r.status) return;
+        }
+        viewStep = 3;
+        await load(true);
+        const todo = (state.employees || []).filter((e) => ['PENDING', 'ERROR'].indexOf(e.employee_payroll_status) >= 0);
+        if (!todo.length) { toast('Nothing left to calculate.', 'info'); return; }
+
+        busy = true;
+        stopRequested = false;
+        renderPanel();
+        const total = num(state.cycle.detail_count) || todo.length;
+        let done = total - todo.length;
+        let failed = 0;
+        const box = $id('calcBox');
+        box.insertAdjacentHTML('beforeend', '<div class="mt-2"><button type="button" class="pc-btn pc-btn-sm pc-btn-danger" id="btnStopCalc">Stop</button></div>');
+        $id('btnStopCalc').addEventListener('click', () => { stopRequested = true; });
+
+        for (let i = 0; i < todo.length; i++) {
+          if (stopRequested) break;
+          const e = todo[i];
+          $id('calcNow').innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Calculating <b>' + esc(e.emp_id) + '</b> ' + esc(e.emp_name) + ' (' + (i + 1) + ' of ' + todo.length + ')';
+          const r = await post(CFG.calcUrl, { cycle_id: CFG.id, payroll_detail_id: e.payroll_detail_id });
+          if (r.status) done++; else failed++;
+          const pct = Math.round(done * 100 / total);
+          $id('calcBar').style.width = pct + '%';
+          $id('calcPct').textContent = pct + '%';
+          $id('calcLabel').textContent = done + ' of ' + total + ' calculated' + (failed ? ', ' + failed + ' failed' : '');
+        }
+        busy = false;
+        await load(true);
+        if (stopRequested) {
+          toast('Calculation stopped. Continue whenever you are ready.', 'info');
+        } else if (failed) {
+          toast(failed + ' employee(s) could not be calculated. See the list.', 'bad');
+        } else if (state.cycle.cycle_status === 'PROCESSING') {
+          await doAction('FINISH_CALCULATION');
+          viewStep = Math.min(currentStep(), STEPS.length - 1);
+          render();
+        } else {
+          toast('Recalculated.', 'ok');
+        }
+      }
+
+      async function recalcOne(detailId) {
+        if (busy) return;
+        busy = true;
+        renderPanel();
+        const r = await post(CFG.calcUrl, { cycle_id: CFG.id, payroll_detail_id: detailId });
+        busy = false;
+        toast((r.data && r.data.emp_id ? r.data.emp_id + ': ' : '') + (r.message || ''), r.status ? 'ok' : 'bad');
+        await load(true);
+      }
+
+      // ---------- events ----------
+      document.addEventListener('click', async function (ev) {
+        const t = ev.target.closest('button, a');
+        if (!t) return;
+
+        if (t.matches('.step') && !t.disabled) { viewStep = parseInt(t.dataset.step, 10); render(); return; }
+        if (t.id === 'btnReload' || t.id === 'btnRefreshData') { await load(true); toast('Refreshed.', 'info'); return; }
+        if (t.id === 'btnDeleteCycle') {
+          const c = state.cycle;
+          const del = await payrollDialog.ask({
+            title: 'Delete payroll ' + c.month_name + ' ' + c.payroll_year,
+            message: 'Cycle ' + c.cycle_code + ' and its calculated employee results are removed. ' +
+                     'Attendance, salary structures and manual amounts are kept. This cannot be undone.\n\n' +
+                     'The month can be created again afterwards.',
+            input: { label: 'Reason', required: true, multiline: true, placeholder: 'Why is this payroll deleted?' },
+            okText: 'Delete payroll', danger: true
+          });
+          if (!del.ok) return;
+          const r = await post(CFG.deleteUrl, { cycle_id: CFG.id, reason: del.value });
+          toast(r.message || (r.status ? 'Deleted.' : 'Not deleted.'), r.status ? 'ok' : 'bad');
+          if (r.status) setTimeout(() => { window.location.href = CFG.dashboardUrl; }, 1200);
+          return;
+        }
+        if (t.id === 'btnBdCsv') { exportBreakdownCsv(); return; }
+        if (t.id === 'btnToggleLog') { const b = $id('logBox'); const show = b.style.display === 'none'; b.style.display = show ? '' : 'none'; t.textContent = show ? 'Hide' : 'Show'; return; }
+        if (t.id === 'btnStartCalc') { await runCalculation('START_CALCULATION'); return; }
+        if (t.id === 'btnContinueCalc') { await runCalculation(null); return; }
+        if (t.id === 'btnRecalcAll') { await runCalculation('RECALCULATE'); return; }
+
+        if (t.dataset.action) {
+          const a = t.dataset.action;
+          const r = await doAction(a, t.dataset.confirm || (a === 'BACK' ? 'Go back one step?' : null));
+          if (r && r.status && a === 'START_CALCULATION') await runCalculation(null);
+          return;
+        }
+        if (t.dataset.recalc) { await recalcOne(t.dataset.recalc); return; }
+        if (t.dataset.hold) {
+          const hold = await payrollDialog.ask({
+            title: 'Hold salary',
+            message: 'The salary of ' + t.dataset.name + ' stays unpaid when the payroll is marked paid. ' +
+                     'You can release it or pay it later.',
+            input: { label: 'Reason', required: true, multiline: true, placeholder: 'Why is this salary on hold?' },
+            okText: 'Hold salary'
+          });
+          if (!hold.ok) return;
+          const r = await post(CFG.holdUrl, { payroll_detail_id: t.dataset.hold, action: 'HOLD', reason: hold.value });
+          toast(r.message, r.status ? 'ok' : 'bad');
+          await load(true);
+          return;
+        }
+        if (t.dataset.release) {
+          const r = await post(CFG.holdUrl, { payroll_detail_id: t.dataset.release, action: 'RELEASE', reason: '' });
+          toast(r.message, r.status ? 'ok' : 'bad');
+          await load(true);
+          return;
+        }
+        if (t.dataset.pay) {
+          const pay = await payrollDialog.ask({
+            title: 'Pay ' + t.dataset.name,
+            message: 'The salary is released and marked paid now. Its payslip is generated straight away.',
+            input: { label: 'Payment note', required: false, placeholder: 'For example the bank reference' },
+            okText: 'Pay now'
+          });
+          if (!pay.ok) return;
+          const r = await post(CFG.payUrl, { payroll_detail_id: t.dataset.pay, remarks: pay.value });
+          toast(r.message, r.status ? 'ok' : 'bad');
+          await load(true);
+          return;
+        }
+        if (t.id === 'btnSaveInput' || t.dataset.removeInput) {
+          const emp = t.dataset.removeInput ? t.dataset.emp : $id('miEmp').value;
+          const comp = t.dataset.removeInput ? t.dataset.comp : $id('miComp').value;
+          const amount = t.dataset.removeInput ? '0' : $id('miAmount').value;
+          if (amount === '') { toast('Enter an amount (0 removes it).', 'bad'); return; }
+          const r = await post(CFG.inputUrl, { cycle_id: CFG.id, emp_id: emp, component_id: comp, amount: amount, remarks: t.dataset.removeInput ? '' : $id('miRemarks').value });
+          toast(r.message, r.status ? 'ok' : 'bad');
+          if (r.status && state.cycle.cycle_status === 'CALCULATED' && r.data && r.data.payroll_detail_id) {
+            await recalcOne(r.data.payroll_detail_id);
+          } else {
+            await load(true);
+          }
+        }
+      });
+
+      if (CFG.flashSuccess) toast(CFG.flashSuccess, 'ok');
+      if (CFG.flashError) toast(CFG.flashError, 'bad');
+      load(false);
+    })();
+  </script>
+</body>
+
+</html>
