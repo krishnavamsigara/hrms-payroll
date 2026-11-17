@@ -504,9 +504,13 @@ if (!function_exists('base_url')) {
               <a href="<?= base_url('payroll/salary_structure') ?>" class="pc-btn shadow-sm">
                 <i class="fas fa-sitemap text-primary"></i> View Salary Structures
               </a>
-              <button class="pc-btn pc-btn-primary" id="btnOpenAddModal" type="button">
+              <a href="<?= base_url('payroll/variables') ?>" class="pc-btn shadow-sm">
+                <i class="fas fa-sliders-h text-primary"></i> Payroll Variables
+              </a>
+              <!-- add / edit open the full page (salary_component_form); the old popup below is no longer opened -->
+              <a href="<?= base_url('payroll/salary_components/new') ?>" class="pc-btn pc-btn-primary">
                 <i class="fas fa-plus-circle"></i> Add New Component
-              </button>
+              </a>
             </div>
           </div>
 
@@ -813,11 +817,11 @@ if (!function_exists('base_url')) {
                         </span>
                       </td>
                       <td class="text-right pr-3">
-                        <button type="button"
-                          class="btn btn-xs btn-outline-primary mr-1 btn-edit font-weight-bold px-2 py-1"
-                          data-id="<?= esc($item->component_id) ?>" style="border-radius: 6px;">
+                        <a href="<?= base_url('payroll/salary_components/edit/' . (int) $item->component_id) ?>"
+                          class="btn btn-xs btn-outline-primary mr-1 font-weight-bold px-2 py-1"
+                          style="border-radius: 6px;">
                           <i class="fas fa-edit mr-1"></i> Edit
-                        </button>
+                        </a>
                         <button type="button" class="btn btn-xs btn-outline-secondary btn-toggle-status px-2 py-1"
                           data-id="<?= esc($item->component_id) ?>" style="border-radius: 6px;" title="Toggle Status">
                           <i class="fas fa-power-off"></i>

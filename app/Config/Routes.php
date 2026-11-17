@@ -305,6 +305,14 @@ $routes->POST('payroll/validate_formula', 'SalaryController::validate_formula');
 $routes->GET('payroll/component_slabs', 'SalaryController::component_slabs');
 $routes->POST('payroll/save_component_slabs', 'SalaryController::save_component_slabs');
 
+# salary components: add / edit page, payroll variables (component_phase1-3.sql)
+$routes->get('payroll/salary_components/new', 'SalaryController::component_form');
+$routes->get('payroll/salary_components/edit/(:num)', 'SalaryController::component_form/$1');
+$routes->post('payroll/salary_components/save', 'SalaryController::component_save');
+$routes->get('payroll/variables', 'SalaryController::payroll_variables');
+$routes->post('payroll/variables/save', 'SalaryController::payroll_variable_save');
+$routes->post('payroll/salary_structure/variables', 'SalaryController::employee_variables_save');
+
 $routes->GET('payroll/salary_structure', 'SalaryController::sal_struct');
 $routes->POST('payroll/salary_structure', 'SalaryController::sal_struct');
 

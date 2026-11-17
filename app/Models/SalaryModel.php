@@ -351,5 +351,67 @@ class SalaryModel extends Model
         return $this->callProcedure('hrms_get_payslip', [$id, $emp_id, $month, $year]);
     }
 
+    // ------------------------------------------------------------------
+    // Salary components: add / edit page (component_phase1-3.sql)
+    // ------------------------------------------------------------------
 
+    /** One component for the form (every column, its method, slab count), or [] when refused / not found. */
+    public function component_get($emp_id, $component_id): array
+    {
+        $rows = $this->callProcedureRows('hrms_component_get', [$emp_id, $component_id]);
+        $row  = $rows[0] ?? [];
+        return strtoupper((string) ($row['status'] ?? 'N')) === 'Y' ? $row : [];
+    }
+
+    /** Every name a formula can use: variables, components and totals. */
+    public function formula_names($emp_id): array
+    {
+        $rows = $this->callProcedureRows('hrms_formula_names', [$emp_id]);
+        return array_values(array_filter($rows, fn($r) => strtoupper((string) ($r['status'] ?? 'N')) === 'Y' && !empty($r['code'])));
+    }
+
+    /** Save a component with one calculation method (hrms_component_save); $p holds the form fields. */
+    public function component_save($emp_id, array $p): array
+    {
+        return $this->callProcedureRows('hrms_component_save', [
+            $emp_id, $p['component_id'], $p['code'], $p['name'], $p['type'], $p['scope'], $p['method'],
+            $p['value'], $p['base'], $p['formula'], $p['min'], $p['max'], $p['eligibility'], $p['rounding'],
+            $p['taxable'], $p['active'], $p['order'], $p['include_in_total'], $p['slabs'], $p['dry_run'],
+        ]);
+    }
+
+    /** Statutory, counts in total and balancing flags (set after a successful save). */
+    public function component_set_flags($emp_id, $component_id, $statutory, $include_in_total, $balancing): array
+    {
+        return $this->callProcedureRows('hrms_component_set_flags', [$emp_id, $component_id, $statutory, $include_in_total, $balancing]);
+    }
+
+    // ------------------------------------------------------------------
+    // Payroll variables (component_phase2.sql)
+    // ------------------------------------------------------------------
+
+    /** Every payroll variable with what uses it. */
+    public function payroll_variables($emp_id): array
+    {
+        $rows = $this->callProcedureRows('hrms_payroll_variable_list', [$emp_id]);
+        return array_values(array_filter($rows, fn($r) => !empty($r['var_code'])));
+    }
+
+    public function payroll_variable_save($emp_id, $code, $name, $description, $data_type, $default, $active): array
+    {
+        return $this->callProcedureRows('hrms_payroll_variable_save', [$emp_id, $code, $name, $description, $data_type, $default, $active]);
+    }
+
+    /** The variables of one employee (own value or default). */
+    public function employee_variables($emp_id, $target_emp_id): array
+    {
+        $rows = $this->callProcedureRows('hrms_employee_variables', [$emp_id, $target_emp_id]);
+        return array_values(array_filter($rows, fn($r) => !empty($r['var_code'])));
+    }
+
+    /** $values_json: [{"var_code": "X", "value": 1 | null}] */
+    public function employee_variables_save($emp_id, $target_emp_id, $values_json): array
+    {
+        return $this->callProcedureRows('hrms_employee_variables_save', [$emp_id, $target_emp_id, $values_json]);
+    }
 }

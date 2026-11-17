@@ -785,6 +785,7 @@ class SalaryController extends BaseController
                 'employee'   => $first,
                 'periods'    => $periods,
                 'timeline'   => $model->salary_timeline($me, $empId),
+                'variables'  => $model->employee_variables($me, $empId),
                 'current'    => $current,
                 'components' => $components,
                 'returnParam' => preg_match('#^cycle/\d+$#', $return) ? $return : '',
@@ -1173,6 +1174,190 @@ public function payroll_summary()
         return $this->response->setJSON([
             'status'  => $row['status'] ?? 'N',
             'remarks' => $row['remarks'] ?? 'The download could not be recorded.',
+        ]);
+    }
+
+    // ==================================================================
+    // Salary components: add / edit page (replaces the popup)
+    // procedures: component_phase1.sql .. component_phase3.sql
+    // ==================================================================
+
+    # GET payroll/salary_components/new  and  payroll/salary_components/edit/{id}
+    public function component_form($componentId = null)
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+        $model = new SalaryModel();
+        $me    = $session->get('emp_id');
+
+        $names = $model->formula_names($me);
+        if (!$names) {
+            return redirect()->to(base_url('payroll/salary_components'))
+                ->with('error', 'Access denied: only active ADMIN or HR users can manage salary components.');
+        }
+
+        $component = [];
+        $slabs     = [];
+        if ($componentId !== null) {
+            $component = $model->component_get($me, (int) $componentId);
+            if (!$component) {
+                return redirect()->to(base_url('payroll/salary_components'))->with('error', 'Salary component not found.');
+            }
+            foreach ($model->component_slabs($me, (int) $componentId) as $s) {
+                if (!empty($s['slab_id'])) {
+                    $slabs[] = $s;
+                }
+            }
+        }
+
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/salary_component_form', [
+                'component' => $component,
+                'slabs'     => $slabs,
+                'names'     => $names,
+                'deps'      => $model->component_dependencies($me),
+            ])
+            . view('Layouts/Footer');
+    }
+
+    # POST payroll/salary_components/save : save, or check only (dry_run = 1), one component
+    public function component_save()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+        $model = new SalaryModel();
+        $me    = $session->get('emp_id');
+        $in    = fn($k) => trim((string) ($this->request->getPost($k) ?? ''));
+        $num   = fn($k) => $in($k) === '' ? null : $in($k);
+        $flag  = fn($k) => $in($k) === '1' ? 1 : 0;
+
+        $dry = $flag('dry_run');
+        $p = [
+            'component_id'     => $num('component_id'),
+            'code'             => strtoupper($in('code')),
+            'name'             => $in('name'),
+            'type'             => strtoupper($in('type')),
+            'scope'            => strtoupper($in('scope')) ?: 'COMPONENT',
+            'method'           => strtoupper($in('method')),
+            'value'            => $num('value'),
+            'base'             => strtoupper($in('base')),
+            'formula'          => $in('formula'),
+            'min'              => $num('min'),
+            'max'              => $num('max'),
+            'eligibility'      => strtoupper($in('eligibility')),
+            'rounding'         => $num('rounding'),
+            'taxable'          => $flag('taxable'),
+            'active'           => $flag('active'),
+            'order'            => $num('order'),
+            'include_in_total' => $flag('include_in_total'),
+            'slabs'            => $in('slabs') !== '' ? $in('slabs') : null,
+            'dry_run'          => $dry,
+        ];
+
+        $row = $this->firstProcedureRow($model->component_save($me, $p));
+        $ok  = strtoupper(trim((string) ($row['status'] ?? 'N'))) === 'Y';
+        $message  = (string) ($row['remarks'] ?? ($ok ? 'Saved.' : 'The component could not be saved.'));
+        $findings = json_decode((string) ($row['findings'] ?? ''), true) ?: [];
+        $impact   = json_decode((string) ($row['impact'] ?? ''), true);
+
+        // after a real save: statutory, counts in total and balancing (rebuilds totals, recalculates)
+        if ($ok && !$dry && !empty($row['component_id'])) {
+            $f    = $this->firstProcedureRow($model->component_set_flags(
+                $me, (int) $row['component_id'], $flag('statutory'), $flag('include_in_total'), $flag('balancing')
+            ));
+            $fok  = strtoupper(trim((string) ($f['status'] ?? 'N'))) === 'Y';
+            $more = trim((string) ($f['remarks'] ?? ''));
+            if (!$fok) {
+                $ok = false;
+                $message .= ' The component was saved, but its totals / balancing settings were not: ' . ($more ?: 'unknown error');
+            } elseif ($more !== '' && $more !== 'Settings saved.' && $more !== 'Flags saved.') {
+                $message .= ' ' . $more;
+            }
+            $findings = array_merge($findings, json_decode((string) ($f['findings'] ?? ''), true) ?: []);
+            $impact   = json_decode((string) ($f['impact'] ?? ''), true) ?: $impact;
+        }
+
+        if ($ok && !$dry) {
+            $session->setFlashdata('success', $message);
+        }
+        return $this->response->setJSON([
+            'status'       => $ok,
+            'dry_run'      => (bool) $dry,
+            'message'      => $message,
+            'component_id' => $row['component_id'] ?? null,
+            'findings'     => $findings,
+            'impact'       => $impact,
+            'redirect'     => ($ok && !$dry) ? base_url('payroll/salary_components') : null,
+            'csrf_token'   => csrf_hash(),
+        ]);
+    }
+
+    # GET payroll/variables : the Payroll variables page
+    public function payroll_variables()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return redirect()->to(base_url('/'));
+        }
+        $rows = (new SalaryModel())->payroll_variables($session->get('emp_id'));
+        return view('Layouts/Header')
+            . view('Layouts/Sidebar')
+            . view('payroll/payroll_variables', ['variables' => $rows])
+            . view('Layouts/Footer');
+    }
+
+    # POST payroll/variables/save : add or change an employee variable
+    public function payroll_variable_save()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+        $in  = fn($k) => trim((string) ($this->request->getPost($k) ?? ''));
+        $row = $this->firstProcedureRow((new SalaryModel())->payroll_variable_save(
+            $session->get('emp_id'),
+            strtoupper($in('var_code')),
+            $in('var_name'),
+            $in('description'),
+            strtoupper($in('data_type')),
+            $in('default_value') === '' ? null : $in('default_value'),
+            $in('is_active') === '0' ? 0 : 1
+        ));
+        $ok = strtoupper(trim((string) ($row['status'] ?? 'N'))) === 'Y';
+        if ($ok) {
+            $session->setFlashdata('success', $row['remarks'] ?? 'Variable saved.');
+        }
+        return $this->response->setJSON([
+            'status'     => $ok,
+            'message'    => $row['remarks'] ?? 'The variable could not be saved.',
+            'csrf_token' => csrf_hash(),
+        ]);
+    }
+
+    # POST payroll/salary_structure/variables : one employee's own variable values
+    public function employee_variables_save()
+    {
+        $session = session();
+        if (!$session->get('logged_in')) {
+            return $this->response->setJSON(['status' => false, 'message' => 'Session expired. Please log in again.'])->setStatusCode(401);
+        }
+        $empId  = strtoupper(trim((string) $this->request->getPost('emp_id')));
+        $values = json_decode((string) ($this->request->getPost('values') ?? '[]'), true);
+        $values = is_array($values) ? array_values($values) : [];
+        $row = $this->firstProcedureRow((new SalaryModel())->employee_variables_save($session->get('emp_id'), $empId, json_encode($values)));
+        $ok  = strtoupper(trim((string) ($row['status'] ?? 'N'))) === 'Y';
+        if ($ok) {
+            $session->setFlashdata('success', $row['remarks'] ?? 'Saved.');
+        }
+        return $this->response->setJSON([
+            'status'     => $ok,
+            'message'    => $row['remarks'] ?? 'The values could not be saved.',
+            'csrf_token' => csrf_hash(),
         ]);
     }
 }

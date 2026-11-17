@@ -297,6 +297,34 @@ if ($fromCycle) {
                             <div class="muted mt-2" style="font-size: 11px;" id="sumSaveHelp">Nothing changed yet.</div>
                         </div>
                     </div>
+
+                    <?php if (!empty($variables)): ?>
+                    <!-- EMPLOYEE VARIABLES (payroll variables added by HR; component_phase2.sql) -->
+                    <div class="pc-card">
+                        <div class="pc-body">
+                            <p class="pc-section-title mb-1"><i class="fas fa-sliders-h mr-1" style="color: var(--bloom-purple);"></i> Payroll variables</p>
+                            <p class="pc-section-help mb-2">This employee's own values. "Default" uses the company default. Applies to every salary period of <?= esc($empName) ?>.</p>
+                            <?php foreach ($variables as $v): ?>
+                                <?php $own = $v['employee_value']; $isFlag = $v['data_type'] === 'FLAG'; ?>
+                                <div class="mb-2">
+                                    <label class="pc-label mb-1" title="<?= esc($v['description'] ?? '', 'attr') ?>"><?= esc($v['var_name']) ?> <span style="text-transform:none; font-weight:600;">(<?= esc($v['var_code']) ?>)</span></label>
+                                    <?php if ($isFlag): ?>
+                                        <select class="pc-control w-100 emp-var" data-code="<?= esc($v['var_code'], 'attr') ?>">
+                                            <option value="" <?= $own === null ? 'selected' : '' ?>>Default (<?= (float) $v['default_value'] != 0 ? 'Yes' : 'No' ?>)</option>
+                                            <option value="1" <?= $own !== null && (float) $own != 0 ? 'selected' : '' ?>>Yes</option>
+                                            <option value="0" <?= $own !== null && (float) $own == 0 ? 'selected' : '' ?>>No</option>
+                                        </select>
+                                    <?php else: ?>
+                                        <input type="number" step="0.0001" class="pc-control w-100 emp-var" data-code="<?= esc($v['var_code'], 'attr') ?>"
+                                            value="<?= $own === null ? '' : esc((float) $own) ?>" placeholder="Default <?= esc((float) $v['default_value']) ?>">
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                            <button type="button" class="pc-btn w-100" id="btnSaveVars"><i class="fas fa-save"></i> Save variables</button>
+                            <div class="muted mt-1" style="font-size: 11px;">Saving recalculates every salary period of this employee.</div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php endif; ?>
@@ -381,7 +409,9 @@ if ($fromCycle) {
             function ruleText(c) {
                 const parts = [];
                 const calc = String(c.rule_calculation_type || '').toUpperCase();
-                if (num(c.is_manual) === 1 || calc === 'MANUAL') {
+                if (num(c.is_balancing) === 1) {
+                    parts.push('<b>Rest of CTC</b> (balancing): CTC1 &minus; other earnings &minus; employer contributions');
+                } else if (num(c.is_manual) === 1 || calc === 'MANUAL') {
                     parts.push('Entered by hand (monthly manual amount)');
                 } else if (num(c.is_slab) === 1 && c.slab_text) {
                     parts.push('<b>Slabs</b><div class="rule-lines">' + String(c.slab_text).split('; ').map((x) => '<div>&bull; ' + esc(x) + '</div>').join('') + '</div>');
@@ -718,6 +748,34 @@ if ($fromCycle) {
             if (CFG.flashError) toast(CFG.flashError, 'bad');
         })();
     </script>
+    <?php if (!empty($variables)): ?>
+    <script>
+        (function () {
+            'use strict';
+            const btn = document.getElementById('btnSaveVars');
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+                const values = Array.from(document.querySelectorAll('.emp-var')).map((el) => ({ var_code: el.dataset.code, value: el.value.trim() === '' ? null : el.value.trim() }));
+                const ans = await payrollDialog.ask({ title: 'Save payroll variables', message: 'Save these values and recalculate every salary period of this employee?', okText: 'Save' });
+                if (!ans.ok) return;
+                const fd = new FormData();
+                fd.append('emp_id', <?= json_encode($empId) ?>);
+                fd.append('values', JSON.stringify(values));
+                const csrf = document.querySelector('input[name="<?= csrf_token() ?>"]');
+                if (csrf) fd.append('<?= csrf_token() ?>', csrf.value);
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                const r = await fetch('<?= site_url('payroll/salary_structure/variables') ?>', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then((x) => x.json()).catch((e) => ({ status: false, message: 'The server did not answer (' + e.message + ').' }));
+                if (r.csrf_token && csrf) csrf.value = r.csrf_token;
+                if (r.status) { window.location.reload(); return; }
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save variables';
+                await payrollDialog.message({ title: 'Not saved', message: r.message || 'The values could not be saved.' });
+            });
+        })();
+    </script>
+    <?php endif; ?>
     <?php endif; ?>
 </body>
 

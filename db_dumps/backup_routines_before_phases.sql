@@ -1,0 +1,24433 @@
+-- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
+--
+-- Host: localhost    Database: production_hrms_db
+-- ------------------------------------------------------
+-- Server version	8.0.43
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Dumping routines for database 'production_hrms_db'
+--
+/*!50003 DROP FUNCTION IF EXISTS `hrms_audit_attendance_json` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_audit_attendance_json`(p_month INT, p_year INT) RETURNS json
+    READS SQL DATA
+BEGIN
+    RETURN (SELECT JSON_OBJECT('employees', COUNT(*),
+                               'finalized', COALESCE(SUM(is_finalized = 'Y'), 0),
+                               'present_days', COALESCE(SUM(present_days), 0),
+                               'wfh_days', COALESCE(SUM(wfh_days), 0),
+                               'leave_days', COALESCE(SUM(leave_days), 0),
+                               'absent_days', COALESCE(SUM(absent_days), 0),
+                               'paid_days', COALESCE(SUM(paid_days), 0),
+                               'unpaid_days', COALESCE(SUM(unpaid_days), 0))
+              FROM payroll_attendance_summary
+             WHERE payroll_month = p_month AND payroll_year = p_year);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_audit_component_json` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_audit_component_json`(p_component_id BIGINT) RETURNS json
+    READS SQL DATA
+BEGIN
+    DECLARE v_slabs JSON DEFAULT NULL;
+    SET v_slabs = (SELECT JSON_ARRAYAGG(s.j)
+                     FROM (SELECT JSON_OBJECT('slab_id', slab_id, 'based_on', slab_based_on,
+                                              'min', slab_min_value, 'max', slab_max_value,
+                                              'result_type', result_type, 'result_value', result_value,
+                                              'percentage_base', percentage_base, 'priority', priority,
+                                              'effective_from', effective_from, 'effective_to', effective_to,
+                                              'active', is_active) AS j
+                             FROM salary_component_slab
+                            WHERE component_id = p_component_id
+                            ORDER BY priority, slab_id
+                            LIMIT 1000) s);
+    RETURN (SELECT JSON_OBJECT('component_id', component_id, 'code', component_code, 'name', component_name,
+                               'type', component_type, 'calculation_type', calculation_type,
+                               'percentage_base', percentage_base, 'percentage_value', percentage_value,
+                               'formula', formula_expression, 'minimum', minimum_amount, 'maximum', maximum_amount,
+                               'scope', calculation_scope, 'order', calculation_order,
+                               'eligibility', eligibility_parameter, 'eligibility_value', eligibility_required_value,
+                               'manual', is_manual, 'slab', is_slab, 'rounding', rounding_precision,
+                               'taxable', is_taxable, 'active', is_active,
+                               'slabs', COALESCE(v_slabs, JSON_ARRAY()))
+              FROM salary_component_master
+             WHERE component_id = p_component_id
+             LIMIT 1);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_audit_salary_json` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_audit_salary_json`(p_structure_id BIGINT) RETURNS json
+    READS SQL DATA
+BEGIN
+    DECLARE v_own     JSON DEFAULT NULL;
+    DECLARE v_amounts JSON DEFAULT NULL;
+    SET v_own = (SELECT JSON_ARRAYAGG(o.j)
+                   FROM (SELECT JSON_OBJECT('code', UPPER(m.component_code), 'calculation_type', e.calculation_type,
+                                            'value', e.component_value, 'percentage_base', e.percentage_base,
+                                            'formula', e.formula_expression) AS j
+                           FROM employee_salary_structure e
+                           JOIN salary_component_master m ON m.component_id = e.component_id
+                          WHERE e.structure_id = p_structure_id AND e.is_overridden = 1
+                          ORDER BY m.calculation_order, m.component_id
+                          LIMIT 1000) o);
+    SET v_amounts = (SELECT JSON_OBJECTAGG(UPPER(m.component_code), e.monthly_amount)
+                       FROM employee_salary_structure e
+                       JOIN salary_component_master m ON m.component_id = e.component_id
+                      WHERE e.structure_id = p_structure_id);
+    RETURN (SELECT JSON_OBJECT('structure_id', structure_id, 'emp_id', emp_id,
+                               'monthly_ctc', monthly_ctc, 'annual_ctc', annual_ctc,
+                               'effective_from', effective_from, 'effective_to', effective_to,
+                               'status', structure_status, 'esi_applicable', esi_applicable,
+                               'own_settings', COALESCE(v_own, JSON_ARRAY()),
+                               'amounts', COALESCE(v_amounts, JSON_OBJECT()))
+              FROM salary_structure
+             WHERE structure_id = p_structure_id
+             LIMIT 1);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_esi_wage_limit` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_esi_wage_limit`() RETURNS decimal(12,2)
+    READS SQL DATA
+BEGIN
+    DECLARE v_limit DECIMAL(12,2);
+    SELECT MAX(s.slab_max_value) INTO v_limit
+      FROM salary_component_slab s
+      JOIN salary_component_master m ON m.component_id = s.component_id
+     WHERE m.component_code IN ('EE_ESI', 'EMP_ESI')
+       AND s.is_active = 1
+       AND s.result_value > 0
+       AND s.slab_max_value IS NOT NULL
+       AND (s.effective_from IS NULL OR s.effective_from <= CURDATE())
+       AND (s.effective_to IS NULL OR s.effective_to >= CURDATE());
+    RETURN COALESCE(v_limit, 21000.00);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_free_order` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_free_order`(p_after INT, p_before INT, p_exclude_id BIGINT) RETURNS int
+    READS SQL DATA
+BEGIN
+    DECLARE v_after INT;
+    DECLARE v_next  INT;
+    DECLARE v_upper INT;
+    SET v_after = COALESCE(p_after, 0);
+    SELECT MIN(calculation_order) INTO v_next
+      FROM salary_component_master
+     WHERE is_active = 1 AND calculation_order > v_after
+       AND (p_exclude_id IS NULL OR component_id <> p_exclude_id);
+    SET v_upper = LEAST(COALESCE(v_next, v_after + 20), COALESCE(p_before, 2147483647), 10000);
+    IF v_upper - v_after >= 2 THEN
+        RETURN v_after + FLOOR((v_upper - v_after) / 2);
+    END IF;
+    RETURN NULL;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_payroll_cycle_actions` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_payroll_cycle_actions`(p_status VARCHAR(30)) RETURNS varchar(200) CHARSET utf8mb4 COLLATE utf8mb4_general_ci
+    NO SQL
+    DETERMINISTIC
+BEGIN
+    RETURN CASE UPPER(COALESCE(p_status, ''))
+        WHEN 'OPEN'                THEN 'VERIFY_ATTENDANCE'
+        WHEN 'ATTENDANCE_VERIFIED' THEN 'VERIFY_STRUCTURE,BACK'
+        WHEN 'STRUCTURE_VERIFIED'  THEN 'START_CALCULATION,BACK'
+        WHEN 'PROCESSING'          THEN 'FINISH_CALCULATION,BACK'
+        WHEN 'CALCULATED'          THEN 'APPROVE,RECALCULATE,BACK'
+        WHEN 'APPROVED'            THEN 'FINALIZE,BACK'
+        WHEN 'FINALIZED'           THEN 'MARK_PAID'
+        WHEN 'PARTIALLY_PAID'      THEN 'GENERATE_PAYSLIPS'
+        WHEN 'PAID'                THEN 'GENERATE_PAYSLIPS,CLOSE'
+        ELSE ''
+    END;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_pay_days` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_pay_days`(p_unpaid_days DECIMAL(6,2)) RETURNS decimal(5,2)
+    NO SQL
+    DETERMINISTIC
+BEGIN
+    RETURN GREATEST(30 - GREATEST(COALESCE(p_unpaid_days, 0), 0), 0);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `hrms_structure_calc_date` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `hrms_structure_calc_date`(p_structure_id BIGINT) RETURNS date
+    READS SQL DATA
+BEGIN
+    DECLARE v_date DATE;
+    SELECT GREATEST(effective_from, LEAST(CURDATE(), COALESCE(effective_to, CURDATE())))
+      INTO v_date
+      FROM salary_structure WHERE structure_id = p_structure_id;
+    RETURN COALESCE(v_date, CURDATE());
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `accept_offer` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `accept_offer`(
+
+    IN p_ref_id VARCHAR(20)
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE ref_id = p_ref_id;
+
+    IF v_count > 0 THEN
+
+        
+
+        UPDATE candidate_details
+        SET
+            offer_status = 'ACCEPTED',
+            onboarding_status = 'IN_PROGRESS'
+        WHERE ref_id = p_ref_id;
+
+        
+
+        SELECT
+            'Y' AS status,
+            p_ref_id AS ref_id,
+            'offer accepted successfully' AS remarks;
+
+    ELSE
+
+        SELECT
+            'N' AS status,
+            p_ref_id AS ref_id,
+            'candidate not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `allowance_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `allowance_list`(
+    in p_staff_id varchar(400),
+    in p_allowance_name varchar(400),
+    in p_allowance_amt int
+)
+begin
+    declare month varchar(45);
+    declare year int(4);
+
+    select date_format(curdate(), '%M') into month;
+    select year(curdate()) into year;
+
+    insert into allowance_list (staff_id, allowance_name, amount, month, year) 
+    values (p_staff_id, p_allowance_name, p_allowance_amt, month, year);
+    
+    if row_count() > 0 then
+        commit;
+        select 'Y' as status, 'Value is inserted successfully in allowance_list ' as remarks;
+    else
+        select 'N' as status, 'Insertion failed, no rows affected in allowance_list ' as remarks;
+    end if;
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `apply_job` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `apply_job`(
+
+    IN p_emp_name VARCHAR(150),
+
+    IN p_email VARCHAR(150),
+
+    IN p_mobile VARCHAR(15),
+
+    IN p_resume_url TEXT
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE email = p_email
+    AND hr_status IN ('PENDING','SELECTED');
+
+    IF v_count = 0 THEN
+
+        
+
+        INSERT INTO candidate_details (
+
+            application_source,
+
+            emp_name,
+
+            email,
+
+            mobile,
+
+            resume_url,
+
+            hr_status,
+
+            onboarding_status
+
+        )
+        VALUES (
+
+            'CAREERS_PAGE',
+
+            p_emp_name,
+
+            p_email,
+
+            p_mobile,
+
+            p_resume_url,
+
+            'PENDING',
+
+            'NOT_STARTED'
+
+        );
+
+        
+
+        SELECT
+            'Y' AS status,
+            p_email AS email,
+            'job applied successfully' AS remarks;
+
+    ELSE
+
+        
+
+        SELECT
+            'N' AS status,
+            p_email AS email,
+            'candidate already applied' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `authenticate_user` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `authenticate_user`(
+    IN p_emp_id VARCHAR(20),
+    IN p_password VARCHAR(255)
+)
+BEGIN
+    DECLARE v_count INT;
+
+    SELECT COUNT(*) INTO v_count
+    FROM user_login_details
+    WHERE emp_id = p_emp_id
+      AND BINARY enc_pwd = p_password  
+      AND status = 'ACTIVE';
+
+    IF v_count > 0 THEN
+
+        UPDATE user_login_details
+        SET last_login = NOW()
+        WHERE emp_id = p_emp_id;
+
+        SELECT 
+            'Y' AS status,
+            'success' AS remarks,
+            ud.*,
+            uld.user_category,
+            uld.is_first_login
+
+        FROM user_details ud
+        JOIN user_login_details uld
+            ON ud.emp_id = uld.emp_id
+
+        WHERE ud.emp_id = p_emp_id;
+
+    ELSE
+
+        SELECT 
+            'N' AS status,
+            'incorrect userid/pwd' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `change_password` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `change_password`(
+    IN p_emp_id VARCHAR(20),
+    IN p_old_pwd VARCHAR(255),
+    IN p_new_pwd VARCHAR(255),
+    IN p_reset_token VARCHAR(255),
+    IN p_is_forgot_pwd BOOLEAN
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    IF p_is_forgot_pwd = TRUE THEN
+
+        
+        SELECT COUNT(*) INTO v_count
+        FROM forgot_password_tokens
+        WHERE emp_id = p_emp_id
+          AND reset_token = p_reset_token
+          AND active = 'Y';
+
+        IF v_count > 0 THEN
+
+            
+            UPDATE user_login_details
+            SET enc_pwd = p_new_pwd,
+                password_change_date = NOW(),
+                is_first_login = FALSE
+            WHERE emp_id = p_emp_id;
+
+            
+            UPDATE forgot_password_tokens
+            SET active = 'N'
+            WHERE emp_id = p_emp_id
+              AND reset_token = p_reset_token;
+
+            SELECT 
+                'Y' AS status,
+                'password modified' AS remarks;
+
+        ELSE
+
+            SELECT 
+                'N' AS status,
+                'invalid or expired token' AS remarks;
+
+        END IF;
+
+    ELSE
+
+        
+        SELECT COUNT(*) INTO v_count
+        FROM user_login_details
+        WHERE emp_id = p_emp_id
+          AND enc_pwd = p_old_pwd;
+
+        IF v_count > 0 THEN
+
+            UPDATE user_login_details
+            SET enc_pwd = p_new_pwd,
+                password_change_date = NOW(),
+                is_first_login = FALSE
+            WHERE emp_id = p_emp_id;
+
+            SELECT 
+                'Y' AS status,
+                'password modified' AS remarks;
+
+        ELSE
+
+            SELECT 
+                'N' AS status,
+                'incorrect previous pwd' AS remarks;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `deduction_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `deduction_list`(
+    in p_staff_id varchar(400),
+    in p_deduction_name varchar(400),
+    in p_deduction_amt int
+)
+begin
+    declare month varchar(45);
+    declare year int(4);
+
+    select date_format(curdate(), '%M') into month;
+    select year(curdate()) into year;
+
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year) 
+    values (p_staff_id, p_deduction_name, p_deduction_amt, month, year);
+    
+    if row_count() > 0 then
+        commit;
+        select 'Y' as status, 'Value is inserted successfully in deduction_list ' as remarks;
+    else
+        select 'N' as status, 'Insertion failed, no rows affected in deduction_list ' as remarks;
+    end if;
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `employee_attendance_punch` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `employee_attendance_punch`(
+    IN p_emp_id VARCHAR(20),
+    IN p_ip VARCHAR(45),
+    IN p_action VARCHAR(10)
+)
+BEGIN
+
+    DECLARE v_location_id BIGINT DEFAULT NULL;
+    DECLARE v_attendance_id BIGINT DEFAULT NULL;
+    DECLARE v_punch_in DATETIME DEFAULT NULL;
+    DECLARE v_punch_out DATETIME DEFAULT NULL;
+    DECLARE v_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_count INT DEFAULT 0;
+    DECLARE v_current_time DATETIME;
+
+
+    
+
+    SET time_zone = '+05:30';
+
+    SET v_current_time = NOW();
+
+
+    
+
+    IF UPPER(p_action) NOT IN ('IN', 'OUT') THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid action. Use IN or OUT' AS remarks;
+
+
+    ELSE
+
+
+        
+
+        SELECT COUNT(*)
+        INTO v_count
+
+        FROM user_details ud
+
+        INNER JOIN user_login_details uld
+            ON ud.emp_id = uld.emp_id
+
+        WHERE ud.emp_id = p_emp_id
+          AND uld.status = 'ACTIVE';
+
+
+        IF v_count = 0 THEN
+
+            SELECT
+                'N' AS status,
+                'Employee not found or inactive' AS remarks;
+
+
+        ELSE
+
+
+            
+
+            SET v_attendance_id = NULL;
+            SET v_punch_in = NULL;
+            SET v_punch_out = NULL;
+            SET v_status = NULL;
+
+            SELECT
+                id,
+                punch_in,
+                punch_out,
+                status
+
+            INTO
+                v_attendance_id,
+                v_punch_in,
+                v_punch_out,
+                v_status
+
+            FROM attendance
+
+            WHERE emp_id = p_emp_id
+              AND attendance_date = CURDATE()
+
+            LIMIT 1;
+
+
+            
+
+            IF v_attendance_id IS NULL THEN
+
+                SELECT
+                    'N' AS status,
+                    'Attendance record not generated for today'
+                    AS remarks;
+
+
+            
+
+            ELSEIF UPPER(v_status) = 'HOLIDAY' THEN
+
+                SELECT
+                    'N' AS status,
+                    'Cannot punch attendance on holiday'
+                    AS remarks;
+
+
+            
+
+            ELSEIF UPPER(v_status) = 'LEAVE' THEN
+
+                SELECT
+                    'N' AS status,
+                    'Employee is on leave today'
+                    AS remarks;
+
+
+            ELSE
+
+
+                
+
+                SET v_location_id = NULL;
+
+
+                IF UPPER(v_status) = 'WFH' THEN
+
+                    
+
+                    SET v_location_id = NULL;
+
+
+                ELSE
+
+                    
+
+                    SELECT id
+                    INTO v_location_id
+
+                    FROM attendance_locations
+
+                    WHERE public_ip = p_ip
+                      AND is_active = TRUE
+
+                    LIMIT 1;
+
+
+                    IF v_location_id IS NULL THEN
+
+                        SELECT
+                            'N' AS status,
+                            'Unauthorized attendance location'
+                            AS remarks;
+
+                    END IF;
+
+                END IF;
+
+
+                
+
+                IF UPPER(v_status) = 'WFH'
+                   OR v_location_id IS NOT NULL THEN
+
+
+                    
+
+                    IF UPPER(p_action) = 'IN' THEN
+
+
+                        
+
+                        IF v_punch_in IS NOT NULL THEN
+
+                            SELECT
+                                'N' AS status,
+                                'Already punched in'
+                                AS remarks;
+
+
+                        ELSE
+
+                            
+
+                            UPDATE attendance
+
+                            SET
+                                punch_in = v_current_time,
+                                punch_out = NULL,
+                                location_id = v_location_id,
+                                status = 'PRESENT'
+
+                            WHERE id = v_attendance_id;
+
+
+                            SELECT
+                                'Y' AS status,
+                                'Punch in successful' AS remarks,
+                                p_emp_id AS emp_id,
+                                CURDATE() AS attendance_date,
+                                v_current_time AS punch_in,
+                                NULL AS punch_out,
+                                v_location_id AS location_id;
+
+                        END IF;
+
+
+                    
+
+                    ELSEIF UPPER(p_action) = 'OUT' THEN
+
+
+                        
+
+                        IF v_punch_in IS NULL THEN
+
+                            SELECT
+                                'N' AS status,
+                                'Punch in required before punch out'
+                                AS remarks;
+
+
+                        
+
+                        ELSEIF v_punch_out > v_punch_in THEN
+
+                            SELECT
+                                'N' AS status,
+                                'Already punched out'
+                                AS remarks;
+
+
+                        ELSE
+
+                            
+
+                            UPDATE attendance
+
+                            SET
+                                punch_out = v_current_time
+
+                            WHERE id = v_attendance_id;
+
+
+                            SELECT
+                                'Y' AS status,
+                                'Punch out successful' AS remarks,
+                                p_emp_id AS emp_id,
+                                CURDATE() AS attendance_date,
+                                v_current_time AS punch_out;
+
+                        END IF;
+
+                    END IF;
+
+                END IF;
+
+            END IF;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `finalize_payroll_attendance_proc` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `finalize_payroll_attendance_proc`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month  INT,
+    IN p_year   INT,
+    IN p_action VARCHAR(20)
+)
+main_block: BEGIN
+
+    DECLARE v_user_category VARCHAR(20);
+    DECLARE v_action        VARCHAR(20);
+    DECLARE v_audit_old     JSON DEFAULT NULL;
+    DECLARE v_audit_new     JSON DEFAULT NULL;
+    DECLARE v_audit_cycle   BIGINT DEFAULT NULL;
+    DECLARE v_cycle_code    VARCHAR(50) DEFAULT NULL;
+    DECLARE v_cycle_status  VARCHAR(30) DEFAULT NULL;
+
+    DECLARE v_total_records     INT DEFAULT 0;
+    DECLARE v_finalized_records INT DEFAULT 0;
+    DECLARE v_duplicate_groups  INT DEFAULT 0;
+    DECLARE v_changed           INT DEFAULT 0;
+    DECLARE v_cycle_reset       TINYINT DEFAULT 0;   
+
+    DECLARE v_error_no      INT DEFAULT 0;
+    DECLARE v_error_message TEXT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_no = MYSQL_ERRNO,
+            v_error_message = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status,
+               CONCAT('Database error [', COALESCE(v_error_no, 0), ']: ',
+                      COALESCE(v_error_message, 'Unknown error')) AS remarks;
+    END;
+
+    SET time_zone = '+05:30';
+    SET v_action = UPPER(TRIM(COALESCE(NULLIF(TRIM(p_action), ''), 'FINALIZE')));
+
+    
+    IF p_emp_id IS NULL OR TRIM(p_emp_id) = '' THEN
+        SELECT 'N' AS status, 'Requester employee ID is required.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    IF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12
+       OR p_year IS NULL OR p_year NOT BETWEEN 1900 AND 9999 THEN
+        SELECT 'N' AS status, 'Invalid month or year.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    IF v_action NOT IN ('FINALIZE', 'UNFINALIZE') THEN
+        SELECT 'N' AS status, CONCAT('Unknown action "', v_action, '". Use FINALIZE or UNFINALIZE.') AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category)))
+      INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id)
+       AND LOWER(TRIM(status)) = 'active';
+
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status,
+               IF(v_action = 'UNFINALIZE',
+                  'Access denied: only active ADMIN or HR users can unfinalize attendance.',
+                  'Access denied: only active ADMIN or HR users can finalize attendance.') AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT COUNT(*), COALESCE(SUM(is_finalized = 'Y'), 0)
+      INTO v_total_records, v_finalized_records
+      FROM payroll_attendance_summary
+     WHERE payroll_month = p_month
+       AND payroll_year  = p_year;
+
+    IF v_total_records = 0 THEN
+        SELECT 'N' AS status,
+               'Attendance not generated. No payroll attendance summaries exist for this month and year.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT payroll_cycle_id, cycle_code, cycle_status
+      INTO v_audit_cycle, v_cycle_code, v_cycle_status
+      FROM payroll_cycles
+     WHERE payroll_month = p_month
+       AND payroll_year  = p_year
+     ORDER BY payroll_cycle_id DESC
+     LIMIT 1;
+
+    IF v_action = 'FINALIZE' THEN
+
+        SELECT COUNT(*)
+          INTO v_duplicate_groups
+          FROM (SELECT emp_id
+                  FROM payroll_attendance_summary
+                 WHERE payroll_month = p_month
+                   AND payroll_year  = p_year
+                 GROUP BY emp_id
+                HAVING COUNT(*) > 1) AS duplicate_employees;
+
+        IF v_duplicate_groups > 0 THEN
+            SELECT 'N' AS status,
+                   CONCAT('Finalization blocked. ', v_duplicate_groups,
+                          ' employee(s) have duplicate attendance summaries. ',
+                          'Resolve the duplicates before finalizing.') AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_finalized_records = v_total_records THEN
+            SELECT 'N' AS status, 'Attendance is already finalized for the selected month and year.' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+    ELSE   
+
+        IF v_finalized_records = 0 THEN
+            SELECT 'N' AS status, 'Attendance is not finalized for the selected month and year.' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_cycle_status IN ('FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED') THEN
+            SELECT 'N' AS status,
+                   CONCAT('Attendance cannot be unfinalized: payroll ', v_cycle_code, ' is ', v_cycle_status,
+                          ' and was paid with this attendance.') AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_cycle_status IS NOT NULL
+           AND v_cycle_status NOT IN ('OPEN', 'ATTENDANCE_VERIFIED', 'STRUCTURE_VERIFIED') THEN
+            SELECT 'N' AS status,
+                   CONCAT('Attendance cannot be unfinalized: payroll ', v_cycle_code, ' is ', v_cycle_status,
+                          ' and salaries are already calculated from it. Go back on the payroll cycle page ',
+                          '(to Structures verified or earlier) or delete the cycle, then unfinalize.') AS remarks;
+            LEAVE main_block;
+        END IF;
+
+    END IF;
+
+    
+    SET v_audit_old = hrms_audit_attendance_json(p_month, p_year);
+    START TRANSACTION;
+
+    IF v_action = 'FINALIZE' THEN
+        UPDATE payroll_attendance_summary
+           SET is_finalized = 'Y', updated_at = NOW()
+         WHERE payroll_month = p_month
+           AND payroll_year  = p_year
+           AND (is_finalized IS NULL OR is_finalized <> 'Y');
+    ELSE
+        UPDATE payroll_attendance_summary
+           SET is_finalized = 'N', updated_at = NOW()
+         WHERE payroll_month = p_month
+           AND payroll_year  = p_year
+           AND is_finalized = 'Y';
+    END IF;
+    SET v_changed = ROW_COUNT();
+
+    
+    IF v_action = 'UNFINALIZE' AND v_cycle_status IN ('ATTENDANCE_VERIFIED', 'STRUCTURE_VERIFIED') THEN
+        UPDATE payroll_cycles SET cycle_status = 'OPEN' WHERE payroll_cycle_id = v_audit_cycle;
+        CALL hrms_payroll_log(v_audit_cycle, NULL, NULL, 'ATTENDANCE_UNFINALIZED', v_cycle_status, 'OPEN',
+             CONCAT('Attendance of ', LPAD(p_month, 2, '0'), '/', p_year,
+                    ' was unfinalized, so the cycle went back to OPEN. Verify attendance again after finalizing.'),
+             p_emp_id);
+        SET v_cycle_reset = 1;
+    END IF;
+
+    
+    SET v_audit_new = hrms_audit_attendance_json(p_month, p_year);
+    CALL hrms_payroll_audit_add('ATTENDANCE', v_action, 'payroll_attendance_summary',
+         CONCAT(p_year, '-', LPAD(p_month, 2, '0')), NULL, v_audit_cycle, p_month, p_year, v_audit_old, v_audit_new,
+         CONCAT('Attendance ', IF(v_action = 'FINALIZE', 'finalized', 'unfinalized'), ' for ',
+                LPAD(p_month, 2, '0'), '/', p_year, ' (', v_changed, ' of ', v_total_records, ' employees).',
+                IF(v_cycle_reset = 1, CONCAT(' Payroll ', v_cycle_code, ' moved back from ', v_cycle_status, ' to OPEN.'), '')),
+         p_emp_id);
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           IF(v_action = 'FINALIZE',
+              CONCAT('Payroll attendance finalized successfully for ', LPAD(p_month, 2, '0'), '/', p_year,
+                     '. Total summary records: ', v_total_records, '.'),
+              CONCAT('Payroll attendance unfinalized for ', LPAD(p_month, 2, '0'), '/', p_year,
+                     '. ', v_changed, ' summary record(s) can be corrected or generated again; finalize again when done.',
+                     IF(v_cycle_reset = 1,
+                        CONCAT(' Payroll ', v_cycle_code, ' moved back from ', v_cycle_status,
+                               ' to OPEN: verify attendance again there.'), ''))
+           ) AS remarks;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `generate_attendance` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `generate_attendance`(
+    IN p_attendance_date DATE
+)
+BEGIN
+
+    IF p_attendance_date IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Attendance date cannot be NULL';
+    END IF;
+
+    INSERT IGNORE INTO attendance (
+        emp_id,
+        attendance_date,
+        punch_in,
+        punch_out,
+        biometric_punch_in,
+        biometric_punch_out,
+        location_id,
+        status
+    )
+    SELECT DISTINCT
+        ud.emp_id,
+        p_attendance_date,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+
+        CASE
+            
+            WHEN EXISTS (
+                SELECT 1
+                FROM holiday_master hm
+                WHERE hm.holiday_date = p_attendance_date
+                  AND hm.status = 'A'
+            )
+            THEN 'HOLIDAY'
+
+            
+            WHEN EXISTS (
+                SELECT 1
+                FROM leave_application la
+                INNER JOIN leave_type lt
+                    ON lt.leave_type_id = la.leave_type_id
+                WHERE la.emp_id = ud.emp_id
+                  AND p_attendance_date
+                      BETWEEN la.from_date AND la.to_date
+                  AND UPPER(la.status) = 'APPROVED'
+                  AND lt.leave_code = 'WFH'
+                  AND lt.status = 'A'
+            )
+            THEN 'WFH'
+
+            
+            WHEN EXISTS (
+                SELECT 1
+                FROM leave_application la
+                INNER JOIN leave_type lt
+                    ON lt.leave_type_id = la.leave_type_id
+                WHERE la.emp_id = ud.emp_id
+                  AND p_attendance_date
+                      BETWEEN la.from_date AND la.to_date
+                  AND UPPER(la.status) = 'APPROVED'
+                  AND lt.leave_code <> 'WFH'
+                  AND lt.status = 'A'
+            )
+            THEN 'LEAVE'
+
+            
+            ELSE 'ABSENT'
+        END
+
+    FROM user_details ud
+    WHERE ud.emp_id IS NOT NULL
+      AND EXISTS (
+          SELECT 1
+          FROM user_login_details ul
+          WHERE ul.emp_id = ud.emp_id
+            AND UPPER(ul.status) = 'ACTIVE'
+      );
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `getactiveUsersfordropdown` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `getactiveUsersfordropdown`()
+BEGIN
+    SELECT 
+        ud.emp_id, 
+        ud.emp_name 
+    FROM 
+        user_details ud
+    INNER JOIN 
+        user_login_details uld ON ud.emp_id = uld.emp_id
+    WHERE 
+        uld.status = 'Active';
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `getemployeedashboard` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `getemployeedashboard`(
+    IN p_emp_id VARCHAR(50)
+)
+BEGIN
+    DECLARE v_current_date DATE;
+    DECLARE v_current_year INT;
+    DECLARE v_current_month INT;
+    DECLARE v_month_start DATE;
+    DECLARE v_holidays_count INT;
+
+    SET v_current_date = CURDATE();
+    SET v_current_year = YEAR(v_current_date);
+    SET v_current_month = MONTH(v_current_date);
+    SET v_month_start = DATE_FORMAT(v_current_date, '%Y-%m-01');
+
+    
+    SELECT COUNT(*)
+    INTO v_holidays_count
+    FROM holiday_master
+    WHERE status = 'A'
+      AND holiday_date BETWEEN v_month_start AND v_current_date;
+
+
+    
+    SELECT 
+        ud.emp_id AS 'employee_id',
+        ud.emp_name AS 'employee_name',
+        mgr.emp_name AS 'reporting',
+        COALESCE(dept.department_name, 'not assigned') AS 'department',
+        COALESCE(desig.designation_name, 'not assigned') AS 'designation',
+        COALESCE(latest_sal.ctc, 0) AS 'ctc',
+
+        
+        COALESCE(bal.pl_balance, 0) AS 'available privilege leaves (pl)',
+        COALESCE(bal.sl_balance, 0) AS 'available sick leaves (sl)',
+
+        
+        COALESCE(m_leaves.total_approved_leaves, 0) AS 'total_approved_leaves',
+        COALESCE(m_leaves.wfh_count, 0) AS 'current_month_wfh_count',
+        COALESCE(m_leaves.lop_count, 0) AS 'current_month_lop_count',
+        COALESCE(m_leaves.pl_count, 0) AS 'current_month_pl_count',
+        COALESCE(m_leaves.sl_count, 0) AS 'current_month_sl_count',
+        COALESCE(m_leaves.lop_pl_sl_combined, 0) AS 'current_leave_total',
+
+        
+        GREATEST(
+            0,
+            (
+                DAY(v_current_date)
+                - v_holidays_count
+                - COALESCE(m_leaves.leave_absences, 0)
+            )
+        ) AS 'present_days_count',
+
+        
+        
+        
+        att.id AS 'attendance_id',
+        att.punch_in AS 'punch_in',
+        att.punch_out AS 'punch_out',
+        att.biometric_punch_in AS 'biometric_punch_in',
+        att.biometric_punch_out AS 'biometric_punch_out',
+        att.location_id AS 'attendance_location_id',
+        att.status AS 'attendance_status',
+        att.created_at AS 'attendance_created_at',
+        att.updated_at AS 'attendance_updated_at'
+
+    FROM user_details ud
+
+    LEFT JOIN user_details mgr
+        ON ud.reporting = mgr.emp_id
+
+    LEFT JOIN department_master dept
+        ON ud.department = dept.department_id
+
+    LEFT JOIN designation_master desig
+        ON ud.designation = desig.designation_id
+
+
+    
+    
+    
+    LEFT JOIN (
+        SELECT 
+            emp_id,
+            SUM(
+                CASE 
+                    WHEN leave_type_id = 5 
+                    THEN closing_balance 
+                    ELSE 0 
+                END
+            ) AS pl_balance,
+
+            SUM(
+                CASE 
+                    WHEN leave_type_id = 6 
+                    THEN closing_balance 
+                    ELSE 0 
+                END
+            ) AS sl_balance
+
+        FROM emp_leave_balance
+
+        WHERE year = v_current_year
+          AND emp_id = p_emp_id
+
+        GROUP BY emp_id
+    ) bal
+        ON ud.emp_id = bal.emp_id
+
+
+    
+    
+    
+    LEFT JOIN (
+        SELECT 
+            s1.staff_id,
+            s1.ctc
+
+        FROM salary_tbl s1
+
+        INNER JOIN (
+            SELECT 
+                staff_id,
+                MAX(id) AS max_id
+
+            FROM salary_tbl
+
+            WHERE staff_id = p_emp_id
+
+            GROUP BY staff_id
+        ) s2
+            ON s1.id = s2.max_id
+
+    ) latest_sal
+        ON ud.emp_id = latest_sal.staff_id
+
+
+    
+    
+    
+    LEFT JOIN (
+        SELECT 
+            la.emp_id,
+
+            SUM(
+                la.approved_leave_days
+            ) AS total_approved_leaves,
+
+            SUM(
+                CASE 
+                    WHEN lt.leave_code = 'WFH'
+                    THEN la.approved_leave_days
+                    ELSE 0
+                END
+            ) AS wfh_count,
+
+            SUM(
+                CASE 
+                    WHEN lt.leave_code = 'LOP'
+                    THEN la.approved_leave_days
+                    ELSE 0
+                END
+            ) AS lop_count,
+
+            SUM(
+                CASE 
+                    WHEN lt.leave_code = 'PL'
+                    THEN la.approved_leave_days
+                    ELSE 0
+                END
+            ) AS pl_count,
+
+            SUM(
+                CASE 
+                    WHEN lt.leave_code = 'SL'
+                    THEN la.approved_leave_days
+                    ELSE 0
+                END
+            ) AS sl_count,
+
+            SUM(
+                CASE 
+                    WHEN lt.leave_code IN ('LOP', 'PL', 'SL')
+                    THEN la.approved_leave_days
+                    ELSE 0
+                END
+            ) AS lop_pl_sl_combined,
+
+            
+            
+            SUM(
+                CASE
+                    WHEN lt.leave_code != 'WFH'
+                    THEN (
+                        DATEDIFF(
+                            LEAST(
+                                la.to_date,
+                                v_current_date
+                            ),
+                            GREATEST(
+                                la.from_date,
+                                v_month_start
+                            )
+                        ) + 1
+                    )
+                    ELSE 0
+                END
+            ) AS leave_absences
+
+        FROM leave_application la
+
+        INNER JOIN leave_type lt
+            ON la.leave_type_id = lt.leave_type_id
+
+        WHERE la.emp_id = p_emp_id
+          AND la.status = 'APPROVED'
+          AND la.from_date <= v_current_date
+          AND la.to_date >= v_month_start
+
+        GROUP BY la.emp_id
+
+    ) m_leaves
+        ON ud.emp_id = m_leaves.emp_id
+
+
+    
+    
+    
+    LEFT JOIN attendance att
+        ON att.emp_id = ud.emp_id
+        AND att.attendance_date = v_current_date
+
+
+    WHERE ud.emp_id = p_emp_id;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `getemployeeleavesummary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `getemployeeleavesummary`(
+    in p_requestor_id varchar(20),  
+    in p_target_emp_id varchar(20),  
+    in p_month varchar(5),           
+    in p_year int                    
+)
+main_block:begin
+    declare v_user_category varchar(20);
+    declare v_status varchar(20);
+    declare v_record_count int default 0;
+
+    set time_zone='+05:30';
+
+    
+    select user_category, status into v_user_category, v_status
+    from user_login_details
+    where emp_id = p_requestor_id
+    limit 1;
+
+    
+    if v_user_category not in ('ADMIN', 'HR') or v_user_category is null or v_status <> 'Y' then
+        select 'N' as status, 'Access Denied: Only active ADMIN or HR accounts can access this data.' as remarks;
+        leave main_block;
+    end if;
+
+    
+    select count(*) into v_record_count
+    from user_details ud
+    left join leave_application la on ud.emp_id = la.emp_id and la.status = 'APPROVED'
+    left join leave_type lt on la.leave_type_id = lt.leave_type_id
+    where (upper(p_target_emp_id) = 'ALL' or ud.emp_id = p_target_emp_id)
+      and (
+          
+          la.emp_id is null or (
+              year(la.from_date) = p_year 
+              and (upper(p_month) = 'ALL' or month(la.from_date) = cast(p_month as unsigned))
+          )
+      );
+
+    
+    if v_record_count = 0 then
+        select 'N' as status, 'leave summary records not available' as remarks;
+        leave main_block;
+    end if;
+
+    
+    select 
+        'Y' as status,
+        'Success' as remarks,
+        row_number() over (order by ud.emp_id) as `sl.no`,
+        ud.emp_id as `employee id`,
+        ud.emp_name as `employee name`,
+        
+        
+        sum(case when lt.leave_code <> 'WFH' and year(la.from_date) = p_year then la.approved_leave_days else 0 end) as `leave taken(yearly)`,
+        
+        
+        sum(case when lt.leave_code <> 'WFH' 
+                      and year(la.from_date) = p_year 
+                      and (upper(p_month) = 'ALL' or month(la.from_date) = cast(p_month as unsigned)) 
+                 then la.approved_leave_days else 0 end) as `leave taken(months)`,
+        
+        
+        sum(case when lt.leave_code = 'WFH' and year(la.from_date) = p_year then la.approved_leave_days else 0 end) as `wfh(yearly)`,
+        
+        
+        sum(case when lt.leave_code = 'WFH' 
+                      and year(la.from_date) = p_year 
+                      and (upper(p_month) = 'ALL' or month(la.from_date) = cast(p_month as unsigned)) 
+                 then la.approved_leave_days else 0 end) as `wfh(months)`
+
+    from 
+        user_details ud
+    left join 
+        leave_application la on ud.emp_id = la.emp_id and la.status = 'APPROVED'
+    left join 
+        leave_type lt on la.leave_type_id = lt.leave_type_id
+    where 
+        (upper(p_target_emp_id) = 'ALL' or ud.emp_id = p_target_emp_id)
+    group by 
+        ud.emp_id, ud.emp_name;
+
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_admin_dashboard` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_admin_dashboard`(
+    IN p_emp_id VARCHAR(20),
+    IN p_category VARCHAR(20)
+)
+BEGIN
+    
+    DECLARE v_total_active_employees INT DEFAULT 0;
+    DECLARE v_total_active_departments INT DEFAULT 0;
+    DECLARE v_pending_general_requests INT DEFAULT 0;
+    DECLARE v_pending_leave_applications INT DEFAULT 0;
+    DECLARE v_absent_today INT DEFAULT 0;
+    DECLARE v_present_today INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+    IF p_category IN ('ADMIN', 'HR') THEN
+
+        
+        SELECT 
+            
+            (
+                SELECT COUNT(DISTINCT u.emp_id) 
+                FROM user_details u
+                INNER JOIN user_login_details ul ON u.emp_id = ul.emp_id
+                WHERE ul.status = 'ACTIVE'
+            ),
+            
+            (
+                SELECT COUNT(1) 
+                FROM department_master 
+                WHERE status = 'A'
+            ),
+            
+            (
+                SELECT COUNT(1) 
+                FROM general_requests 
+                WHERE status = 'PENDING'
+            ),
+            
+            (
+                SELECT COUNT(1) 
+                FROM leave_application 
+                WHERE status = 'PENDING'
+            ),
+            
+            (
+                SELECT COUNT(DISTINCT l.emp_id)
+                FROM leave_application l
+                INNER JOIN user_login_details ul ON l.emp_id = ul.emp_id
+                INNER JOIN user_details u ON l.emp_id = u.emp_id
+                WHERE l.status = 'APPROVED'
+                  AND ul.status = 'ACTIVE'
+                  AND CURRENT_DATE() BETWEEN l.from_date AND l.to_date
+            )
+        INTO 
+            v_total_active_employees,
+            v_total_active_departments,
+            v_pending_general_requests,
+            v_pending_leave_applications,
+            v_absent_today;
+
+        
+        SET v_present_today = GREATEST(0, v_total_active_employees - v_absent_today);
+
+        
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            v_total_active_employees AS total_active_employees,
+            v_total_active_departments AS total_active_departments,
+            v_pending_general_requests AS pending_general_requests,
+            v_pending_leave_applications AS pending_leave_applications,
+            v_present_today AS employees_present_today,
+            v_absent_today AS employees_absent_today;
+
+    ELSE
+        
+        SELECT 
+            'N' AS status,
+            'Access Denied: Restricted to ADMIN or HR roles only.' AS remarks,
+            0 AS total_active_employees,
+            0 AS total_active_departments,
+            0 AS pending_general_requests,
+            0 AS pending_leave_applications,
+            0 AS employees_present_today,
+            0 AS employees_absent_today;
+            
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendance_monthly_chart` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendance_monthly_chart`(
+    IN p_emp_id VARCHAR(20),
+    IN p_period VARCHAR(10)
+)
+BEGIN
+    DECLARE v_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_today DATE;
+    DECLARE v_start_date DATE;
+    DECLARE v_end_date DATE;
+    DECLARE v_previous_start DATE;
+    DECLARE v_previous_end DATE;
+    DECLARE v_month_base DATE;
+    DECLARE v_end_base DATE;
+    DECLARE v_cycle_start TINYINT UNSIGNED;
+    DECLARE v_cycle_end TINYINT UNSIGNED;
+    DECLARE v_error_message TEXT DEFAULT NULL;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_message = MESSAGE_TEXT;
+
+        SELECT
+            'N' AS status,
+            COALESCE(v_error_message,
+                     'An unexpected database error occurred.') AS remarks;
+    END;
+
+    
+    SET v_today = DATE(
+        CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')
+    );
+
+    IF v_today IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Unable to calculate IST date.';
+    END IF;
+
+    
+    IF p_period IS NULL OR UPPER(TRIM(p_period))
+       NOT IN ('DAY', 'WEEK', 'MONTH', 'YEAR') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid period. Use DAY, WEEK, MONTH, or YEAR.';
+    END IF;
+
+    
+    SELECT
+        MAX(UPPER(TRIM(user_category))),
+        MAX(LOWER(TRIM(status)))
+    INTO v_category, v_user_status
+    FROM user_login_details
+    WHERE emp_id = p_emp_id;
+
+    IF v_category IS NULL
+       OR v_category NOT IN ('ADMIN', 'HR')
+       OR v_user_status IS NULL
+       OR v_user_status <> 'active' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Access denied. Active ADMIN or HR account required.';
+    END IF;
+
+    
+    SELECT
+        MAX(payroll_cycle_start_day),
+        MAX(payroll_cycle_end_day)
+    INTO v_cycle_start, v_cycle_end
+    FROM company_settings;
+
+    IF v_cycle_start IS NULL OR v_cycle_end IS NULL
+       OR v_cycle_start NOT BETWEEN 1 AND 31
+       OR v_cycle_end NOT BETWEEN 1 AND 31 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid payroll cycle configuration.';
+    END IF;
+
+    CASE UPPER(TRIM(p_period))
+
+        WHEN 'DAY' THEN
+            SET v_start_date = v_today;
+            SET v_end_date = v_today;
+            SET v_previous_start =
+                DATE_SUB(v_today, INTERVAL 1 DAY);
+            SET v_previous_end = v_previous_start;
+
+        WHEN 'WEEK' THEN
+            SET v_start_date =
+                DATE_SUB(v_today, INTERVAL WEEKDAY(v_today) DAY);
+            SET v_end_date = v_today;
+            SET v_previous_start =
+                DATE_SUB(v_start_date, INTERVAL 7 DAY);
+            SET v_previous_end =
+                DATE_SUB(v_today, INTERVAL 7 DAY);
+
+        WHEN 'MONTH' THEN
+            IF DAY(v_today) >= v_cycle_start THEN
+                SET v_month_base =
+                    DATE_SUB(v_today,
+                        INTERVAL DAYOFMONTH(v_today) - 1 DAY);
+            ELSE
+                SET v_month_base =
+                    DATE_SUB(
+                        DATE_SUB(v_today, INTERVAL 1 MONTH),
+                        INTERVAL DAYOFMONTH(
+                            DATE_SUB(v_today, INTERVAL 1 MONTH)
+                        ) - 1 DAY
+                    );
+            END IF;
+
+            SET v_start_date = DATE_ADD(
+                v_month_base,
+                INTERVAL LEAST(
+                    v_cycle_start,
+                    DAY(LAST_DAY(v_month_base))
+                ) - 1 DAY
+            );
+
+            IF v_cycle_start > v_cycle_end THEN
+                SET v_end_base =
+                    DATE_ADD(v_month_base, INTERVAL 1 MONTH);
+            ELSE
+                SET v_end_base = v_month_base;
+            END IF;
+
+            SET v_end_date = DATE_ADD(
+                v_end_base,
+                INTERVAL LEAST(
+                    v_cycle_end,
+                    DAY(LAST_DAY(v_end_base))
+                ) - 1 DAY
+            );
+
+            SET v_previous_end =
+                DATE_SUB(v_start_date, INTERVAL 1 DAY);
+
+            SET v_month_base =
+                DATE_SUB(
+                    DATE_SUB(v_start_date,
+                        INTERVAL DAYOFMONTH(v_start_date) - 1 DAY),
+                    INTERVAL 1 MONTH
+                );
+
+            SET v_previous_start = DATE_ADD(
+                v_month_base,
+                INTERVAL LEAST(
+                    v_cycle_start,
+                    DAY(LAST_DAY(v_month_base))
+                ) - 1 DAY
+            );
+
+        WHEN 'YEAR' THEN
+            SET v_start_date = MAKEDATE(YEAR(v_today), 1);
+            SET v_end_date = v_today;
+            SET v_previous_start =
+                MAKEDATE(YEAR(v_today) - 1, 1);
+            SET v_previous_end =
+                DATE_SUB(v_today, INTERVAL 1 YEAR);
+
+    END CASE;
+
+    
+    SELECT
+        'Y' AS status,
+        'Attendance report generated successfully.' AS remarks,
+        UPPER(TRIM(p_period)) AS period_type,
+        v_today AS ist_today,
+        v_start_date AS current_start_date,
+        v_end_date AS current_end_date,
+        v_previous_start AS previous_start_date,
+        v_previous_end AS previous_end_date,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) = 'PRESENT'
+            THEN a.emp_id END) AS current_present,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) = 'ABSENT'
+            THEN a.emp_id END) AS current_absent,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) IN ('WFH', 'WORK FROM HOME')
+            THEN a.emp_id END) AS current_wfh,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) IN
+                 ('LEAVE', 'PL', 'SL', 'ML', 'LOP')
+            THEN a.emp_id END) AS current_leave,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) = 'PRESENT'
+            THEN a.emp_id END) AS previous_present,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) = 'ABSENT'
+            THEN a.emp_id END) AS previous_absent,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) IN ('WFH', 'WORK FROM HOME')
+            THEN a.emp_id END) AS previous_wfh,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) IN
+                 ('LEAVE', 'PL', 'SL', 'ML', 'LOP')
+            THEN a.emp_id END) AS previous_leave
+
+    FROM attendance a
+    WHERE a.attendance_date BETWEEN
+        LEAST(v_start_date, v_previous_start)
+        AND GREATEST(v_end_date, v_previous_end);
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendance_monthly_report` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendance_monthly_report`(
+    IN p_emp_id VARCHAR(20),
+    IN p_period VARCHAR(10)
+)
+BEGIN
+    DECLARE v_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_today DATE;
+    DECLARE v_start_date DATE;
+    DECLARE v_end_date DATE;
+    DECLARE v_previous_start DATE;
+    DECLARE v_previous_end DATE;
+    DECLARE v_month_base DATE;
+    DECLARE v_end_base DATE;
+    DECLARE v_cycle_start TINYINT UNSIGNED;
+    DECLARE v_cycle_end TINYINT UNSIGNED;
+    DECLARE v_error_message TEXT DEFAULT NULL;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_message = MESSAGE_TEXT;
+
+        SELECT
+            'N' AS status,
+            COALESCE(v_error_message,
+                     'An unexpected database error occurred.') AS remarks;
+    END;
+
+    
+    SET v_today = DATE(
+        CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')
+    );
+
+    IF v_today IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Unable to calculate IST date.';
+    END IF;
+
+    
+    IF p_period IS NULL OR UPPER(TRIM(p_period))
+       NOT IN ('DAY', 'WEEK', 'MONTH', 'YEAR') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid period. Use DAY, WEEK, MONTH, or YEAR.';
+    END IF;
+
+    
+    SELECT
+        MAX(UPPER(TRIM(user_category))),
+        MAX(LOWER(TRIM(status)))
+    INTO v_category, v_user_status
+    FROM user_login_details
+    WHERE emp_id = p_emp_id;
+
+    IF v_category IS NULL
+       OR v_category NOT IN ('ADMIN', 'HR')
+       OR v_user_status IS NULL
+       OR v_user_status <> 'active' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Access denied. Active ADMIN or HR account required.';
+    END IF;
+
+    
+    SELECT
+        MAX(payroll_cycle_start_day),
+        MAX(payroll_cycle_end_day)
+    INTO v_cycle_start, v_cycle_end
+    FROM company_settings;
+
+    IF v_cycle_start IS NULL OR v_cycle_end IS NULL
+       OR v_cycle_start NOT BETWEEN 1 AND 31
+       OR v_cycle_end NOT BETWEEN 1 AND 31 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid payroll cycle configuration.';
+    END IF;
+
+    CASE UPPER(TRIM(p_period))
+
+        WHEN 'DAY' THEN
+            SET v_start_date = v_today;
+            SET v_end_date = v_today;
+            SET v_previous_start =
+                DATE_SUB(v_today, INTERVAL 1 DAY);
+            SET v_previous_end = v_previous_start;
+
+        WHEN 'WEEK' THEN
+            SET v_start_date =
+                DATE_SUB(v_today, INTERVAL WEEKDAY(v_today) DAY);
+            SET v_end_date = v_today;
+            SET v_previous_start =
+                DATE_SUB(v_start_date, INTERVAL 7 DAY);
+            SET v_previous_end =
+                DATE_SUB(v_today, INTERVAL 7 DAY);
+
+        WHEN 'MONTH' THEN
+            IF DAY(v_today) >= v_cycle_start THEN
+                SET v_month_base =
+                    DATE_SUB(v_today,
+                        INTERVAL DAYOFMONTH(v_today) - 1 DAY);
+            ELSE
+                SET v_month_base =
+                    DATE_SUB(
+                        DATE_SUB(v_today, INTERVAL 1 MONTH),
+                        INTERVAL DAYOFMONTH(
+                            DATE_SUB(v_today, INTERVAL 1 MONTH)
+                        ) - 1 DAY
+                    );
+            END IF;
+
+            SET v_start_date = DATE_ADD(
+                v_month_base,
+                INTERVAL LEAST(
+                    v_cycle_start,
+                    DAY(LAST_DAY(v_month_base))
+                ) - 1 DAY
+            );
+
+            IF v_cycle_start > v_cycle_end THEN
+                SET v_end_base =
+                    DATE_ADD(v_month_base, INTERVAL 1 MONTH);
+            ELSE
+                SET v_end_base = v_month_base;
+            END IF;
+
+            SET v_end_date = DATE_ADD(
+                v_end_base,
+                INTERVAL LEAST(
+                    v_cycle_end,
+                    DAY(LAST_DAY(v_end_base))
+                ) - 1 DAY
+            );
+
+            SET v_previous_end =
+                DATE_SUB(v_start_date, INTERVAL 1 DAY);
+
+            SET v_month_base =
+                DATE_SUB(
+                    DATE_SUB(v_start_date,
+                        INTERVAL DAYOFMONTH(v_start_date) - 1 DAY),
+                    INTERVAL 1 MONTH
+                );
+
+            SET v_previous_start = DATE_ADD(
+                v_month_base,
+                INTERVAL LEAST(
+                    v_cycle_start,
+                    DAY(LAST_DAY(v_month_base))
+                ) - 1 DAY
+            );
+
+        WHEN 'YEAR' THEN
+            SET v_start_date = MAKEDATE(YEAR(v_today), 1);
+            SET v_end_date = v_today;
+            SET v_previous_start =
+                MAKEDATE(YEAR(v_today) - 1, 1);
+            SET v_previous_end =
+                DATE_SUB(v_today, INTERVAL 1 YEAR);
+
+    END CASE;
+
+    
+    SELECT
+        'Y' AS status,
+        'Attendance report generated successfully.' AS remarks,
+        UPPER(TRIM(p_period)) AS period_type,
+        v_today AS ist_today,
+        v_start_date AS current_start_date,
+        v_end_date AS current_end_date,
+        v_previous_start AS previous_start_date,
+        v_previous_end AS previous_end_date,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) = 'PRESENT'
+            THEN a.emp_id END) AS current_present,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) = 'ABSENT'
+            THEN a.emp_id END) AS current_absent,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) IN ('WFH', 'WORK FROM HOME')
+            THEN a.emp_id END) AS current_wfh,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN v_start_date AND v_end_date
+             AND UPPER(TRIM(a.status)) IN
+                 ('LEAVE', 'PL', 'SL', 'ML', 'LOP')
+            THEN a.emp_id END) AS current_leave,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) = 'PRESENT'
+            THEN a.emp_id END) AS previous_present,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) = 'ABSENT'
+            THEN a.emp_id END) AS previous_absent,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) IN ('WFH', 'WORK FROM HOME')
+            THEN a.emp_id END) AS previous_wfh,
+
+        COUNT(DISTINCT CASE
+            WHEN a.attendance_date BETWEEN
+                 v_previous_start AND v_previous_end
+             AND UPPER(TRIM(a.status)) IN
+                 ('LEAVE', 'PL', 'SL', 'ML', 'LOP')
+            THEN a.emp_id END) AS previous_leave
+
+    FROM attendance a
+    WHERE a.attendance_date BETWEEN
+        LEAST(v_start_date, v_previous_start)
+        AND GREATEST(v_end_date, v_previous_end);
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendance_overview_data` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendance_overview_data`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT,
+    IN p_search VARCHAR(255)
+)
+BEGIN
+    DECLARE v_user_category VARCHAR(20);
+    DECLARE v_cycle_start_day INT;
+    DECLARE v_cycle_end_day INT;
+    DECLARE v_month_start DATE;
+    DECLARE v_start_date DATE;
+    DECLARE v_end_date DATE;
+
+    
+    SET time_zone = '+05:30';
+
+    
+    SELECT user_category
+    INTO v_user_category
+    FROM user_login_details
+    WHERE emp_id = p_emp_id
+    LIMIT 1;
+
+    
+    IF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12
+       OR p_year IS NULL OR p_year NOT BETWEEN 1900 AND 9999
+    THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid month or year.';
+    END IF;
+
+    
+    SELECT
+        payroll_cycle_start_day,
+        payroll_cycle_end_day
+    INTO
+        v_cycle_start_day,
+        v_cycle_end_day
+    FROM company_settings
+    ORDER BY id
+    LIMIT 1;
+
+    
+    IF v_cycle_start_day IS NULL
+       OR v_cycle_end_day IS NULL
+       OR v_cycle_start_day NOT BETWEEN 1 AND 31
+       OR v_cycle_end_day NOT BETWEEN 1 AND 31
+    THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid payroll cycle settings in company_settings.';
+    END IF;
+
+    
+    SET v_month_start = STR_TO_DATE(
+        CONCAT(p_year, '-', LPAD(p_month, 2, '0'), '-01'),
+        '%Y-%m-%d'
+    );
+
+    
+    IF v_cycle_start_day > v_cycle_end_day THEN
+
+        
+        SET v_start_date = DATE_ADD(
+            DATE_SUB(v_month_start, INTERVAL 1 MONTH),
+            INTERVAL LEAST(
+                v_cycle_start_day,
+                DAY(
+                    LAST_DAY(
+                        DATE_SUB(v_month_start, INTERVAL 1 MONTH)
+                    )
+                )
+            ) - 1 DAY
+        );
+
+        SET v_end_date = DATE_ADD(
+            v_month_start,
+            INTERVAL LEAST(
+                v_cycle_end_day,
+                DAY(LAST_DAY(v_month_start))
+            ) - 1 DAY
+        );
+
+    ELSE
+
+        
+        SET v_start_date = DATE_ADD(
+            v_month_start,
+            INTERVAL LEAST(
+                v_cycle_start_day,
+                DAY(LAST_DAY(v_month_start))
+            ) - 1 DAY
+        );
+
+        SET v_end_date = DATE_ADD(
+            v_month_start,
+            INTERVAL LEAST(
+                v_cycle_end_day,
+                DAY(LAST_DAY(v_month_start))
+            ) - 1 DAY
+        );
+
+    END IF;
+
+    
+    IF v_user_category IN ('ADMIN' , 'HR') THEN
+
+        SELECT
+            u.emp_id,
+            u.emp_name,
+            d.department_name,
+            ds.designation_name,
+            u.reporting,
+            m.emp_name AS manager_name,
+
+            v_start_date AS period_start_date,
+            v_end_date AS period_end_date,
+
+            COUNT(
+                CASE
+                    WHEN a.status IN ('PRESENT', 'WFH')
+                    THEN 1
+                END
+            ) AS total_present,
+
+            COUNT(
+                CASE
+                    WHEN a.status = 'LEAVE'
+                    THEN 1
+                END
+            ) AS total_leaves,
+
+            COUNT(
+                CASE
+                    WHEN a.status = 'WFH'
+                    THEN 1
+                END
+            ) AS total_wfh,
+
+            COUNT(
+                CASE
+                    WHEN a.status = 'HOLIDAY'
+                    THEN 1
+                END
+            ) AS total_holidays,
+
+            IFNULL(
+                SUM(
+                    CASE
+                        WHEN a.punch_in IS NOT NULL
+                         AND a.punch_out IS NOT NULL
+                        THEN TIMESTAMPDIFF(
+                            MINUTE,
+                            a.punch_in,
+                            a.punch_out
+                        )
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS total_work_mins
+
+        FROM user_details u
+
+        LEFT JOIN user_details m
+            ON u.reporting = m.emp_id
+
+        LEFT JOIN department_master d
+            ON u.department = d.department_id
+
+        LEFT JOIN designation_master ds
+            ON u.designation = ds.designation_id
+
+        LEFT JOIN attendance a
+            ON u.emp_id = a.emp_id
+           AND a.attendance_date BETWEEN v_start_date AND v_end_date
+
+        WHERE
+            (
+                p_search IS NULL
+                OR TRIM(p_search) = ''
+                OR u.emp_id LIKE CONCAT('%', TRIM(p_search), '%')
+                OR u.emp_name LIKE CONCAT('%', TRIM(p_search), '%')
+            )
+
+        GROUP BY
+            u.emp_id,
+            u.emp_name,
+            d.department_name,
+            ds.designation_name,
+            u.reporting,
+            m.emp_name
+
+        ORDER BY u.emp_id;
+
+    ELSE
+
+        SELECT 'UNAUTHORIZED' AS error_msg;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendence_admin_every_day` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendence_admin_every_day`(
+    IN p_emp_id VARCHAR(20),
+    IN p_day INT,
+    IN p_month INT,
+    IN p_year INT,
+    IN p_category VARCHAR(20)
+)
+BEGIN
+
+    DECLARE v_target_date DATE;
+    DECLARE v_is_authorized INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+
+    
+
+    SET v_target_date = STR_TO_DATE(
+        CONCAT(
+            p_year, '-',
+            LPAD(p_month, 2, '0'), '-',
+            LPAD(p_day, 2, '0')
+        ),
+        '%Y-%m-%d'
+    );
+
+
+  
+
+    IF v_target_date IS NULL THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid date parameter provided.' AS remarks;
+
+
+    ELSE
+
+
+       
+
+        IF UPPER(TRIM(p_category)) = 'ADMIN' THEN
+            SET v_is_authorized = 1;
+        END IF;
+
+
+       
+
+        IF v_is_authorized = 0 THEN
+
+            SELECT
+                'N' AS status,
+                'Access Denied: Only ADMIN can view employee attendance.'
+                AS remarks;
+
+
+        ELSE
+
+
+         
+
+            SELECT
+
+                'Y' AS status,
+
+                'Employee attendance fetched successfully'
+                AS remarks,
+
+                p_category AS category,
+
+                v_target_date AS attendance_date,
+
+                ud.emp_name AS employee_name,
+
+                ud.emp_id,
+
+                dep.department_name,
+
+                att.punch_in,
+
+
+            
+
+                CASE
+
+                    WHEN att.punch_in IS NOT NULL
+                         AND att.punch_out IS NOT NULL
+                         AND att.punch_in = att.punch_out
+
+                    THEN NULL
+
+                    ELSE att.punch_out
+
+                END AS punch_out,
+
+
+               
+
+                CASE
+
+                    
+
+                    WHEN att.punch_in IS NOT NULL
+                         AND att.punch_out IS NOT NULL
+                         AND att.punch_in <> att.punch_out
+
+                    THEN
+                        SEC_TO_TIME(
+                            TIMESTAMPDIFF(
+                                SECOND,
+                                att.punch_in,
+                                att.punch_out
+                            )
+                        )
+
+
+                    
+
+                    WHEN att.punch_in IS NOT NULL
+                         AND att.punch_out IS NOT NULL
+                         AND att.punch_in = att.punch_out
+                         AND v_target_date = DATE(NOW())
+
+                    THEN
+                        SEC_TO_TIME(
+                            TIMESTAMPDIFF(
+                                SECOND,
+                                att.punch_in,
+                                NOW()
+                            )
+                        )
+
+
+                    
+
+                    WHEN att.punch_in IS NOT NULL
+                         AND att.punch_out IS NULL
+                         AND v_target_date = DATE(NOW())
+
+                    THEN
+                        SEC_TO_TIME(
+                            TIMESTAMPDIFF(
+                                SECOND,
+                                att.punch_in,
+                                NOW()
+                            )
+                        )
+
+
+                    ELSE NULL
+
+                END AS total_hours,
+
+
+                
+
+                CASE
+
+                    WHEN att.punch_in IS NULL
+                         AND att.status IS NULL
+
+                    THEN 'ABSENT'
+
+                    ELSE COALESCE(
+                        att.status,
+                        'ABSENT'
+                    )
+
+                END AS attendance_status
+
+
+            FROM user_details ud
+
+
+           
+
+            INNER JOIN user_login_details uld
+
+                ON uld.emp_id = ud.emp_id
+
+
+         
+
+            LEFT JOIN attendance att
+
+                ON att.emp_id = ud.emp_id
+
+               AND DATE(att.attendance_date) = v_target_date
+
+
+            
+
+            LEFT JOIN department_master dep
+
+                ON dep.department_id = ud.department
+
+               AND dep.status = '1'
+
+
+            
+
+            WHERE uld.status = 'ACTIVE'
+
+
+            ORDER BY ud.emp_id ASC;
+
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendence_monthly_report` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendence_monthly_report`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT,
+    IN p_category VARCHAR(20)
+)
+BEGIN
+
+    DECLARE v_target_date DATE;
+    DECLARE v_period_start DATE;
+    DECLARE v_period_end DATE;
+    DECLARE v_calculation_end DATE;
+    DECLARE v_today DATE;
+
+    DECLARE v_is_authorized INT DEFAULT 0;
+
+    DECLARE v_total_employees INT DEFAULT 0;
+    DECLARE v_today_present INT DEFAULT 0;
+    DECLARE v_today_leave INT DEFAULT 0;
+    DECLARE v_today_wfh INT DEFAULT 0;
+    DECLARE v_today_absent INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    SET v_today = DATE(NOW());
+
+
+    
+
+    IF p_month < 1
+       OR p_month > 12
+       OR p_year < 2000
+       OR p_year > 2100 THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid month or year parameter provided.' AS remarks;
+
+    ELSE
+
+        
+
+        SET v_target_date = STR_TO_DATE(
+            CONCAT(
+                p_year,
+                '-',
+                LPAD(p_month, 2, '0'),
+                '-01'
+            ),
+            '%Y-%m-%d'
+        );
+
+
+        
+
+        IF UPPER(TRIM(p_category)) = 'ADMIN' THEN
+            SET v_is_authorized = 1;
+        END IF;
+
+
+        
+
+        IF v_is_authorized = 0 THEN
+
+            SELECT
+                'N' AS status,
+                'Access Denied: Only ADMIN can view monthly attendance.' AS remarks;
+
+        ELSE
+
+
+            
+
+            SET v_period_start = DATE_SUB(
+                v_target_date,
+                INTERVAL 1 MONTH
+            );
+
+            SET v_period_start = STR_TO_DATE(
+                CONCAT(
+                    YEAR(v_period_start),
+                    '-',
+                    LPAD(MONTH(v_period_start), 2, '0'),
+                    '-25'
+                ),
+                '%Y-%m-%d'
+            );
+
+            SET v_period_end = DATE_SUB(
+                DATE_ADD(
+                    v_period_start,
+                    INTERVAL 1 MONTH
+                ),
+                INTERVAL 1 DAY
+            );
+
+
+            
+
+            IF v_today < v_period_start THEN
+
+                SET v_calculation_end = NULL;
+
+            ELSEIF v_today > v_period_end THEN
+
+                SET v_calculation_end = v_period_end;
+
+            ELSE
+
+                SET v_calculation_end = v_today;
+
+            END IF;
+
+
+            
+
+            IF v_calculation_end IS NULL THEN
+
+                SELECT
+                    'Y' AS status,
+                    'Attendance period has not started yet.' AS remarks,
+                    p_month AS month,
+                    p_year AS year,
+                    p_category AS category,
+                    v_period_start AS period_start,
+                    v_period_end AS period_end,
+                    NULL AS calculated_until;
+
+            ELSE
+
+
+                
+
+                SELECT COUNT(DISTINCT ud.emp_id)
+                INTO v_total_employees
+                FROM user_details ud
+
+                INNER JOIN user_login_details uld
+                    ON uld.emp_id = ud.emp_id
+
+                WHERE uld.status = 'ACTIVE';
+
+
+                
+
+                SELECT
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status = 'PRESENT'
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ),
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status = 'LEAVE'
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ),
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status = 'WFH'
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    )
+
+                INTO
+                    v_today_present,
+                    v_today_leave,
+                    v_today_wfh
+
+                FROM user_details ud
+
+                INNER JOIN user_login_details uld
+                    ON uld.emp_id = ud.emp_id
+
+                LEFT JOIN attendance a
+                    ON a.emp_id = ud.emp_id
+                    AND DATE(a.attendance_date) = v_today
+
+                WHERE uld.status = 'ACTIVE';
+
+
+                
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM holiday_master
+                    WHERE holiday_date = v_today
+                      AND status = 'A'
+                ) THEN
+
+                    SET v_today_absent = 0;
+
+                ELSE
+
+                    SET v_today_absent = GREATEST(
+                        v_total_employees
+                        - v_today_present
+                        - v_today_wfh
+                        - v_today_leave,
+                        0
+                    );
+
+                END IF;
+
+
+                
+
+                WITH RECURSIVE date_range AS (
+
+                    SELECT
+                        v_period_start AS attendance_date
+
+                    UNION ALL
+
+                    SELECT
+                        DATE_ADD(
+                            attendance_date,
+                            INTERVAL 1 DAY
+                        )
+
+                    FROM date_range
+
+                    WHERE attendance_date < v_calculation_end
+
+                ),
+
+
+                
+
+                active_employees AS (
+
+                    SELECT
+                        ud.emp_id,
+                        ud.emp_name,
+                        ud.department
+
+                    FROM user_details ud
+
+                    INNER JOIN user_login_details uld
+                        ON uld.emp_id = ud.emp_id
+
+                    WHERE uld.status = 'ACTIVE'
+
+                ),
+
+
+                
+
+                employee_days AS (
+
+                    SELECT
+                        ae.emp_id,
+                        ae.emp_name,
+                        ae.department,
+
+                        dr.attendance_date,
+
+                        att.punch_in,
+                        att.punch_out,
+                        att.status AS raw_status
+
+                    FROM active_employees ae
+
+                    CROSS JOIN date_range dr
+
+                    LEFT JOIN attendance att
+                        ON att.emp_id = ae.emp_id
+                        AND DATE(att.attendance_date) = dr.attendance_date
+
+                ),
+
+
+                
+
+                employee_daily AS (
+
+                    SELECT
+                        ed.*,
+
+                        CASE
+
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM holiday_master hm
+                                WHERE hm.holiday_date = ed.attendance_date
+                                  AND hm.status = 'A'
+                            )
+                            THEN 'HOLIDAY'
+
+                            ELSE COALESCE(
+                                ed.raw_status,
+                                'ABSENT'
+                            )
+
+                        END AS final_status
+
+                    FROM employee_days ed
+
+                )
+
+
+                
+
+                SELECT
+
+                    'Y' AS status,
+
+                    'Monthly attendance fetched successfully'
+                        AS remarks,
+
+                    v_target_date AS selected_date,
+
+                    v_today_present AS today_present,
+
+                    v_today_leave AS today_leave,
+
+                    v_today_wfh AS today_wfh,
+
+                    v_today_absent AS today_absent,
+
+                    p_month AS month,
+
+                    p_year AS year,
+
+                    p_category AS category,
+
+                    v_period_start AS period_start,
+
+                    v_period_end AS period_end,
+
+                    v_calculation_end AS calculated_until,
+
+                    ed.emp_id,
+
+                    ed.emp_name AS employee_name,
+
+                    dep.department_name,
+
+
+                    
+
+                    COUNT(*) AS total_days,
+
+
+                    
+
+                    SUM(
+                        CASE
+                            WHEN ed.final_status IN ('PRESENT', 'LATE')
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS total_present,
+
+
+                    
+
+                    SUM(
+                        CASE
+                            WHEN ed.final_status = 'ABSENT'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS total_absent,
+
+
+                    
+
+                    SUM(
+                        CASE
+                            WHEN ed.final_status = 'WFH'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS total_wfh,
+
+
+                    
+
+                    SUM(
+                        CASE
+                            WHEN ed.final_status = 'LEAVE'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS total_leave,
+
+
+                    
+
+                    SUM(
+                        CASE
+                            WHEN ed.final_status = 'HOLIDAY'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS total_holidays,
+
+
+                    
+
+                    SEC_TO_TIME(
+                        SUM(
+                            CASE
+
+                                
+                                WHEN ed.punch_in IS NOT NULL
+                                 AND ed.punch_out IS NOT NULL
+                                 AND ed.punch_in <> ed.punch_out
+
+                                THEN TIMESTAMPDIFF(
+                                    SECOND,
+                                    ed.punch_in,
+                                    ed.punch_out
+                                )
+
+
+                                
+                                WHEN ed.punch_in IS NOT NULL
+                                 AND ed.punch_out IS NOT NULL
+                                 AND ed.punch_in = ed.punch_out
+                                 AND ed.attendance_date = v_today
+
+                                THEN TIMESTAMPDIFF(
+                                    SECOND,
+                                    ed.punch_in,
+                                    NOW()
+                                )
+
+
+                                
+                                WHEN ed.punch_in IS NOT NULL
+                                 AND ed.punch_out IS NULL
+                                 AND ed.attendance_date = v_today
+
+                                THEN TIMESTAMPDIFF(
+                                    SECOND,
+                                    ed.punch_in,
+                                    NOW()
+                                )
+
+                                ELSE 0
+
+                            END
+                        )
+                    ) AS total_hours,
+
+
+                    
+
+                    (
+                        SELECT JSON_ARRAYAGG(
+
+                            JSON_OBJECT(
+
+                                'date',
+                                DATE_FORMAT(
+                                    x.attendance_date,
+                                    '%Y-%m-%d'
+                                ),
+
+                                'day_name',
+                                DAYNAME(
+                                    x.attendance_date
+                                ),
+
+                                'status',
+                                x.final_status,
+
+
+                                
+
+                                'punch_in',
+
+                                CASE
+
+                                    WHEN x.punch_in IS NOT NULL
+
+                                    THEN DATE_FORMAT(
+                                        x.punch_in,
+                                        '%Y-%m-%d %H:%i:%s'
+                                    )
+
+                                    ELSE NULL
+
+                                END,
+
+
+                                
+
+                                'punch_out',
+
+                                CASE
+
+                                    WHEN x.punch_in IS NOT NULL
+                                     AND x.punch_out IS NOT NULL
+                                     AND x.punch_in = x.punch_out
+
+                                    THEN NULL
+
+                                    WHEN x.punch_out IS NOT NULL
+
+                                    THEN DATE_FORMAT(
+                                        x.punch_out,
+                                        '%Y-%m-%d %H:%i:%s'
+                                    )
+
+                                    ELSE NULL
+
+                                END,
+
+
+                                
+
+                                'total_hours',
+
+                                CASE
+
+                                    
+
+                                    WHEN x.punch_in IS NOT NULL
+                                     AND x.punch_out IS NOT NULL
+                                     AND x.punch_in <> x.punch_out
+
+                                    THEN TIME_FORMAT(
+                                        SEC_TO_TIME(
+                                            TIMESTAMPDIFF(
+                                                SECOND,
+                                                x.punch_in,
+                                                x.punch_out
+                                            )
+                                        ),
+                                        '%H:%i:%s'
+                                    )
+
+
+                                    
+
+                                    WHEN x.punch_in IS NOT NULL
+                                     AND x.punch_out IS NOT NULL
+                                     AND x.punch_in = x.punch_out
+                                     AND x.attendance_date = v_today
+
+                                    THEN TIME_FORMAT(
+                                        SEC_TO_TIME(
+                                            TIMESTAMPDIFF(
+                                                SECOND,
+                                                x.punch_in,
+                                                NOW()
+                                            )
+                                        ),
+                                        '%H:%i:%s'
+                                    )
+
+
+                                    
+
+                                    WHEN x.punch_in IS NOT NULL
+                                     AND x.punch_out IS NULL
+                                     AND x.attendance_date = v_today
+
+                                    THEN TIME_FORMAT(
+                                        SEC_TO_TIME(
+                                            TIMESTAMPDIFF(
+                                                SECOND,
+                                                x.punch_in,
+                                                NOW()
+                                            )
+                                        ),
+                                        '%H:%i:%s'
+                                    )
+
+                                    ELSE NULL
+
+                                END
+
+                            )
+
+                        )
+
+                        FROM employee_daily x
+
+                        WHERE x.emp_id = ed.emp_id
+
+                        ORDER BY x.attendance_date
+
+                    ) AS attendance_data
+
+
+                FROM employee_daily ed
+
+                LEFT JOIN department_master dep
+                    ON dep.department_id = ed.department
+
+                AND dep.status = '1'
+
+
+                
+
+                GROUP BY
+                    ed.emp_id,
+                    ed.emp_name,
+                    ed.department,
+                    dep.department_name
+
+
+                ORDER BY ed.emp_id ASC;
+
+
+            END IF;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendence_period_summary_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendence_period_summary_details`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+BEGIN
+
+    DECLARE v_period_start DATE;
+    DECLARE v_period_end DATE;
+    DECLARE v_calculation_end DATE;
+    DECLARE v_today DATE;
+
+    DECLARE v_employee_count INT DEFAULT 0;
+    DECLARE v_total_working_days INT DEFAULT 0;
+
+
+    
+
+    SET time_zone = '+05:30';
+
+    SET v_today = CURDATE();
+
+
+    
+
+    IF p_month < 1 OR p_month > 12 THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid month. Month must be between 1 and 12'
+                AS remarks;
+
+    ELSE
+
+
+        
+
+        SET v_period_start =
+            DATE_SUB(
+                STR_TO_DATE(
+                    CONCAT(p_year, '-', p_month, '-25'),
+                    '%Y-%m-%d'
+                ),
+                INTERVAL 1 MONTH
+            );
+
+
+        SET v_period_end =
+            STR_TO_DATE(
+                CONCAT(p_year, '-', p_month, '-24'),
+                '%Y-%m-%d'
+            );
+
+
+        
+
+        IF v_today < v_period_end THEN
+
+            SET v_calculation_end = v_today;
+
+        ELSE
+
+            SET v_calculation_end = v_period_end;
+
+        END IF;
+
+
+        
+
+        SELECT
+            (
+                DATEDIFF(
+                    v_calculation_end,
+                    v_period_start
+                ) + 1
+            )
+            -
+            COUNT(DISTINCT hm.holiday_date)
+
+        INTO v_total_working_days
+
+        FROM holiday_master hm
+
+        WHERE hm.holiday_date
+              BETWEEN v_period_start
+              AND v_calculation_end
+
+          AND hm.status = 'A';
+
+
+        
+
+        SELECT COUNT(*)
+        INTO v_employee_count
+
+        FROM user_details ud
+
+        INNER JOIN user_login_details uld
+            ON uld.emp_id = ud.emp_id
+
+        WHERE ud.reporting = p_emp_id
+          AND uld.status = 'ACTIVE';
+
+
+        
+
+        IF v_employee_count = 0 THEN
+
+            SELECT
+                'N' AS status,
+
+                'There are no employees reporting to this employee'
+                    AS remarks,
+
+                p_emp_id AS reporting_to,
+
+                v_period_start AS period_start,
+
+                v_period_end AS period_end,
+
+                v_calculation_end AS calculated_until;
+
+
+        ELSE
+
+
+            
+
+            SELECT
+
+                'Y' AS status,
+
+                'Attendance period summary fetched successfully'
+                    AS remarks,
+
+
+                
+
+                ud.emp_id
+                    AS emp_id,
+
+                ud.emp_name
+                    AS employee_name,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'PRESENT'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS total_present,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'WFH'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS total_wfh,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'LEAVE'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS total_leaves,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.punch_in IS NOT NULL
+                             AND a.punch_out IS NOT NULL
+                             AND a.punch_in = a.punch_out
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS missed_punch,
+
+
+                
+
+                COALESCE(
+
+                    SEC_TO_TIME(
+                        SUM(
+                            CASE
+
+                                WHEN a.punch_in IS NOT NULL
+                                 AND a.punch_out IS NOT NULL
+                                 AND a.punch_out > a.punch_in
+
+                                THEN TIMESTAMPDIFF(
+                                    SECOND,
+                                    a.punch_in,
+                                    a.punch_out
+                                )
+
+                                ELSE 0
+
+                            END
+                        )
+                    ),
+
+                    '00:00:00'
+
+                ) AS total_hours,
+
+
+                
+
+                v_total_working_days
+                    AS total_working_days,
+
+
+                
+
+                GREATEST(
+
+                    v_total_working_days
+
+                    - COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status IN ('PRESENT', 'WFH')
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    )
+
+                    - COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status = 'LEAVE'
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ),
+
+                    0
+
+                ) AS total_absents,
+
+
+                
+
+                v_period_start
+                    AS period_start,
+
+                v_period_end
+                    AS period_end,
+
+                v_calculation_end
+                    AS calculated_until
+
+
+            FROM user_details ud
+
+            INNER JOIN user_login_details uld
+                ON uld.emp_id = ud.emp_id
+
+
+            LEFT JOIN attendance a
+                ON a.emp_id = ud.emp_id
+
+               AND a.attendance_date
+                   BETWEEN v_period_start
+                   AND v_calculation_end
+
+
+            WHERE ud.reporting = p_emp_id
+              AND uld.status = 'ACTIVE'
+
+
+            GROUP BY
+                ud.emp_id,
+                ud.emp_name
+
+
+            ORDER BY
+                ud.emp_id;
+
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendence_period_summery_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendence_period_summery_details`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+BEGIN
+
+    DECLARE v_period_start DATE;
+    DECLARE v_period_end DATE;
+    DECLARE v_calculation_end DATE;
+    DECLARE v_today DATE;
+
+    DECLARE v_employee_count INT DEFAULT 0;
+    DECLARE v_total_working_days INT DEFAULT 0;
+
+
+    
+
+    SET time_zone = '+05:30';
+
+    SET v_today = CURDATE();
+
+
+    
+
+    IF p_month < 1 OR p_month > 12 THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid month. Month must be between 1 and 12'
+                AS remarks;
+
+    ELSE
+
+
+        
+
+        SET v_period_start =
+            DATE_SUB(
+                STR_TO_DATE(
+                    CONCAT(p_year, '-', p_month, '-25'),
+                    '%Y-%m-%d'
+                ),
+                INTERVAL 1 MONTH
+            );
+
+
+        SET v_period_end =
+            STR_TO_DATE(
+                CONCAT(p_year, '-', p_month, '-24'),
+                '%Y-%m-%d'
+            );
+
+
+        
+
+        IF v_today < v_period_end THEN
+
+            SET v_calculation_end = v_today;
+
+        ELSE
+
+            SET v_calculation_end = v_period_end;
+
+        END IF;
+
+
+        
+
+        SELECT
+            (
+                DATEDIFF(
+                    v_calculation_end,
+                    v_period_start
+                ) + 1
+            )
+            -
+            COUNT(DISTINCT hm.holiday_date)
+
+        INTO v_total_working_days
+
+        FROM holiday_master hm
+
+        WHERE hm.holiday_date
+              BETWEEN v_period_start
+              AND v_calculation_end
+
+          AND hm.status = 'A';
+
+
+        
+
+        SELECT COUNT(*)
+        INTO v_employee_count
+
+        FROM user_details ud
+
+        INNER JOIN user_login_details uld
+            ON uld.emp_id = ud.emp_id
+
+        WHERE ud.reporting = p_emp_id
+          AND uld.status = 'ACTIVE';
+
+
+        
+
+        IF v_employee_count = 0 THEN
+
+            SELECT
+                'N' AS status,
+
+                'There are no employees reporting to this employee'
+                    AS remarks,
+
+                p_emp_id AS reporting_to,
+
+                v_period_start AS period_start,
+
+                v_period_end AS period_end,
+
+                v_calculation_end AS calculated_until;
+
+
+        ELSE
+
+
+            
+
+            SELECT
+
+                'Y' AS status,
+
+                'Attendance period summary fetched successfully'
+                    AS remarks,
+
+
+                
+
+                ud.emp_id
+                    AS emp_id,
+
+                ud.emp_name
+                    AS employee_name,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'PRESENT'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS total_present,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'WFH'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS total_wfh,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'LEAVE'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS total_leaves,
+
+
+                
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.punch_in IS NOT NULL
+                             AND a.punch_out IS NOT NULL
+                             AND a.punch_in = a.punch_out
+                            THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS missed_punch,
+
+
+                
+
+                COALESCE(
+
+                    SEC_TO_TIME(
+                        SUM(
+                            CASE
+
+                                WHEN a.punch_in IS NOT NULL
+                                 AND a.punch_out IS NOT NULL
+                                 AND a.punch_out > a.punch_in
+
+                                THEN TIMESTAMPDIFF(
+                                    SECOND,
+                                    a.punch_in,
+                                    a.punch_out
+                                )
+
+                                ELSE 0
+
+                            END
+                        )
+                    ),
+
+                    '00:00:00'
+
+                ) AS total_hours,
+
+
+                
+
+                v_total_working_days
+                    AS total_working_days,
+
+
+                
+
+                GREATEST(
+
+                    v_total_working_days
+
+                    - COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status IN ('PRESENT', 'WFH')
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    )
+
+                    - COALESCE(
+                        SUM(
+                            CASE
+                                WHEN a.status = 'LEAVE'
+                                THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ),
+
+                    0
+
+                ) AS total_absents,
+
+
+                
+
+                v_period_start
+                    AS period_start,
+
+                v_period_end
+                    AS period_end,
+
+                v_calculation_end
+                    AS calculated_until
+
+
+            FROM user_details ud
+
+            INNER JOIN user_login_details uld
+                ON uld.emp_id = ud.emp_id
+
+
+            LEFT JOIN attendance a
+                ON a.emp_id = ud.emp_id
+
+               AND a.attendance_date
+                   BETWEEN v_period_start
+                   AND v_calculation_end
+
+
+            WHERE ud.reporting = p_emp_id
+              AND uld.status = 'ACTIVE'
+
+
+            GROUP BY
+                ud.emp_id,
+                ud.emp_name
+
+
+            ORDER BY
+                ud.emp_id;
+
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_attendence_today_admin` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_attendence_today_admin`(
+    IN p_emp_id VARCHAR(20),
+    IN p_day INT,
+    IN p_month INT,
+    IN p_year INT
+)
+BEGIN
+
+    DECLARE v_target_date DATE;
+    DECLARE v_user_category VARCHAR(20);
+    DECLARE v_is_authorized INT DEFAULT 0;
+
+    DECLARE v_total_employees INT DEFAULT 0;
+    DECLARE v_today_present INT DEFAULT 0;
+    DECLARE v_today_wfh INT DEFAULT 0;
+    DECLARE v_today_leave INT DEFAULT 0;
+    DECLARE v_today_absent INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    SET v_target_date = STR_TO_DATE(
+        CONCAT(
+            p_year, '-',
+            LPAD(p_month, 2, '0'), '-',
+            LPAD(p_day, 2, '0')
+        ),
+        '%Y-%m-%d'
+    );
+
+    IF v_target_date IS NULL THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid date parameter provided.' AS remarks;
+
+    ELSE
+
+        SELECT UPPER(user_category)
+        INTO v_user_category
+        FROM user_login_details
+        WHERE emp_id = p_emp_id
+          AND status = 'ACTIVE'
+        LIMIT 1;
+
+        IF v_user_category IN ('ADMIN', 'HR') THEN
+            SET v_is_authorized = 1;
+        END IF;
+
+        IF v_is_authorized = 0 THEN
+
+            SELECT
+                'N' AS status,
+                'Access Denied: Only ADMIN or HR can view attendance counts.' AS remarks;
+
+        ELSE
+
+            SELECT COUNT(*)
+            INTO v_total_employees
+            FROM user_details ud
+            INNER JOIN user_login_details uld
+                ON uld.emp_id = ud.emp_id
+            WHERE uld.status = 'ACTIVE';
+
+            SELECT
+                COALESCE(SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN a.status = 'WFH' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN a.status = 'LEAVE' THEN 1 ELSE 0 END), 0)
+            INTO
+                v_today_present,
+                v_today_wfh,
+                v_today_leave
+            FROM user_details ud
+            INNER JOIN user_login_details uld
+                ON uld.emp_id = ud.emp_id
+            LEFT JOIN attendance a
+                ON a.emp_id = ud.emp_id
+               AND DATE(a.attendance_date) = v_target_date
+            WHERE uld.status = 'ACTIVE';
+
+            IF EXISTS (
+                SELECT 1
+                FROM holiday_master hm
+                WHERE hm.holiday_date = v_target_date
+                  AND hm.status = 'A'
+            ) THEN
+                SET v_today_absent = 0;
+            ELSE
+                SET v_today_absent = GREATEST(
+                    v_total_employees
+                    - v_today_present
+                    - v_today_wfh
+                    - v_today_leave,
+                    0
+                );
+            END IF;
+
+            SELECT
+                'Y' AS status,
+                'Daily attendance counts fetched successfully' AS remarks,
+                v_target_date AS attendance_date,
+                v_total_employees AS total_employees_count,
+                v_today_present AS today_present_count,
+                v_today_wfh AS today_wfh_count,
+                v_today_leave AS today_leave_count,
+                v_today_absent AS today_absent_count;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_candidate_details_by_ref_id` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_candidate_details_by_ref_id`(
+
+    IN p_ref_id VARCHAR(20)
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE ref_id = p_ref_id;
+
+    IF v_count > 0 THEN
+
+        
+
+        SELECT
+
+            'Y' AS status,
+
+            id,
+
+            ref_id,
+
+            candidate_type,
+
+            application_source,
+
+            resume_url,
+
+            offer_letter_url,
+
+            temp_password,
+
+            offer_status,
+
+            onboarding_status,
+
+            hr_status,
+
+            current_step,
+
+            is_submitted,
+
+            emp_name,
+
+            email,
+
+            mobile,
+
+            dob,
+
+            gender,
+
+            marital_status,
+
+            father_name,
+
+            mother_name,
+
+            current_address,
+
+            perminent_address,
+
+            bank_holder_name,
+
+            bank_name,
+
+            bank_branch,
+
+            bank_account_no,
+
+            ifsc,
+
+            upi_id,
+
+            bank_account_type,
+
+            pan,
+
+            aadhaar,
+
+            uan,
+
+            skills,
+
+            qualification,
+
+            department,
+
+            designation,
+
+            reporting,
+
+            remarks,
+
+            created_by,
+
+            received_on,
+
+            updated_on,
+
+            documents,
+            experience
+
+        FROM candidate_details
+        WHERE ref_id = p_ref_id;
+
+    ELSE
+
+        SELECT
+
+            'N' AS status,
+
+            p_ref_id AS ref_id,
+
+            'candidate not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_candidate_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_candidate_list`(
+    IN p_application_source VARCHAR(30),
+    IN p_onboarding_status VARCHAR(30),
+    IN p_offer_status VARCHAR(20),
+    IN p_candidate_type VARCHAR(20) 
+)
+BEGIN
+    SET time_zone = '+05:30';
+
+    IF p_application_source = 'CAREERS' THEN
+
+        
+        SELECT
+            ref_id,
+            candidate_type,
+            application_source,
+            emp_name,
+            email,
+            mobile,
+            offer_status,
+            onboarding_status,
+            hr_status,
+            current_step,
+            is_submitted,
+            received_on
+        FROM candidate_details
+        WHERE application_source = 'CAREERS'
+          AND (p_onboarding_status = 'ALL' OR onboarding_status = p_onboarding_status)
+          AND (p_offer_status = 'ALL' OR offer_status = p_offer_status)
+          AND (p_candidate_type = 'ALL' OR candidate_type = p_candidate_type)
+        ORDER BY id DESC;
+
+    ELSEIF p_application_source = 'HR' THEN
+
+        
+        SELECT
+            ref_id,
+            candidate_type,
+            application_source,
+            emp_name,
+            email,
+            mobile,
+            offer_status,
+            onboarding_status,
+            hr_status,
+            current_step,
+            is_submitted,
+            created_by,
+            received_on
+        FROM candidate_details
+        WHERE application_source = 'HR'
+          AND (p_onboarding_status = 'ALL' OR onboarding_status = p_onboarding_status)
+          AND (p_offer_status = 'ALL' OR offer_status = p_offer_status)
+          AND (p_candidate_type = 'ALL' OR candidate_type = p_candidate_type)
+        ORDER BY id DESC;
+
+    ELSE
+
+        
+        SELECT
+            ref_id,
+            candidate_type,
+            application_source,
+            emp_name,
+            email,
+            mobile,
+            offer_status,
+            onboarding_status,
+            hr_status,
+            current_step,
+            is_submitted,
+            created_by,
+            received_on
+        FROM candidate_details
+        WHERE (p_application_source = 'ALL' OR application_source = p_application_source)
+          AND (p_onboarding_status = 'ALL' OR onboarding_status = p_onboarding_status)
+          AND (p_offer_status = 'ALL' OR offer_status = p_offer_status)
+          AND (p_candidate_type = 'ALL' OR candidate_type = p_candidate_type)
+        ORDER BY id DESC;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_details_from_employee_sal_to_allowance_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_details_from_employee_sal_to_allowance_list`(
+    IN p_month VARCHAR(45), 
+    IN p_year VARCHAR(45)
+)
+BEGIN
+    
+    INSERT INTO allowance_list (staff_id, allowance_name, amount, month, year)
+    SELECT 
+        es.emp_id AS staff_id,
+        'Basic Salary' AS allowance_name,
+        es.`basic @ 50%` AS amount,
+        es.month AS month,
+        es.year AS year
+    FROM employee_salary es
+    WHERE es.month = p_month AND es.year = p_year;
+
+    
+    INSERT INTO allowance_list (staff_id, allowance_name, amount, month, year)
+    SELECT 
+        es.emp_id AS staff_id,
+        'House Rent Allowance' AS allowance_name,
+        es.`hra @ 20%` AS amount,
+        es.month AS month,
+        es.year AS year
+    FROM employee_salary es
+    WHERE es.month = p_month AND es.year = p_year;
+
+    
+    INSERT INTO allowance_list (staff_id, allowance_name, amount, month, year)
+    SELECT 
+        es.emp_id AS staff_id,
+        'Medical Allowance' AS allowance_name,
+        es.`medical @ 5%` AS amount,
+        es.month AS month,
+        es.year AS year
+    FROM employee_salary es
+    WHERE es.month = p_month AND es.year = p_year;
+
+    
+    INSERT INTO allowance_list (staff_id, allowance_name, amount, month, year)
+    SELECT 
+        es.emp_id AS staff_id,
+        'Conveyance Allowance' AS allowance_name,
+        es.`conveyance @ 8%` AS amount,
+        es.month AS month,
+        es.year AS year
+    FROM employee_salary es
+    WHERE es.month = p_month AND es.year = p_year;    
+
+    
+    INSERT INTO allowance_list (staff_id, allowance_name, amount, month, year)
+    SELECT 
+        es.emp_id AS staff_id,
+        'Other Allowance' AS allowance_name,
+        es.`others @ 17%` AS amount,
+        es.month AS month,
+        es.year AS year
+    FROM employee_salary es
+    WHERE es.month = p_month AND es.year = p_year;
+
+    
+    INSERT INTO allowance_list (staff_id, allowance_name, amount, month, year)
+    SELECT 
+        es.emp_id AS staff_id,
+        'Employer Contribution (EPF,ESI,NPS)' AS allowance_name,
+        (es.pf_employer_contribution + es.admin_charges + es.esi_employer_contribution + es.nps) AS amount,
+        es.month AS month,
+        es.year AS year
+    FROM employee_salary es
+    WHERE es.month = p_month AND es.year = p_year;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_details_from_employee_sal_to_deduction_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_details_from_employee_sal_to_deduction_list`(
+    in p_month varchar(45), 
+    in p_year varchar(45)
+)
+begin
+    
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year)
+    select 
+        es.emp_id as staff_id,
+        'Income Tax' as deduction_name,
+        es.tds as d_amount,
+        es.month as month,
+        es.year as year
+    from employee_salary es
+    where es.month = p_month and es.year = p_year;
+
+    
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year)
+    select 
+        es.emp_id as staff_id,
+        'Professional Tax' as deduction_name,
+        es.pt as d_amount,
+        es.month as month,
+        es.year as year
+    from employee_salary es
+    where es.month = p_month and es.year = p_year;
+
+    
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year)
+    select 
+        es.emp_id as staff_id,
+        'EPF' as deduction_name,
+        (es.pf_employer_contribution + es.admin_charges + es.pf_employee_contribution) as d_amount,
+        es.month as month,
+        es.year as year
+    from employee_salary es
+    where es.month = p_month and es.year = p_year;
+
+    
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year)
+    select 
+        es.emp_id as staff_id,
+        'ESI' as deduction_name,
+        (es.esi_employee_contribution + es.esi_employer_contribution) as d_amount,
+        es.month as month,
+        es.year as year
+    from employee_salary es
+    where es.month = p_month and es.year = p_year;
+
+    
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year)
+    select 
+        es.emp_id as staff_id,
+        'NPS' as deduction_name,
+        es.`nps` as d_amount,
+        es.month as month,
+        es.year as year
+    from employee_salary es
+    where es.month = p_month and es.year = p_year;
+
+    
+    insert into deduction_list (staff_id, deduction_name, d_amount, month, year)
+    select 
+        es.emp_id as staff_id,
+        'Other Deductions' as deduction_name,
+        es.`advances/ other_deductions` as d_amount,
+        es.month as month,
+        es.year as year
+    from employee_salary es
+    where es.month = p_month and es.year = p_year;
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_details_from_employee_sal_to_sal_tbl` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_details_from_employee_sal_to_sal_tbl`(
+    IN p_month VARCHAR(45),
+    IN p_year VARCHAR(45)
+)
+BEGIN
+    INSERT INTO salary_tbl (
+        staff_id, staff_name, basic_salary, total_working_days, nps, no_days_absent, 
+        total_allowances, total_deductions, advance_amount, ctc, net_income, monthly_ctc, month, year
+    )
+    SELECT 
+        emp_id, name, salary * 0.50 AS basic_salary, working_days, nps, leaves AS no_days_absent,
+        (salary * 0.20 + salary * 0.05 + salary * 0.08 + salary * 0.17 + pf_employer_contribution + admin_charges + esi_employer_contribution) AS total_allowances,
+        total_deductions, `advances/ other_deductions` AS advance_amount,
+        ctc1 AS ctc, net_pay AS net_income, (salary + other_earnings) AS monthly_ctc, month AS month, year AS year
+    FROM employee_salary
+    WHERE month = p_month AND year = p_year;
+
+    
+    UPDATE salary_tbl ns
+    JOIN user_details st ON ns.staff_id = st.emp_id
+    SET ns.department_id = st.department;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_employee_attendance_dashboard` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_employee_attendance_dashboard`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+BEGIN
+    DECLARE v_start_date DATE;
+    DECLARE v_end_date DATE;
+    DECLARE v_start_day INT;
+    DECLARE v_end_day INT;
+    DECLARE v_month_start DATE;
+    DECLARE v_previous_month DATE;
+
+    SET time_zone = '+05:30';
+
+    
+    IF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12
+       OR p_year IS NULL OR p_year NOT BETWEEN 1900 AND 9999
+    THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid month or year.';
+    END IF;
+
+    
+    SELECT
+        payroll_cycle_start_day,
+        payroll_cycle_end_day
+    INTO
+        v_start_day,
+        v_end_day
+    FROM company_settings
+    ORDER BY id
+    LIMIT 1;
+
+    
+    IF v_start_day IS NULL
+       OR v_end_day IS NULL
+       OR v_start_day NOT BETWEEN 1 AND 31
+       OR v_end_day NOT BETWEEN 1 AND 31
+    THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid payroll cycle settings in company_settings.';
+    END IF;
+
+    
+    SET v_month_start = STR_TO_DATE(
+        CONCAT(p_year, '-', LPAD(p_month, 2, '0'), '-01'),
+        '%Y-%m-%d'
+    );
+
+    SET v_previous_month =
+        DATE_SUB(v_month_start, INTERVAL 1 MONTH);
+
+    
+    IF v_start_day > v_end_day THEN
+
+        
+        SET v_start_date = DATE_ADD(
+            v_previous_month,
+            INTERVAL (
+                LEAST(
+                    v_start_day,
+                    DAY(LAST_DAY(v_previous_month))
+                ) - 1
+            ) DAY
+        );
+
+        SET v_end_date = DATE_ADD(
+            v_month_start,
+            INTERVAL (
+                LEAST(
+                    v_end_day,
+                    DAY(LAST_DAY(v_month_start))
+                ) - 1
+            ) DAY
+        );
+
+    ELSE
+
+        
+        SET v_start_date = DATE_ADD(
+            v_month_start,
+            INTERVAL (
+                LEAST(
+                    v_start_day,
+                    DAY(LAST_DAY(v_month_start))
+                ) - 1
+            ) DAY
+        );
+
+        SET v_end_date = DATE_ADD(
+            v_month_start,
+            INTERVAL (
+                LEAST(
+                    v_end_day,
+                    DAY(LAST_DAY(v_month_start))
+                ) - 1
+            ) DAY
+        );
+
+    END IF;
+
+    
+    SELECT
+        'Y' AS status,
+        'Success' AS remarks,
+
+        a.id,
+        a.emp_id,
+        a.attendance_date,
+        a.punch_in,
+        a.punch_out,
+        a.biometric_punch_in,
+        a.biometric_punch_out,
+        a.status AS attendance_status,
+
+        v_start_date AS period_start_date,
+        v_end_date AS period_end_date,
+
+        IF(
+            a.punch_in IS NOT NULL
+            AND a.punch_out IS NOT NULL,
+            TIME_FORMAT(
+                TIMEDIFF(a.punch_out, a.punch_in),
+                '%H:%i'
+            ),
+            '-'
+        ) AS total_hours,
+
+        IF(
+            a.punch_in IS NOT NULL
+            AND a.punch_out IS NOT NULL,
+            TIME_FORMAT(
+                TIMEDIFF(a.punch_out, a.punch_in),
+                '%H:%i'
+            ),
+            '-'
+        ) AS daily_time_formatted
+
+    FROM attendance a
+
+    WHERE a.emp_id = p_emp_id
+      AND a.attendance_date BETWEEN v_start_date AND v_end_date
+
+    ORDER BY a.attendance_date ASC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_employee_attendance_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_employee_attendance_details`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+BEGIN
+    DECLARE v_period_start DATE;
+    DECLARE v_period_end DATE;
+    DECLARE v_calculation_end DATE;
+
+    DECLARE v_employee_count INT DEFAULT 0;
+    DECLARE v_start_day INT DEFAULT 25;
+    DECLARE v_end_day INT DEFAULT 24;
+
+    DECLARE v_start_base DATE;
+    DECLARE v_end_base DATE;
+
+    SET time_zone = '+05:30';
+
+    
+    IF p_month IS NULL OR p_month < 1 OR p_month > 12
+       OR p_year IS NULL OR p_year < 1000 OR p_year > 9999
+       OR p_emp_id IS NULL OR TRIM(p_emp_id) = '' THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid employee ID, month, or year' AS remarks;
+
+    ELSE
+
+        
+        SELECT
+            COALESCE(MAX(payroll_cycle_start_day), 25),
+            COALESCE(MAX(payroll_cycle_end_day), 24)
+        INTO v_start_day, v_end_day
+        FROM company_settings;
+
+        
+        IF v_start_day < 1 OR v_start_day > 31
+           OR v_end_day < 1 OR v_end_day > 31 THEN
+
+            SELECT
+                'N' AS status,
+                'Invalid attendance cycle in company_settings'
+                    AS remarks;
+
+        ELSE
+
+            
+            SELECT COUNT(*)
+            INTO v_employee_count
+            FROM user_details ud
+            INNER JOIN user_login_details uld
+                ON uld.emp_id = ud.emp_id
+            WHERE ud.emp_id = p_emp_id
+              AND UPPER(uld.status) = 'ACTIVE';
+
+            IF v_employee_count = 0 THEN
+
+                SELECT
+                    'N' AS status,
+                    'Employee not found or inactive' AS remarks;
+
+            ELSE
+
+                
+
+                SET v_start_base = STR_TO_DATE(
+                    CONCAT(
+                        p_year, '-',
+                        LPAD(p_month, 2, '0'), '-01'
+                    ),
+                    '%Y-%m-%d'
+                );
+
+                SET v_end_base = LAST_DAY(v_start_base);
+
+                
+                SET v_period_end = DATE_ADD(
+                    v_start_base,
+                    INTERVAL (
+                        LEAST(
+                            v_end_day,
+                            DAY(v_end_base)
+                        ) - 1
+                    ) DAY
+                );
+
+                SET v_period_start = DATE_ADD(
+                    v_start_base,
+                    INTERVAL (
+                        LEAST(
+                            v_start_day,
+                            DAY(v_end_base)
+                        ) - 1
+                    ) DAY
+                );
+
+                
+                IF v_start_day > v_end_day THEN
+
+                    SET v_start_base = DATE_SUB(
+                        v_start_base,
+                        INTERVAL 1 MONTH
+                    );
+
+                    SET v_period_start = DATE_ADD(
+                        v_start_base,
+                        INTERVAL (
+                            LEAST(
+                                v_start_day,
+                                DAY(LAST_DAY(v_start_base))
+                            ) - 1
+                        ) DAY
+                    );
+
+                END IF;
+
+                
+                IF CURDATE() < v_period_start THEN
+
+                    SET v_calculation_end = NULL;
+
+                ELSEIF CURDATE() < v_period_end THEN
+
+                    SET v_calculation_end = CURDATE();
+
+                ELSE
+
+                    SET v_calculation_end = v_period_end;
+
+                END IF;
+
+                IF v_calculation_end IS NULL THEN
+
+                    SELECT
+                        'Y' AS status,
+                        'Attendance period has not started yet'
+                            AS remarks,
+                        p_emp_id AS emp_id,
+                        ud.emp_name,
+                        ud.reporting AS reporting_to_emp_id,
+                        mgr.emp_name AS reporting_to_name,
+                        cs.company_name,
+                        v_start_day AS payroll_cycle_start_day,
+                        v_end_day AS payroll_cycle_end_day,
+                        v_period_start AS period_start,
+                        v_period_end AS period_end,
+                        NULL AS calculated_until
+                    FROM user_details ud
+                    LEFT JOIN user_details mgr
+                        ON mgr.emp_id = ud.reporting
+                    LEFT JOIN (
+                        SELECT
+                            company_name,
+                            payroll_cycle_start_day,
+                            payroll_cycle_end_day
+                        FROM company_settings
+                        ORDER BY id
+                        LIMIT 1
+                    ) cs ON 1 = 1
+                    WHERE ud.emp_id = p_emp_id
+                    LIMIT 1;
+
+                ELSE
+
+                    
+
+                    SELECT
+                        a.id,
+                        a.emp_id,
+                        ud.emp_name,
+
+                        ud.reporting AS reporting_to_emp_id,
+                        mgr.emp_name AS reporting_to_name,
+
+                        cs.company_name,
+                        cs.payroll_cycle_start_day,
+                        cs.payroll_cycle_end_day,
+
+                        v_period_start AS period_start,
+                        v_period_end AS period_end,
+                        v_calculation_end AS calculated_until,
+
+                        a.attendance_date,
+                        DAYNAME(a.attendance_date) AS day_name,
+                        a.status,
+                        a.punch_in,
+                        a.punch_out,
+
+                        
+                        CASE
+                            WHEN a.punch_in IS NOT NULL
+                             AND a.punch_out IS NOT NULL
+                            THEN TIMEDIFF(a.punch_out, a.punch_in)
+                            ELSE NULL
+                        END AS daily_time_formatted,
+
+                        CASE
+                            WHEN a.punch_in IS NOT NULL
+                             AND a.punch_out IS NOT NULL
+                            THEN ROUND(
+                                TIMESTAMPDIFF(
+                                    SECOND,
+                                    a.punch_in,
+                                    a.punch_out
+                                ) / 3600.0,
+                                2
+                            )
+                            ELSE NULL
+                        END AS daily_hours_decimal,
+
+                        
+                        SEC_TO_TIME(
+                            SUM(
+                                CASE
+                                    WHEN a.punch_in IS NOT NULL
+                                     AND a.punch_out IS NOT NULL
+                                    THEN GREATEST(
+                                        0,
+                                        TIMESTAMPDIFF(
+                                            SECOND,
+                                            a.punch_in,
+                                            a.punch_out
+                                        )
+                                    )
+                                    ELSE 0
+                                END
+                            ) OVER ()
+                        ) AS monthly_total_time_formatted,
+
+                        ROUND(
+                            SUM(
+                                CASE
+                                    WHEN a.punch_in IS NOT NULL
+                                     AND a.punch_out IS NOT NULL
+                                    THEN GREATEST(
+                                        0,
+                                        TIMESTAMPDIFF(
+                                            SECOND,
+                                            a.punch_in,
+                                            a.punch_out
+                                        )
+                                    )
+                                    ELSE 0
+                                END
+                            ) OVER () / 3600.0,
+                            2
+                        ) AS monthly_total_hours_decimal,
+
+                        COUNT(
+                            CASE
+                                WHEN a.punch_in IS NOT NULL
+                                 AND a.punch_out IS NOT NULL
+                                THEN 1
+                            END
+                        ) OVER () AS monthly_total_worked_days,
+
+                        
+                        COUNT(*) OVER () AS total_days,
+
+                        SUM(
+                            CASE
+                                WHEN UPPER(a.status)
+                                    NOT IN ('HOLIDAY', 'WEEKOFF')
+                                THEN 1 ELSE 0
+                            END
+                        ) OVER () AS working_days,
+
+                        SUM(
+                            CASE WHEN UPPER(a.status) = 'PRESENT'
+                                 THEN 1 ELSE 0 END
+                        ) OVER () AS present_days,
+
+                        SUM(
+                            CASE WHEN UPPER(a.status) = 'ABSENT'
+                                 THEN 1 ELSE 0 END
+                        ) OVER () AS absent_days,
+
+                        SUM(
+                            CASE WHEN UPPER(a.status) = 'HOLIDAY'
+                                 THEN 1 ELSE 0 END
+                        ) OVER () AS holidays,
+
+                        SUM(
+                            CASE WHEN UPPER(a.status) = 'LEAVE'
+                                 THEN 1 ELSE 0 END
+                        ) OVER () AS leave_days,
+
+                        SUM(
+                            CASE WHEN UPPER(a.status) = 'WFH'
+                                 THEN 1 ELSE 0 END
+                        ) OVER () AS wfh_days,
+
+                        
+                        a.biometric_punch_in,
+                        a.biometric_punch_out,
+                        a.location_id,
+                        al.name AS location_name,
+                        al.public_ip AS location_public_ip,
+                        al.is_active AS location_active,
+
+                        a.created_at,
+                        a.updated_at
+
+                    FROM attendance a
+
+                    INNER JOIN user_details ud
+                        ON ud.emp_id = a.emp_id
+
+                    LEFT JOIN user_details mgr
+                        ON mgr.emp_id = ud.reporting
+
+                    LEFT JOIN attendance_locations al
+                        ON al.id = a.location_id
+
+                    LEFT JOIN (
+                        SELECT
+                            company_name,
+                            payroll_cycle_start_day,
+                            payroll_cycle_end_day
+                        FROM company_settings
+                        ORDER BY id
+                        LIMIT 1
+                    ) cs ON 1 = 1
+
+                    WHERE a.emp_id = p_emp_id
+                      AND a.attendance_date >= v_period_start
+                      AND a.attendance_date < DATE_ADD(
+                          v_calculation_end,
+                          INTERVAL 1 DAY
+                      )
+
+                    ORDER BY a.attendance_date ASC;
+
+                END IF;
+
+            END IF;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_employee_attendence_reporting_to` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_employee_attendence_reporting_to`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+BEGIN
+    DECLARE v_target_date DATE;
+    DECLARE v_period_start DATE;
+    DECLARE v_period_end DATE;
+    DECLARE v_calculation_end DATE;
+    DECLARE v_today DATE;
+    DECLARE v_total_team_members INT DEFAULT 0;
+    DECLARE v_today_present INT DEFAULT 0;
+    DECLARE v_today_wfh INT DEFAULT 0;
+    DECLARE v_today_leave INT DEFAULT 0;
+    DECLARE v_today_absent INT DEFAULT 0;
+    DECLARE v_reporting_employee_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+    SET v_today = DATE(NOW());
+
+    IF p_month < 1 OR p_month > 12 OR p_year < 2000 OR p_year > 2100 THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid month or year parameter provided' AS remarks;
+
+    ELSE
+
+        SET v_target_date = STR_TO_DATE(
+            CONCAT(
+                p_year, '-',
+                LPAD(p_month, 2, '0'),
+                '-01'
+            ),
+            '%Y-%m-%d'
+        );
+
+        SET v_period_start = DATE_SUB(
+            v_target_date,
+            INTERVAL 1 MONTH
+        );
+
+        SET v_period_start = STR_TO_DATE(
+            CONCAT(
+                YEAR(v_period_start), '-',
+                LPAD(MONTH(v_period_start), 2, '0'),
+                '-25'
+            ),
+            '%Y-%m-%d'
+        );
+
+        SET v_period_end = DATE_SUB(
+            DATE_ADD(v_period_start, INTERVAL 1 MONTH),
+            INTERVAL 1 DAY
+        );
+
+        IF YEAR(v_target_date) = YEAR(v_today)
+           AND MONTH(v_target_date) = MONTH(v_today) THEN
+
+            SET v_calculation_end = LEAST(
+                v_today,
+                v_period_end
+            );
+
+        ELSEIF v_target_date < v_today THEN
+
+            SET v_calculation_end = v_period_end;
+
+        ELSE
+
+            SET v_calculation_end = v_period_start - INTERVAL 1 DAY;
+
+        END IF;
+
+        SELECT COUNT(*)
+        INTO v_reporting_employee_count
+        FROM user_details ud
+        INNER JOIN user_login_details uld
+            ON uld.emp_id = ud.emp_id
+        WHERE ud.reporting = p_emp_id
+          AND uld.status = 'ACTIVE';
+
+        IF v_reporting_employee_count = 0 THEN
+
+            SELECT
+                'N' AS status,
+                'There are no employees reporting to this employee' AS remarks,
+                p_emp_id AS reporting_to,
+                v_period_start AS period_start,
+                v_period_end AS period_end,
+                v_calculation_end AS calculated_until,
+                0 AS total_team_members;
+
+        ELSE
+
+            SET v_total_team_members = v_reporting_employee_count;
+
+            SELECT
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'PRESENT' THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ),
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'WFH' THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ),
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.status = 'LEAVE' THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                )
+            INTO
+                v_today_present,
+                v_today_wfh,
+                v_today_leave
+            FROM user_details ud
+            INNER JOIN user_login_details uld
+                ON uld.emp_id = ud.emp_id
+            LEFT JOIN attendance a
+                ON a.emp_id = ud.emp_id
+               AND DATE(a.attendance_date) = v_today
+            WHERE ud.reporting = p_emp_id
+              AND uld.status = 'ACTIVE';
+
+            IF EXISTS (
+                SELECT 1
+                FROM holiday_master hm
+                WHERE hm.holiday_date = v_today
+                  AND hm.status = 'A'
+            ) THEN
+
+                SET v_today_absent = 0;
+
+            ELSE
+
+                SET v_today_absent = GREATEST(
+                    v_total_team_members
+                    - v_today_present
+                    - v_today_wfh
+                    - v_today_leave,
+                    0
+                );
+
+            END IF;
+
+            WITH RECURSIVE date_range AS (
+
+                SELECT v_period_start AS attendance_date
+
+                UNION ALL
+
+                SELECT DATE_ADD(
+                    attendance_date,
+                    INTERVAL 1 DAY
+                )
+                FROM date_range
+                WHERE attendance_date < v_calculation_end
+
+            ),
+
+            reporting_employees AS (
+
+                SELECT
+                    ud.emp_id,
+                    ud.ref_id,
+                    ud.emp_name,
+                    ud.email,
+                    ud.mobile,
+                    ud.gender,
+                    ud.department,
+                    ud.designation,
+                    ud.location,
+                    ud.documents
+
+                FROM user_details ud
+
+                INNER JOIN user_login_details uld
+                    ON uld.emp_id = ud.emp_id
+
+                WHERE ud.reporting = p_emp_id
+                  AND uld.status = 'ACTIVE'
+
+            )
+
+            SELECT
+
+                'Y' AS status,
+
+                'Team attendance fetched successfully' AS remarks,
+
+                p_emp_id AS reporting_to,
+
+                re.emp_id,
+
+                re.ref_id,
+
+                re.emp_name AS employee_name,
+
+                re.email,
+
+                re.mobile AS mobile_number,
+
+                re.gender,
+
+                re.department AS department_id,
+
+                dep.department_name,
+
+                re.designation AS designation_id,
+
+                dm.designation_name,
+
+                re.location AS employee_location,
+
+                JSON_UNQUOTE(
+                    JSON_EXTRACT(
+                        re.documents,
+                        '$.profile_photo'
+                    )
+                ) AS profile_photo,
+
+                CASE
+
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM holiday_master hm
+                        WHERE hm.holiday_date = v_today
+                          AND hm.status = 'A'
+                    )
+                    THEN 'HOLIDAY'
+
+                    ELSE COALESCE(
+                        (
+                            SELECT a_today.status
+                            FROM attendance a_today
+                            WHERE a_today.emp_id = re.emp_id
+                              AND DATE(a_today.attendance_date) = v_today
+                            ORDER BY a_today.id DESC
+                            LIMIT 1
+                        ),
+                        'ABSENT'
+                    )
+
+                END AS today_attendance_status,
+
+                p_month AS month,
+
+                p_year AS year,
+
+                v_period_start AS period_start,
+
+                v_period_end AS period_end,
+
+                v_calculation_end AS calculated_until,
+
+                v_total_team_members AS total_team_members,
+
+                v_today AS today_date,
+
+                v_today_present AS today_present,
+
+                v_today_wfh AS today_wfh,
+
+                v_today_leave AS today_leave,
+
+                v_today_absent AS today_absent,
+
+                (
+
+                    SELECT JSON_ARRAYAGG(
+
+                        JSON_OBJECT(
+
+                            'date',
+                            DATE_FORMAT(
+                                dr.attendance_date,
+                                '%Y-%m-%d'
+                            ),
+
+                            'day_name',
+                            DAYNAME(
+                                dr.attendance_date
+                            ),
+
+                            'status',
+
+                            CASE
+
+                                WHEN EXISTS (
+                                    SELECT 1
+                                    FROM holiday_master hm
+                                    WHERE hm.holiday_date =
+                                          dr.attendance_date
+                                      AND hm.status = 'A'
+                                )
+                                THEN 'HOLIDAY'
+
+                                ELSE COALESCE(
+                                    att.status,
+                                    'ABSENT'
+                                )
+
+                            END,
+
+                            'punch_in',
+                            DATE_FORMAT(
+                                att.punch_in,
+                                '%Y-%m-%d %H:%i:%s'
+                            ),
+
+                            'punch_out',
+
+                            CASE
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NOT NULL
+                                     AND att.punch_in = att.punch_out
+
+                                THEN NULL
+
+                                ELSE DATE_FORMAT(
+                                    att.punch_out,
+                                    '%Y-%m-%d %H:%i:%s'
+                                )
+
+                            END,
+
+                            'daily_time_formatted',
+
+                            CASE
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NOT NULL
+                                     AND att.punch_in <> att.punch_out
+
+                                THEN TIMEDIFF(
+                                    att.punch_out,
+                                    att.punch_in
+                                )
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NOT NULL
+                                     AND att.punch_in = att.punch_out
+                                     AND dr.attendance_date = v_today
+
+                                THEN TIMEDIFF(
+                                    NOW(),
+                                    att.punch_in
+                                )
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NULL
+                                     AND dr.attendance_date = v_today
+
+                                THEN TIMEDIFF(
+                                    NOW(),
+                                    att.punch_in
+                                )
+
+                                ELSE NULL
+
+                            END,
+
+                            'daily_hours_decimal',
+
+                            CASE
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NOT NULL
+                                     AND att.punch_in <> att.punch_out
+
+                                THEN ROUND(
+                                    TIMESTAMPDIFF(
+                                        SECOND,
+                                        att.punch_in,
+                                        att.punch_out
+                                    ) / 3600.0,
+                                    2
+                                )
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NOT NULL
+                                     AND att.punch_in = att.punch_out
+                                     AND dr.attendance_date = v_today
+
+                                THEN ROUND(
+                                    TIMESTAMPDIFF(
+                                        SECOND,
+                                        att.punch_in,
+                                        NOW()
+                                    ) / 3600.0,
+                                    2
+                                )
+
+                                WHEN att.punch_in IS NOT NULL
+                                     AND att.punch_out IS NULL
+                                     AND dr.attendance_date = v_today
+
+                                THEN ROUND(
+                                    TIMESTAMPDIFF(
+                                        SECOND,
+                                        att.punch_in,
+                                        NOW()
+                                    ) / 3600.0,
+                                    2
+                                )
+
+                                ELSE NULL
+
+                            END,
+
+                            'biometric_punch_in',
+                            DATE_FORMAT(
+                                att.biometric_punch_in,
+                                '%Y-%m-%d %H:%i:%s'
+                            ),
+
+                            'biometric_punch_out',
+                            DATE_FORMAT(
+                                att.biometric_punch_out,
+                                '%Y-%m-%d %H:%i:%s'
+                            ),
+
+                            'location_id',
+                            att.location_id
+
+                        )
+
+                    )
+
+                    FROM date_range dr
+
+                    LEFT JOIN attendance att
+                        ON att.emp_id = re.emp_id
+                       AND DATE(att.attendance_date) =
+                           dr.attendance_date
+
+                ) AS attendance_data
+
+            FROM reporting_employees re
+
+            LEFT JOIN department_master dep
+                ON dep.department_id = re.department
+               AND dep.status = '1'
+
+            LEFT JOIN designation_master dm
+                ON dm.designation_id = re.designation
+               AND dm.status = '1'
+
+            ORDER BY re.emp_id ASC;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_employee_leave_summary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_employee_leave_summary`(
+    in p_requestor_id varchar(20),  
+    in p_target_emp_id varchar(20),  
+    in p_month int,                  
+    in p_year int                    
+)
+main_block:begin
+    declare v_user_category varchar(20);
+    declare v_status varchar(20);
+    declare v_record_count int default 0;
+
+    set time_zone='+05:30';
+
+    
+    select user_category, status into v_user_category, v_status
+    from user_login_details
+    where emp_id = p_requestor_id
+    limit 1;
+
+    
+    if v_user_category not in ('ADMIN', 'HR') or v_user_category is null or v_status <> 'ACTIVE' then
+        select 'N' as status, 'Access Denied: Only active ADMIN or HR accounts can access this data.' as remarks;
+        leave main_block;
+    end if;
+
+    
+    select count(*) into v_record_count
+    from user_details ud
+    left join leave_application la on ud.emp_id = la.emp_id and la.status = 'APPROVED'
+    left join leave_type lt on la.leave_type_id = lt.leave_type_id
+    where (upper(p_target_emp_id) = 'ALL' or ud.emp_id = p_target_emp_id)
+      and (
+          la.emp_id is null or (
+              year(la.from_date) = p_year 
+              and (p_month = 0 or month(la.from_date) = p_month)
+          )
+      );
+
+    
+    if v_record_count = 0 then
+        select 'N' as status, 'leave summary records not available' as remarks;
+        leave main_block;
+    end if;
+
+    
+    select 
+        'Y' as status,
+        'Success' as remarks,
+        row_number() over (order by ud.emp_id) as `sl.no`,
+        ud.emp_id as `employee id`,
+        ud.emp_name as `employee name`,
+        
+        
+        sum(case when lt.leave_code <> 'WFH' and year(la.from_date) = p_year then la.approved_leave_days else 0 end) as `leave taken(yearly)`,
+        
+        
+        sum(case when lt.leave_code <> 'WFH' 
+                      and year(la.from_date) = p_year 
+                      and (p_month = 0 or month(la.from_date) = p_month) 
+                 then la.approved_leave_days else 0 end) as `leave taken(months)`,
+        
+        
+        sum(case when lt.leave_code = 'WFH' and year(la.from_date) = p_year then la.approved_leave_days else 0 end) as `wfh(yearly)`,
+        
+        
+        sum(case when lt.leave_code = 'WFH' 
+                      and year(la.from_date) = p_year 
+                      and (p_month = 0 or month(la.from_date) = p_month) 
+                 then la.approved_leave_days else 0 end) as `wfh(months)`
+
+    from 
+        user_details ud
+    left join 
+        leave_application la on ud.emp_id = la.emp_id and la.status = 'APPROVED'
+    left join 
+        leave_type lt on la.leave_type_id = lt.leave_type_id
+    where 
+        (upper(p_target_emp_id) = 'ALL' or ud.emp_id = p_target_emp_id)
+    group by 
+        ud.emp_id, ud.emp_name;
+
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_employee_leave_summary1` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_employee_leave_summary1`(
+    IN p_requestor_id VARCHAR(20),  
+    IN p_target_emp_id VARCHAR(20),  
+    IN p_month INT,                  
+    IN p_year INT,                   
+    IN p_report_type VARCHAR(20)     
+)
+main_block: BEGIN
+    DECLARE v_user_category VARCHAR(20);
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_record_count INT DEFAULT 0;
+
+    SET time_zone='+05:30';
+
+    
+    SELECT user_category, status INTO v_user_category, v_status
+    FROM user_login_details
+    WHERE emp_id = p_requestor_id
+    LIMIT 1;
+
+    
+    IF v_user_category NOT IN ('ADMIN', 'HR') OR v_user_category IS NULL OR v_status <> 'ACTIVE' THEN
+        SELECT 'N' AS status, 'Access Denied: Only active ADMIN or HR accounts can access this data.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SET p_report_type = UPPER(IFNULL(p_report_type, 'YEARLY'));
+
+   
+   
+IF p_report_type = 'DASHBOARD' THEN
+
+    SELECT 
+        'Y' AS status,
+        'Success' AS remarks,
+        ud.emp_id AS `Employee`,
+        ud.emp_name AS `Employee Name`,
+        
+        
+        IFNULL(SUM(CASE WHEN lt.leave_code = 'PL' THEN la.approved_leave_days ELSE 0 END), 0) AS `PL Used`,
+        GREATEST(0, MAX(IFNULL(pl_quota.yearly_quota, 0)) - IFNULL(SUM(CASE WHEN lt.leave_code = 'PL' THEN la.approved_leave_days ELSE 0 END), 0)) AS `PL Balance`,
+        
+        
+        IFNULL(SUM(CASE WHEN lt.leave_code = 'SL' THEN la.approved_leave_days ELSE 0 END), 0) AS `SL Used`,
+        GREATEST(0, MAX(IFNULL(sl_quota.yearly_quota, 0)) - IFNULL(SUM(CASE WHEN lt.leave_code = 'SL' THEN la.approved_leave_days ELSE 0 END), 0)) AS `SL Balance`,
+        
+        
+        IFNULL(SUM(CASE WHEN lt.leave_code = 'WFH' THEN la.approved_leave_days ELSE 0 END), 0) AS `WFH`,
+        IFNULL(SUM(
+            CASE 
+                WHEN lt.leave_code = 'LOP' THEN la.approved_leave_days 
+                ELSE IFNULL(la.lop_days, 0)
+            END
+        ), 0) AS `LOP`
+
+    FROM user_details ud
+    LEFT JOIN leave_application la 
+        ON ud.emp_id = la.emp_id 
+       AND la.status = 'APPROVED'
+       AND YEAR(la.from_date) = p_year
+    LEFT JOIN leave_type lt 
+        ON la.leave_type_id = lt.leave_type_id
+    
+    
+    LEFT JOIN leave_type pl_quota 
+        ON pl_quota.leave_code = 'PL' AND pl_quota.year = CAST(p_year AS CHAR) AND pl_quota.status = 'A'
+    LEFT JOIN leave_type sl_quota 
+        ON sl_quota.leave_code = 'SL' AND sl_quota.year = CAST(p_year AS CHAR) AND sl_quota.status = 'A'
+
+    WHERE (UPPER(p_target_emp_id) = 'ALL' OR ud.emp_id = p_target_emp_id)
+    GROUP BY ud.emp_id, ud.emp_name;
+   
+    ELSEIF p_report_type = 'MONTHLY' THEN
+
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            ud.emp_id AS `Employee`,
+            ud.emp_name AS `Employee Name`,
+            SUM(CASE WHEN lt.leave_code = 'PL' THEN la.approved_leave_days ELSE 0 END) AS `PL`,
+            SUM(CASE WHEN lt.leave_code = 'SL' THEN la.approved_leave_days ELSE 0 END) AS `SL`,
+            SUM(CASE WHEN lt.leave_code = 'WFH' THEN la.approved_leave_days ELSE 0 END) AS `WFH`,
+            SUM(CASE WHEN lt.leave_code = 'LOP' THEN la.approved_leave_days ELSE 0 END) AS `LOP`,
+            SUM(CASE WHEN lt.leave_code <> 'WFH' THEN la.approved_leave_days ELSE 0 END) AS `Total`
+        FROM user_details ud
+        LEFT JOIN leave_application la 
+            ON ud.emp_id = la.emp_id 
+           AND la.status = 'APPROVED'
+           AND YEAR(la.from_date) = p_year
+           AND (p_month = 0 OR MONTH(la.from_date) = p_month)
+        LEFT JOIN leave_type lt 
+            ON la.leave_type_id = lt.leave_type_id
+        WHERE (UPPER(p_target_emp_id) = 'ALL' OR ud.emp_id = p_target_emp_id)
+        GROUP BY ud.emp_id, ud.emp_name;
+
+   
+    ELSEIF p_report_type = 'YEARLY' THEN
+
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            ROW_NUMBER() OVER (ORDER BY ud.emp_id) AS `sl.no`,
+            ud.emp_id AS `Employee`,
+            ud.emp_name AS `Employee Name`,
+            SUM(CASE WHEN lt.leave_code = 'PL' THEN la.approved_leave_days ELSE 0 END) AS `PL`,
+            SUM(CASE WHEN lt.leave_code = 'SL' THEN la.approved_leave_days ELSE 0 END) AS `SL`,
+            SUM(CASE WHEN lt.leave_code = 'WFH' THEN la.approved_leave_days ELSE 0 END) AS `WFH`,
+            SUM(CASE WHEN lt.leave_code = 'LOP' THEN la.approved_leave_days ELSE 0 END) AS `LOP`,
+            SUM(CASE WHEN lt.leave_code <> 'WFH' THEN la.approved_leave_days ELSE 0 END) AS `Total`
+        FROM user_details ud
+        LEFT JOIN leave_application la 
+            ON ud.emp_id = la.emp_id 
+           AND la.status = 'APPROVED'
+           AND YEAR(la.from_date) = p_year
+        LEFT JOIN leave_type lt 
+            ON la.leave_type_id = lt.leave_type_id
+        WHERE (UPPER(p_target_emp_id) = 'ALL' OR ud.emp_id = p_target_emp_id)
+        GROUP BY ud.emp_id, ud.emp_name;
+
+   
+    ELSEIF p_report_type = 'CALENDAR' THEN
+
+        
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            m.month_name AS `Month`,
+            IFNULL(SUM(CASE WHEN lt.leave_code = 'PL' THEN la.approved_leave_days ELSE 0 END), 0) AS `PL`,
+            IFNULL(SUM(CASE WHEN lt.leave_code = 'SL' THEN la.approved_leave_days ELSE 0 END), 0) AS `SL`,
+            IFNULL(SUM(CASE WHEN lt.leave_code = 'WFH' THEN la.approved_leave_days ELSE 0 END), 0) AS `WFH`,
+            IFNULL(SUM(CASE WHEN lt.leave_code = 'LOP' THEN la.approved_leave_days ELSE 0 END), 0) AS `LOP`,
+            IFNULL(SUM(CASE WHEN lt.leave_code <> 'WFH' THEN la.approved_leave_days ELSE 0 END), 0) AS `Total`
+        FROM (
+            SELECT 1 AS m_num, 'Jan' AS month_name UNION ALL
+            SELECT 2, 'Feb' UNION ALL SELECT 3, 'Mar' UNION ALL
+            SELECT 4, 'Apr' UNION ALL SELECT 5, 'May' UNION ALL
+            SELECT 6, 'Jun' UNION ALL SELECT 7, 'Jul' UNION ALL
+            SELECT 8, 'Aug' UNION ALL SELECT 9, 'Sep' UNION ALL
+            SELECT 10, 'Oct' UNION ALL SELECT 11, 'Nov' UNION ALL SELECT 12, 'Dec'
+        ) m
+        LEFT JOIN leave_application la 
+            ON MONTH(la.from_date) = m.m_num 
+           AND YEAR(la.from_date) = p_year
+           AND la.emp_id = p_target_emp_id
+           AND la.status = 'APPROVED'
+        LEFT JOIN leave_type lt 
+            ON la.leave_type_id = lt.leave_type_id
+        GROUP BY m.m_num, m.month_name
+        ORDER BY m.m_num;
+
+   
+    ELSEIF p_report_type = 'HISTORY' THEN
+
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            DATE_FORMAT(la.from_date, '%d-%b-%Y') AS `Date`,
+            lt.leave_code AS `Leave`,
+            la.approved_leave_days AS `Days`,
+            CASE WHEN lt.leave_code = 'LOP' THEN la.approved_leave_days ELSE 0 END AS `LOP`,
+            la.status AS `Status`
+        FROM leave_application la
+        INNER JOIN leave_type lt ON la.leave_type_id = lt.leave_type_id
+        WHERE (UPPER(p_target_emp_id) = 'ALL' OR la.emp_id = p_target_emp_id)
+          AND YEAR(la.from_date) = p_year
+          AND (p_month = 0 OR MONTH(la.from_date) = p_month)
+        ORDER BY la.from_date DESC;
+
+   
+    ELSEIF p_report_type = 'DASHBOARD_CARD' THEN
+
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            (SELECT COUNT(*) FROM user_details) AS `Total Employees`,
+            (
+                SELECT COUNT(DISTINCT emp_id) 
+                FROM leave_application 
+                WHERE status = 'APPROVED' 
+                  AND CURRENT_DATE() BETWEEN DATE(from_date) AND DATE(to_date)
+            ) AS `Employees On Leave Today`,
+            (SELECT COUNT(*) FROM leave_application WHERE status = 'PENDING' AND YEAR(from_date) = p_year) AS `Pending`,
+            (SELECT COUNT(*) FROM leave_application WHERE status = 'APPROVED' AND YEAR(from_date) = p_year) AS `Approved`,
+            (SELECT COUNT(*) FROM leave_application WHERE status = 'REJECTED' AND YEAR(from_date) = p_year) AS `Rejected`;
+
+    ELSE
+        SELECT 'N' AS status, 'Invalid p_report_type parameter provided.' AS remarks;
+    END IF;
+
+END main_block ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_emp_leave_balances` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_emp_leave_balances`(
+    IN p_emp_id VARCHAR(20),
+    IN p_year INT
+)
+BEGIN
+    SELECT 
+        MAX(b.balance_id) AS balance_id,
+        p_emp_id AS emp_id,
+        p_year AS year,
+        IFNULL(MAX(b.opening_balance), MAX(t.yearly_quota)) AS opening_balance,
+        IFNULL(SUM(b.credited), 0) AS credited,
+        IFNULL(SUM(b.availed), 0) AS availed,
+        IFNULL(MAX(b.closing_balance), MAX(t.yearly_quota)) AS balance_days,
+        t.leave_code, 
+        t.leave_name
+    FROM leave_type t
+    LEFT JOIN emp_leave_balance b 
+        ON t.leave_type_id = b.leave_type_id 
+        AND b.emp_id = p_emp_id 
+        AND b.year = p_year
+    WHERE t.year = p_year
+    GROUP BY t.leave_type_id, t.leave_code, t.leave_name;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_payroll_attendance_data_proc` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_payroll_attendance_data_proc`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+pa: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view payroll attendance.' AS remarks;
+        LEAVE pa;
+    END IF;
+
+    SELECT p.*, e.emp_name,
+           IFNULL(d.department_name, 'N/A') AS department,
+           IFNULL(dg.designation_name, 'N/A') AS designation
+      FROM payroll_attendance_summary p
+      JOIN user_details e ON p.emp_id = e.emp_id
+      LEFT JOIN department_master d ON e.department = d.department_id
+      LEFT JOIN designation_master dg ON e.designation = dg.designation_id
+     WHERE p.payroll_month = p_month AND p.payroll_year = p_year
+     ORDER BY p.emp_id ASC;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_salary`(
+    IN p_login_staff_id VARCHAR(400)
+)
+BEGIN
+    DECLARE v_count INT;
+
+    
+    SELECT COUNT(DISTINCT sa.staff_id) INTO v_count
+    FROM salary_tbl sa
+    JOIN department_master d ON sa.department_id = d.department_id
+    JOIN user_details st ON sa.staff_id = st.emp_id
+    JOIN user_login_details ud ON st.emp_id = ud.emp_id AND ud.status = 'ACTIVE'
+    WHERE st.reporting = p_login_staff_id;
+
+    IF v_count > 0 THEN
+        
+        
+        SELECT DISTINCT 
+            'Y' AS status,
+            'success' AS remarks,
+            sa.staff_name, 
+            sa.staff_id, 
+            sa.ctc, 
+            st.joining_date AS doj, 
+            d.department_name
+        FROM salary_tbl sa
+        JOIN department_master d ON sa.department_id = d.department_id
+        JOIN user_details st ON sa.staff_id = st.emp_id
+        JOIN user_login_details ud ON st.emp_id = ud.emp_id AND ud.status = 'ACTIVE'
+        WHERE st.reporting = p_login_staff_id;
+
+    ELSE
+        
+        
+        SELECT 
+            'N' AS status,
+            'no active records found for this manager id' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_user_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_user_details`(
+    IN p_emp_id VARCHAR(20)
+)
+BEGIN
+    DECLARE v_count INT;
+
+    SELECT COUNT(*) INTO v_count
+    FROM user_details
+    WHERE emp_id = p_emp_id;
+
+    IF v_count > 0 THEN
+
+        SELECT 
+            'Y' AS status,
+            'success' AS remarks,
+            ud.id,
+            ud.emp_id,
+            ud.ref_id,
+            ud.emp_name,
+            ud.email,
+            ud.mobile,
+            ud.dob,
+            ud.gender,
+            ud.marital_status,
+            ud.father_name,
+            ud.mother_name,
+            ud.current_address,
+            ud.perminent_address,
+            
+            
+            ud.department AS department_id,
+            IFNULL(dm.department_name, '') AS department_name,
+            
+            
+            ud.designation AS designation_id,
+            IFNULL(desg.designation_name, '') AS designation_name,
+            
+            
+            ud.reporting AS reporting_id,
+            IFNULL(mgr.emp_name, '') AS reporting,
+            
+            ud.joining_date,
+            ud.skills,
+            ud.qualification,
+            ud.experience,
+            ud.bank_holder_name,
+            ud.bank_name,
+            ud.bank_branch,
+            ud.bank_account_no,
+            ud.ifsc,
+            ud.upi_id,
+            ud.bank_account_type,
+            ud.pan,
+            ud.pf_account_no,
+            ud.esic_no,
+            ud.aadhaar,
+            ud.uan,
+            ud.documents,
+            ud.received_on,
+            ud.updated_on,
+            ud.at_blooms,
+            ud.profisional_details_status,
+            
+            
+            
+            uld.user_category
+
+        FROM user_details ud
+        LEFT JOIN user_login_details uld
+            ON ud.emp_id = uld.emp_id
+        LEFT JOIN department_master dm
+            ON ud.department = dm.department_id
+        LEFT JOIN designation_master desg              
+            ON ud.designation = desg.designation_id
+        LEFT JOIN user_details mgr                     
+            ON ud.reporting = mgr.emp_id     
+        WHERE ud.emp_id = p_emp_id;
+
+    ELSE
+
+        SELECT 
+            'N' AS status,
+            'incorrect userid' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `get_user_drop_down` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `get_user_drop_down`(
+    IN p_requestor_emp_id VARCHAR(20),  
+    IN p_user_category VARCHAR(20)      
+)
+BEGIN
+
+    DECLARE v_target_role VARCHAR(20) DEFAULT NULL;
+
+    
+    SET time_zone = '+05:30';
+
+    
+    IF p_requestor_emp_id IS NOT NULL AND p_requestor_emp_id != '' THEN
+        SELECT user_category 
+        INTO v_target_role
+        FROM user_login_details
+        WHERE emp_id = p_requestor_emp_id
+          AND status = 'ACTIVE'
+        LIMIT 1;
+    END IF;
+
+    
+    IF p_requestor_emp_id IS NULL OR p_requestor_emp_id = '' OR v_target_role NOT IN ('HR', 'ADMIN') THEN
+
+        SELECT 
+            'N' AS status,
+            'Unauthorized: Only active HR or ADMIN can fetch the dropdown list' AS remarks,
+            NULL AS emp_id,
+            NULL AS emp_name,
+            NULL AS user_category;
+
+    ELSE
+
+        
+        SELECT 
+            'Y' AS status,
+            'Success' AS remarks,
+            uld.emp_id,
+            ud.emp_name,
+            uld.user_category
+        FROM user_login_details uld
+        LEFT JOIN user_details ud 
+            ON uld.emp_id = ud.emp_id
+        WHERE 
+            uld.status = 'ACTIVE'
+        AND 
+            (p_user_category IS NULL OR p_user_category = '' OR uld.user_category = p_user_category)
+        ORDER BY 
+            CASE 
+                WHEN uld.user_category = 'ADMIN' THEN 1
+                WHEN uld.user_category = 'HR' THEN 2
+                ELSE 3
+            END,
+            ud.emp_name ASC;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_attach_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_attach_component`(
+    IN  p_component_id BIGINT,
+    OUT p_attached     INT
+)
+BEGIN
+    INSERT INTO employee_salary_structure
+        (structure_id, component_id, calculation_type, component_value, percentage_base,
+         formula_expression, monthly_amount, is_overridden)
+    SELECT ss.structure_id, m.component_id,
+           CASE WHEN m.calculation_type = 'STATUTORY' THEN 'MANUAL' ELSE m.calculation_type END,
+           COALESCE(m.percentage_value, 0),
+           COALESCE(m.percentage_base, 'NONE'),
+           m.formula_expression,
+           0.00,
+           0
+      FROM salary_structure ss
+      JOIN salary_component_master m
+        ON m.is_active = 1
+       AND m.calculation_scope = 'COMPONENT'
+       AND (p_component_id IS NULL OR m.component_id = p_component_id)
+     WHERE ss.structure_status = 'ACTIVE'
+       AND NOT EXISTS (SELECT 1 FROM employee_salary_structure e
+                        WHERE e.structure_id = ss.structure_id AND e.component_id = m.component_id);
+    SET p_attached = ROW_COUNT();
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_calculate_payroll_detail` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_calculate_payroll_detail`(
+    IN  p_payroll_detail_id BIGINT,
+    OUT p_errors            INT,
+    OUT p_error_text        VARCHAR(500)
+)
+BEGIN
+    DECLARE v_structure BIGINT;
+    DECLARE v_emp       VARCHAR(20);
+    DECLARE v_ctc1      DECIMAL(14,2);
+    DECLARE v_days      DECIMAL(5,2);
+    DECLARE v_month     INT;
+    DECLARE v_year      INT;
+    DECLARE v_end       DATE;
+    DECLARE v_passes    INT DEFAULT 0;
+    DECLARE v_sum_earn  DECIMAL(14,2);
+    DECLARE v_sum_ded   DECIMAL(14,2);
+    DECLARE v_sum_er    DECIMAL(14,2);
+    DECLARE v_gross     DECIMAL(14,2);
+    DECLARE v_ded       DECIMAL(14,2);
+    DECLARE v_er        DECIMAL(14,2);
+    DECLARE v_net       DECIMAL(14,2);
+
+    SELECT MAX(d.structure_id), MAX(d.emp_id), MAX(d.ctc1), MAX(d.payable_days),
+           MAX(c.payroll_month), MAX(c.payroll_year), MAX(c.period_end)
+      INTO v_structure, v_emp, v_ctc1, v_days, v_month, v_year, v_end
+      FROM employee_payroll_details d
+      LEFT JOIN payroll_runs r   ON r.payroll_run_id = d.payroll_run_id
+      LEFT JOIN payroll_cycles c ON c.payroll_cycle_id = r.payroll_cycle_id
+     WHERE d.payroll_detail_id = p_payroll_detail_id;
+
+    CALL hrms_engine_run(v_structure, COALESCE(v_ctc1, 0), LEAST(GREATEST(COALESCE(v_days, 0), 0), 30),
+                         v_emp, v_month, v_year, COALESCE(v_end, CURDATE()), v_passes, p_errors, p_error_text);
+
+    IF p_errors = 0 THEN
+        DELETE FROM employee_payroll_component_details WHERE payroll_detail_id = p_payroll_detail_id;
+        INSERT INTO employee_payroll_component_details
+            (payroll_detail_id, component_id, component_code, component_name, component_type,
+             calculation_scope, calculation_order, calculation_type,
+             component_value, percentage_base, percentage_value, formula_expression, calculated_amount, is_taxable)
+        SELECT p_payroll_detail_id, m.component_id, m.component_code, m.component_name, m.component_type,
+               c.scope, c.calc_order,
+               CASE WHEN c.overridden = 1 THEN c.eff_calc ELSE m.calculation_type END,
+               ROUND(c.eff_value, 2), c.eff_base, COALESCE(m.percentage_value, 0), c.eff_formula,
+               ROUND(c.new_amt, 2), COALESCE(m.is_taxable, 1)
+          FROM tmp_hrms_calc c
+          JOIN salary_component_master m ON m.component_id = c.cid
+         ORDER BY c.calc_order, c.cid;
+
+        SELECT COALESCE(SUM(IF(scope = 'COMPONENT' AND ctype = 'EARNING', new_amt, 0)), 0),
+               COALESCE(SUM(IF(scope = 'COMPONENT' AND ctype = 'DEDUCTION', new_amt, 0)), 0),
+               COALESCE(SUM(IF(scope = 'COMPONENT' AND ctype = 'EMPLOYER_CONTRIBUTION', new_amt, 0)), 0),
+               MAX(IF(scope = 'AGGREGATE' AND code = 'GROSS', new_amt, NULL)),
+               MAX(IF(scope = 'AGGREGATE' AND code = 'TOTAL_DEDUCTIONS', new_amt, NULL)),
+               MAX(IF(scope = 'AGGREGATE' AND code = 'TOTAL_EMPLOYER_CONTRIBUTION', new_amt, NULL)),
+               MAX(IF(scope = 'AGGREGATE' AND code = 'NET_PAY', new_amt, NULL))
+          INTO v_sum_earn, v_sum_ded, v_sum_er, v_gross, v_ded, v_er, v_net
+          FROM tmp_hrms_calc;
+
+        SET v_gross = COALESCE(v_gross, v_sum_earn);
+        SET v_ded   = COALESCE(v_ded, v_sum_ded);
+        SET v_er    = COALESCE(v_er, v_sum_er);
+        SET v_net   = COALESCE(v_net, v_gross - v_ded);
+
+        UPDATE employee_payroll_details
+           SET gross_earnings = ROUND(v_gross, 2),
+               total_deductions = ROUND(v_ded, 2),
+               employer_contributions = ROUND(v_er, 2),
+               net_pay = ROUND(v_net, 2),
+               employee_payroll_status = 'CALCULATED',
+               calculation_remarks = LEFT(CONCAT(COALESCE(calculation_remarks, ''),
+                   ' Components calculated by the salary engine from the component master (', v_passes, ' passes).'), 1000)
+         WHERE payroll_detail_id = p_payroll_detail_id;
+    ELSE
+        SET p_error_text = LEFT(CONCAT('Employee ', COALESCE(v_emp, '?'), ' - ', COALESCE(p_error_text, 'calculation failed')), 500);
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_calculate_payroll_run` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_calculate_payroll_run`(
+    IN  p_payroll_run_id BIGINT,
+    OUT p_employees      INT,
+    OUT p_errors         INT,
+    OUT p_error_text     VARCHAR(500)
+)
+BEGIN
+    DECLARE v_done   INT DEFAULT 0;
+    DECLARE v_detail BIGINT;
+    DECLARE v_err    INT DEFAULT 0;
+    DECLARE v_text   VARCHAR(500);
+    DECLARE cur CURSOR FOR SELECT payroll_detail_id FROM tmp_hrms_detail_list ORDER BY payroll_detail_id;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = 1;
+
+    SET p_employees = 0;
+    SET p_errors = 0;
+    SET p_error_text = NULL;
+
+    CALL hrms_engine_prepare();
+    DELETE FROM tmp_hrms_detail_list;
+    INSERT INTO tmp_hrms_detail_list (payroll_detail_id)
+    SELECT payroll_detail_id FROM employee_payroll_details WHERE payroll_run_id = p_payroll_run_id;
+
+    OPEN cur;
+    dt: LOOP
+        SET v_done = 0;
+        FETCH cur INTO v_detail;
+        IF v_done = 1 THEN
+            LEAVE dt;
+        END IF;
+        CALL hrms_calculate_payroll_detail(v_detail, v_err, v_text);
+        IF v_err > 0 THEN
+            SET p_errors = v_err;
+            SET p_error_text = v_text;
+            LEAVE dt;
+        END IF;
+        SET p_employees = p_employees + 1;
+    END LOOP dt;
+    CLOSE cur;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_calculate_structure` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_calculate_structure`(
+    IN  p_structure_id BIGINT,
+    IN  p_on_date      DATE,
+    OUT p_rows_changed INT,
+    OUT p_errors       INT,
+    OUT p_error_text   VARCHAR(500)
+)
+BEGIN
+    DECLARE v_passes INT DEFAULT 0;
+
+    SET p_rows_changed = 0;
+    CALL hrms_engine_run(p_structure_id, NULL, NULL, NULL, NULL, NULL, p_on_date, v_passes, p_errors, p_error_text);
+
+    IF p_errors = 0 THEN
+        UPDATE employee_salary_structure e
+          JOIN tmp_hrms_calc c ON c.ecid = e.employee_component_id
+           SET e.monthly_amount = ROUND(c.new_amt, 2)
+         WHERE c.scope = 'COMPONENT'
+           AND e.monthly_amount <> ROUND(c.new_amt, 2);
+        SET p_rows_changed = ROW_COUNT();
+
+        DELETE FROM employee_salary_structure_totals WHERE structure_id = p_structure_id;
+        INSERT INTO employee_salary_structure_totals (structure_id, component_id, monthly_amount)
+        SELECT p_structure_id, c.cid, ROUND(c.new_amt, 2)
+          FROM tmp_hrms_calc c
+         WHERE c.scope = 'AGGREGATE';
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_change_finish` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_change_finish`(
+    IN  p_component_id BIGINT,
+    OUT p_error        VARCHAR(500),
+    OUT p_findings     LONGTEXT,
+    OUT p_impact       LONGTEXT,
+    OUT p_structures   INT,
+    OUT p_changed      INT
+)
+BEGIN
+    DECLARE v_errors   INT DEFAULT 0;
+    DECLARE v_msg      VARCHAR(500) DEFAULT NULL;
+    DECLARE v_emps     INT DEFAULT 0;
+    DECLARE v_rows     LONGTEXT;
+    DECLARE v_seq      INT DEFAULT NULL;
+
+    SET p_error = NULL;
+    SET p_findings = '[]';
+    SET p_impact = NULL;
+    SET p_structures = 0;
+    SET p_changed = 0;
+    SET SESSION group_concat_max_len = 1000000;
+
+    CALL hrms_component_rules_check(p_component_id, 0);
+    SELECT MIN(seq) INTO v_seq FROM tmp_hrms_findings WHERE level = 'ERROR';
+    IF v_seq IS NOT NULL THEN
+        SELECT MAX(message) INTO p_error FROM tmp_hrms_findings WHERE seq = v_seq;
+    END IF;
+
+    IF p_error IS NULL THEN
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_snap_before;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_snap_after;
+        CREATE TEMPORARY TABLE tmp_hrms_snap_before AS
+            SELECT t.structure_id,
+                   SUM(IF(UPPER(m.component_code) = 'GROSS', t.monthly_amount, 0))            AS gross,
+                   SUM(IF(UPPER(m.component_code) = 'TOTAL_DEDUCTIONS', t.monthly_amount, 0)) AS ded,
+                   SUM(IF(UPPER(m.component_code) = 'NET_PAY', t.monthly_amount, 0))          AS net,
+                   SUM(IF(UPPER(m.component_code) = 'TOTAL_CTC', t.monthly_amount, 0))        AS tctc
+              FROM employee_salary_structure_totals t
+              JOIN salary_component_master m ON m.component_id = t.component_id
+             GROUP BY t.structure_id;
+
+        CALL hrms_recalculate_all_structures(p_structures, p_changed, v_errors, v_msg);
+
+        IF v_msg IS NOT NULL THEN
+            SET p_error = v_msg;
+            INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+            VALUES ('ERROR', 'ENGINE', NULL, LEFT(CONCAT('Calculation stopped: ', v_msg), 700));
+        ELSE
+            CREATE TEMPORARY TABLE tmp_hrms_snap_after AS
+                SELECT t.structure_id,
+                       SUM(IF(UPPER(m.component_code) = 'GROSS', t.monthly_amount, 0))            AS gross,
+                       SUM(IF(UPPER(m.component_code) = 'TOTAL_DEDUCTIONS', t.monthly_amount, 0)) AS ded,
+                       SUM(IF(UPPER(m.component_code) = 'NET_PAY', t.monthly_amount, 0))          AS net,
+                       SUM(IF(UPPER(m.component_code) = 'TOTAL_CTC', t.monthly_amount, 0))        AS tctc
+                  FROM employee_salary_structure_totals t
+                  JOIN salary_component_master m ON m.component_id = t.component_id
+                 GROUP BY t.structure_id;
+
+            SELECT COUNT(*) INTO v_emps
+              FROM tmp_hrms_snap_after a
+              LEFT JOIN tmp_hrms_snap_before b ON b.structure_id = a.structure_id
+             WHERE ABS(a.gross - COALESCE(b.gross, 0)) >= 0.01 OR ABS(a.ded - COALESCE(b.ded, 0)) >= 0.01
+                OR ABS(a.net - COALESCE(b.net, 0)) >= 0.01;
+
+            SELECT GROUP_CONCAT(j ORDER BY k DESC, emp SEPARATOR ',') INTO v_rows
+              FROM (
+                    SELECT ABS(a.net - COALESCE(b.net, 0)) AS k, ss.emp_id AS emp,
+                           JSON_OBJECT('emp_id', ss.emp_id, 'emp_name', ud.emp_name,
+                                       'from', DATE_FORMAT(ss.effective_from, '%d %b %Y'),
+                                       'gross_before', COALESCE(b.gross, 0), 'gross_after', a.gross,
+                                       'ded_before', COALESCE(b.ded, 0), 'ded_after', a.ded,
+                                       'net_before', COALESCE(b.net, 0), 'net_after', a.net) AS j
+                      FROM tmp_hrms_snap_after a
+                      LEFT JOIN tmp_hrms_snap_before b ON b.structure_id = a.structure_id
+                      JOIN salary_structure ss ON ss.structure_id = a.structure_id
+                      LEFT JOIN user_details ud ON ud.emp_id = ss.emp_id
+                     WHERE ABS(a.gross - COALESCE(b.gross, 0)) >= 0.01 OR ABS(a.ded - COALESCE(b.ded, 0)) >= 0.01
+                        OR ABS(a.net - COALESCE(b.net, 0)) >= 0.01
+                     ORDER BY k DESC, emp
+                     LIMIT 50
+                   ) z;
+            SET p_impact = CONCAT('{"structures":', p_structures, ',"changed":', v_emps,
+                                  ',"rows":[', COALESCE(v_rows, ''), ']}');
+
+            
+            INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+            SELECT 'WARNING', 'CTC', NULL,
+                   LEFT(CONCAT(COUNT(DISTINCT ss.emp_id), ' employee', IF(COUNT(DISTINCT ss.emp_id) = 1, '', 's'),
+                               ' would no longer add up to the CTC (TOTAL_CTC differs from CTC): ',
+                               SUBSTRING_INDEX(GROUP_CONCAT(DISTINCT ss.emp_id ORDER BY ss.emp_id SEPARATOR ', '), ', ', 10),
+                               IF(COUNT(DISTINCT ss.emp_id) > 10, CONCAT(' and ', COUNT(DISTINCT ss.emp_id) - 10, ' more'), ''), '.'), 700)
+              FROM tmp_hrms_snap_after a
+              JOIN tmp_hrms_snap_before b ON b.structure_id = a.structure_id
+              JOIN salary_structure ss ON ss.structure_id = a.structure_id
+             WHERE ABS(a.tctc - ss.monthly_ctc) > 1 AND ABS(b.tctc - ss.monthly_ctc) <= 1
+            HAVING COUNT(*) > 0;
+
+            
+            INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+            SELECT 'WARNING', 'SLAB', UPPER(m.component_code),
+                   LEFT(CONCAT(UPPER(m.component_code), ': ', COUNT(DISTINCT ss.emp_id), ' employee', IF(COUNT(DISTINCT ss.emp_id) = 1, '', 's'),
+                               ' fall in no slab range and get 0: ',
+                               SUBSTRING_INDEX(GROUP_CONCAT(DISTINCT ss.emp_id ORDER BY ss.emp_id SEPARATOR ', '), ', ', 10),
+                               IF(COUNT(DISTINCT ss.emp_id) > 10, CONCAT(' and ', COUNT(DISTINCT ss.emp_id) - 10, ' more'), ''), '.'), 700)
+              FROM tmp_hrms_gap_list g
+              JOIN salary_component_master m ON m.component_id = g.cid
+              JOIN salary_structure ss ON ss.structure_id = g.structure_id
+             GROUP BY m.component_id, m.component_code;
+        END IF;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_snap_before;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_snap_after;
+    END IF;
+
+    SELECT CONCAT('[', COALESCE(GROUP_CONCAT(JSON_OBJECT('level', level, 'check', check_code, 'component', component_code,
+                                                         'message', message, 'suggest_order', suggest_order)
+                                             ORDER BY FIELD(level, 'ERROR', 'WARNING', 'INFO'), seq SEPARATOR ','), ''), ']')
+      INTO p_findings
+      FROM tmp_hrms_findings;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_cycle_guard` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_cycle_guard`(
+    IN  p_emp_id VARCHAR(20),
+    IN  p_reason VARCHAR(200),
+    OUT p_notice VARCHAR(500)
+)
+BEGIN
+    DECLARE v_done   INT DEFAULT 0;
+    DECLARE v_cycle  BIGINT;
+    DECLARE v_status VARCHAR(30);
+    DECLARE v_label  VARCHAR(40);
+    DECLARE cur CURSOR FOR
+        SELECT payroll_cycle_id, cycle_status,
+               CONCAT(ELT(payroll_month, 'January','February','March','April','May','June','July',
+                          'August','September','October','November','December'), ' ', payroll_year)
+          FROM payroll_cycles
+         WHERE cycle_status IN ('PROCESSING', 'CALCULATED', 'APPROVED');
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = 1;
+
+    SET p_notice = NULL;
+    OPEN cur;
+    cy: LOOP
+        SET v_done = 0;
+        FETCH cur INTO v_cycle, v_status, v_label;
+        IF v_done = 1 THEN LEAVE cy; END IF;
+
+        UPDATE employee_payroll_details epd
+          JOIN payroll_runs pr ON pr.payroll_run_id = epd.payroll_run_id
+           SET epd.employee_payroll_status = 'PENDING',
+               epd.calculation_remarks = 'Salary rules changed: calculate again.'
+         WHERE pr.payroll_cycle_id = v_cycle;
+        UPDATE payroll_runs SET run_status = 'DRAFT', approved_by = NULL, approved_at = NULL
+         WHERE payroll_cycle_id = v_cycle;
+        UPDATE payroll_cycles SET cycle_status = 'STRUCTURE_VERIFIED', updated_at = CURRENT_TIMESTAMP
+         WHERE payroll_cycle_id = v_cycle;
+        CALL hrms_payroll_log(v_cycle, NULL, NULL, 'RULES_CHANGED', v_status, 'STRUCTURE_VERIFIED',
+                              CONCAT(COALESCE(p_reason, 'Salary rules changed'), '. Calculate the payroll again.'), p_emp_id);
+        SET p_notice = LEFT(CONCAT(COALESCE(CONCAT(p_notice, ' '), ''), 'Payroll ', v_label, ' was ', v_status,
+                                   ' and is back at "Structures verified": calculate it again.'), 500);
+    END LOOP cy;
+    CLOSE cur;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_dependents` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_dependents`(
+    IN  p_component_code       VARCHAR(30),
+    IN  p_exclude_component_id BIGINT,
+    IN  p_max_order            INT,
+    IN  p_active_only          TINYINT,
+    OUT p_list                 VARCHAR(500)
+)
+BEGIN
+    DECLARE v_code VARCHAR(40);
+    SET v_code = UPPER(TRIM(COALESCE(p_component_code, '')));
+    SET p_list = NULL;
+
+    SELECT LEFT(GROUP_CONCAT(CONCAT(UPPER(m.component_code), ' (order ', m.calculation_order, ')')
+                             ORDER BY m.calculation_order SEPARATOR ', '), 500)
+      INTO p_list
+      FROM salary_component_master m
+     WHERE (p_exclude_component_id IS NULL OR m.component_id <> p_exclude_component_id)
+       AND (p_max_order IS NULL OR m.calculation_order <= p_max_order)
+       AND (COALESCE(p_active_only, 0) = 0 OR m.is_active = 1)
+       AND (
+              (m.calculation_type = 'PERCENTAGE' AND UPPER(COALESCE(m.percentage_base, '')) = v_code)
+           OR (m.calculation_type IN ('FORMULA', 'STATUTORY')
+               AND m.formula_expression IS NOT NULL
+               AND LOCATE(CONCAT(' ', v_code, ' '),
+                          CONCAT(' ', REGEXP_REPLACE(UPPER(m.formula_expression), '[^A-Z0-9_]', ' '), ' ')) > 0)
+           OR EXISTS (SELECT 1 FROM salary_component_slab s
+                       WHERE s.component_id = m.component_id AND s.is_active = 1
+                         AND (UPPER(s.slab_based_on) = v_code OR UPPER(COALESCE(s.percentage_base, '')) = v_code))
+           );
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_rules_check` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_rules_check`(IN p_component_id BIGINT, IN p_output TINYINT)
+BEGIN
+    DECLARE v_done    INT DEFAULT 0;
+    DECLARE v_code    VARCHAR(40);
+    DECLARE v_calc    VARCHAR(30);
+    DECLARE v_base    VARCHAR(40);
+    DECLARE v_formula TEXT;
+    DECLARE v_manual  TINYINT;
+    DECLARE v_slabbed TINYINT;
+    DECLARE v_cid     BIGINT;
+    DECLARE v_focus   VARCHAR(40) DEFAULT NULL;
+    DECLARE v_res     DECIMAL(18,4);
+    DECLARE v_st      CHAR(1);
+    DECLARE v_rm      VARCHAR(500);
+    DECLARE v_i       INT DEFAULT 0;
+    DECLARE v_added   INT DEFAULT 1;
+    DECLARE v_list    TEXT;
+    DECLARE cur CURSOR FOR
+        SELECT m.component_id, UPPER(m.component_code), UPPER(m.calculation_type), UPPER(COALESCE(m.percentage_base, 'NONE')),
+               NULLIF(TRIM(COALESCE(m.formula_expression, '')), ''),
+               IF(m.is_manual = 1 OR m.calculation_type = 'MANUAL', 1, 0),
+               IF(m.is_slab = 1 AND EXISTS (SELECT 1 FROM salary_component_slab s
+                                             WHERE s.component_id = m.component_id AND s.is_active = 1), 1, 0)
+          FROM salary_component_master m
+         WHERE m.is_active = 1;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = 1;
+
+    SET SESSION group_concat_max_len = 1000000;
+    CALL hrms_engine_prepare();
+    SELECT MAX(UPPER(component_code)) INTO v_focus FROM salary_component_master WHERE component_id = p_component_id;
+
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_findings (
+        seq            INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        level          VARCHAR(10) NOT NULL,
+        check_code     VARCHAR(20) NOT NULL,
+        component_code VARCHAR(40) NULL,
+        message        VARCHAR(700) NOT NULL,
+        suggest_order  INT NULL
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_dep (
+        code VARCHAR(40) NOT NULL,
+        uses VARCHAR(64) NOT NULL,
+        via  VARCHAR(20) NOT NULL,
+        PRIMARY KEY (code, uses, via)
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_reach (
+        f VARCHAR(64) NOT NULL,
+        t VARCHAR(64) NOT NULL,
+        PRIMARY KEY (f, t)
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_req_dates (
+        d     DATE NOT NULL PRIMARY KEY,
+        label VARCHAR(100) NOT NULL
+    );
+    DELETE FROM tmp_hrms_findings;
+    DELETE FROM tmp_hrms_dep;
+    DELETE FROM tmp_hrms_reach;
+    DELETE FROM tmp_hrms_req_dates;
+
+    
+    OPEN cur;
+    rd: LOOP
+        SET v_done = 0;
+        FETCH cur INTO v_cid, v_code, v_calc, v_base, v_formula, v_manual, v_slabbed;
+        IF v_done = 1 THEN LEAVE rd; END IF;
+        IF v_slabbed = 1 THEN
+            INSERT IGNORE INTO tmp_hrms_dep (code, uses, via)
+            SELECT v_code, UPPER(s.slab_based_on), 'slab' FROM salary_component_slab s
+             WHERE s.component_id = v_cid AND s.is_active = 1;
+            INSERT IGNORE INTO tmp_hrms_dep (code, uses, via)
+            SELECT v_code, UPPER(s.percentage_base), 'slab %' FROM salary_component_slab s
+             WHERE s.component_id = v_cid AND s.is_active = 1 AND s.result_type = 'PERCENTAGE'
+               AND UPPER(COALESCE(s.percentage_base, 'NONE')) <> 'NONE';
+        ELSEIF v_manual = 1 THEN
+            SET v_i = v_i;   
+        ELSEIF v_calc IN ('FORMULA', 'STATUTORY') AND v_formula IS NOT NULL THEN
+            DELETE FROM tmp_hrms_formula_tokens;
+            CALL hrms_formula_evaluate(v_formula, 'TOKENS', v_res, v_st, v_rm);
+            IF v_st = 'Y' THEN
+                INSERT IGNORE INTO tmp_hrms_dep (code, uses, via)
+                SELECT v_code, token, 'formula' FROM tmp_hrms_formula_tokens WHERE token <> 'MANUAL_AMOUNT';
+            ELSE
+                INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+                VALUES ('ERROR', 'NAMES', v_code, LEFT(CONCAT(v_code, ': the formula cannot be read - ', v_rm), 700));
+            END IF;
+        ELSEIF v_calc = 'PERCENTAGE' AND v_base <> 'NONE' THEN
+            INSERT IGNORE INTO tmp_hrms_dep (code, uses, via) VALUES (v_code, v_base, 'based on');
+        END IF;
+    END LOOP rd;
+    CLOSE cur;
+
+    IF p_output = 2 THEN
+        SELECT d.code, d.uses, d.via, m.calculation_order AS uses_order
+          FROM tmp_hrms_dep d
+          LEFT JOIN salary_component_master m ON UPPER(m.component_code) = d.uses
+         ORDER BY d.code, d.uses;
+    ELSEIF p_output <> 3 THEN
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'ERROR', 'NAMES', d.code,
+               CONCAT(d.code, ' uses ', d.uses, ' (', d.via, '), which ',
+                      IF(m.component_id IS NULL, 'does not exist', 'is inactive and always 0'), '.')
+          FROM tmp_hrms_dep d
+          LEFT JOIN salary_component_master m ON UPPER(m.component_code) = d.uses
+         WHERE d.uses NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION',
+                              'ESI_APPLICABLE','PAY_DAYS','PAYABLE_DAYS','LOP_DAYS','MANUAL_AMOUNT','ESI_WAGE','STANDARD_ESI_WAGE')
+           AND (m.component_id IS NULL OR m.is_active = 0)
+           AND (v_focus IS NULL OR d.code = v_focus OR d.uses = v_focus);
+
+        
+        INSERT IGNORE INTO tmp_hrms_reach (f, t) SELECT code, uses FROM tmp_hrms_dep;
+        SET v_i = 0;
+        WHILE v_added > 0 AND v_i < 40 DO
+            DROP TEMPORARY TABLE IF EXISTS tmp_hrms_reach_new;
+            CREATE TEMPORARY TABLE tmp_hrms_reach_new AS
+                SELECT DISTINCT r.f, d.uses AS t FROM tmp_hrms_reach r JOIN tmp_hrms_dep d ON d.code = r.t;
+            INSERT IGNORE INTO tmp_hrms_reach (f, t) SELECT f, t FROM tmp_hrms_reach_new;
+            SET v_added = ROW_COUNT();
+            SET v_i = v_i + 1;
+        END WHILE;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_reach_new;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_reach_back;
+        CREATE TEMPORARY TABLE tmp_hrms_reach_back AS SELECT f, t FROM tmp_hrms_reach;
+
+        
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_dep_max;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_used_min;
+        CREATE TEMPORARY TABLE tmp_hrms_dep_max AS
+            SELECT d.code, MAX(m.calculation_order) AS max_order
+              FROM tmp_hrms_dep d
+              JOIN salary_component_master m ON UPPER(m.component_code) = d.uses AND m.is_active = 1
+             GROUP BY d.code;
+        CREATE TEMPORARY TABLE tmp_hrms_used_min AS
+            SELECT d.uses AS code, MIN(m.calculation_order) AS min_order
+              FROM tmp_hrms_dep d
+              JOIN salary_component_master m ON UPPER(m.component_code) = d.code AND m.is_active = 1
+             GROUP BY d.uses;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_dep_max2;
+        CREATE TEMPORARY TABLE tmp_hrms_dep_max2 AS SELECT code, max_order FROM tmp_hrms_dep_max;
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message, suggest_order)
+        SELECT 'WARNING', 'ORDER', d.code,
+               CONCAT(d.code, ' (order ', a.calculation_order, ') uses ', d.uses, ' (order ', b.calculation_order,
+                      '), which is calculated later. Give ', d.code, ' an order above ', COALESCE(dm.max_order, b.calculation_order),
+                      IF(um.min_order IS NULL, '', CONCAT(' and below ', um.min_order)),
+                      IF(hrms_free_order(dm.max_order, um.min_order, a.component_id) IS NULL, '',
+                         CONCAT(', for example ', hrms_free_order(dm.max_order, um.min_order, a.component_id))), '.'),
+               hrms_free_order(dm.max_order, um.min_order, a.component_id)
+          FROM tmp_hrms_dep d
+          JOIN salary_component_master a ON UPPER(a.component_code) = d.code AND a.is_active = 1
+                                        AND a.calculation_scope = 'COMPONENT'
+          JOIN salary_component_master b ON UPPER(b.component_code) = d.uses AND b.is_active = 1
+          LEFT JOIN tmp_hrms_dep_max dm ON dm.code = d.code
+          LEFT JOIN tmp_hrms_used_min um ON um.code = d.code
+         WHERE b.calculation_order >= a.calculation_order
+           AND NOT EXISTS (SELECT 1 FROM tmp_hrms_reach_back r WHERE r.f = d.uses AND r.t = d.code)
+           AND (v_focus IS NULL OR d.code = v_focus OR d.uses = v_focus);
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message, suggest_order)
+        
+        SELECT 'ERROR', 'ORDER',
+               IF(hrms_free_order(GREATEST(COALESCE(bm.max_order, 0), COALESCE((SELECT MAX(z.calculation_order) FROM salary_component_master z WHERE z.is_active = 1 AND z.calculation_order < a.calculation_order AND z.component_id <> b.component_id), 0)), a.calculation_order, b.component_id) IS NULL, d.code, d.uses),
+               CONCAT(d.code, ' is a total and must be calculated after everything it uses, but ', d.uses,
+                      ' (order ', b.calculation_order, ') comes after it (order ', a.calculation_order, '). ',
+                      IF(hrms_free_order(GREATEST(COALESCE(bm.max_order, 0), COALESCE((SELECT MAX(z.calculation_order) FROM salary_component_master z WHERE z.is_active = 1 AND z.calculation_order < a.calculation_order AND z.component_id <> b.component_id), 0)), a.calculation_order, b.component_id) IS NOT NULL,
+                         CONCAT('Give ', d.uses, ' an order below ', a.calculation_order, ', for example ',
+                                hrms_free_order(GREATEST(COALESCE(bm.max_order, 0), COALESCE((SELECT MAX(z.calculation_order) FROM salary_component_master z WHERE z.is_active = 1 AND z.calculation_order < a.calculation_order AND z.component_id <> b.component_id), 0)), a.calculation_order, b.component_id), '.'),
+                         CONCAT('Give ', d.code, ' an order above ', COALESCE(am.max_order, b.calculation_order),
+                                IF(hrms_free_order(am.max_order, au.min_order, a.component_id) IS NULL, '.',
+                                   CONCAT(', for example ', hrms_free_order(am.max_order, au.min_order, a.component_id), '.'))))),
+               COALESCE(hrms_free_order(GREATEST(COALESCE(bm.max_order, 0), COALESCE((SELECT MAX(z.calculation_order) FROM salary_component_master z WHERE z.is_active = 1 AND z.calculation_order < a.calculation_order AND z.component_id <> b.component_id), 0)), a.calculation_order, b.component_id),
+                        hrms_free_order(am.max_order, au.min_order, a.component_id))
+          FROM tmp_hrms_dep d
+          JOIN salary_component_master a ON UPPER(a.component_code) = d.code AND a.is_active = 1
+                                        AND a.calculation_scope = 'AGGREGATE'
+          JOIN salary_component_master b ON UPPER(b.component_code) = d.uses AND b.is_active = 1
+          LEFT JOIN tmp_hrms_dep_max bm ON bm.code = d.uses
+          LEFT JOIN tmp_hrms_dep_max2 am ON am.code = d.code
+          LEFT JOIN tmp_hrms_used_min au ON au.code = d.code
+         WHERE b.calculation_order >= a.calculation_order
+           AND NOT EXISTS (SELECT 1 FROM tmp_hrms_reach_back r WHERE r.f = d.uses AND r.t = d.code)
+           AND (v_focus IS NULL OR d.code = v_focus OR d.uses = v_focus);
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'ERROR', 'TOTAL', UPPER(m.component_code),
+               CONCAT(UPPER(m.component_code), ' is a total but uses no component or total. ',
+                      'A total must add up components or other totals, for example BASIC + HRA.')
+          FROM salary_component_master m
+         WHERE m.is_active = 1 AND m.calculation_scope = 'AGGREGATE'
+           AND NOT EXISTS (SELECT 1 FROM tmp_hrms_dep d
+                             JOIN salary_component_master x ON UPPER(x.component_code) = d.uses AND x.is_active = 1
+                            WHERE d.code = UPPER(m.component_code))
+           AND (p_component_id IS NULL OR m.component_id = p_component_id);
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_dep_max;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_dep_max2;
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_used_min;
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'INFO', 'ORDER', d.code,
+               CONCAT(d.code, ' (order ', a.calculation_order, ') uses ', d.uses, ' (order ', b.calculation_order,
+                      ') and ', d.uses, ' depends back on ', d.code,
+                      '. This circle is settled by calculating again until the amounts stop changing.')
+          FROM tmp_hrms_dep d
+          JOIN salary_component_master a ON UPPER(a.component_code) = d.code AND a.is_active = 1
+          JOIN salary_component_master b ON UPPER(b.component_code) = d.uses AND b.is_active = 1
+         WHERE b.calculation_order >= a.calculation_order
+           AND EXISTS (SELECT 1 FROM tmp_hrms_reach_back r WHERE r.f = d.uses AND r.t = d.code)
+           AND (v_focus IS NULL OR d.code = v_focus OR d.uses = v_focus);
+        DROP TEMPORARY TABLE IF EXISTS tmp_hrms_reach_back;
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'ERROR', 'SLAB', UPPER(m.component_code),
+               CONCAT(UPPER(m.component_code), ': the slab with priority ', b.priority, ' (', b.slab_based_on, ' ',
+                      FORMAT(b.slab_min_value, 2), ' to ', COALESCE(FORMAT(b.slab_max_value, 2), 'no limit'),
+                      ') can never apply - the slab with priority ', a.priority, ' covers its whole range and wins.')
+          FROM salary_component_slab b
+          JOIN salary_component_slab a
+            ON a.component_id = b.component_id AND a.slab_id <> b.slab_id
+           AND a.is_active = 1 AND UPPER(a.slab_based_on) = UPPER(b.slab_based_on)
+           AND a.priority < b.priority
+           AND a.slab_min_value <= b.slab_min_value
+           AND (a.slab_max_value IS NULL OR (b.slab_max_value IS NOT NULL AND b.slab_max_value <= a.slab_max_value))
+           AND a.effective_from <= b.effective_from
+           AND (a.effective_to IS NULL OR (b.effective_to IS NOT NULL AND b.effective_to <= a.effective_to))
+          JOIN salary_component_master m ON m.component_id = b.component_id AND m.is_active = 1 AND m.is_slab = 1
+         WHERE b.is_active = 1
+           AND (p_component_id IS NULL OR m.component_id = p_component_id);
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'WARNING', 'SLAB', g.code,
+               CONCAT(g.code, ': ', g.based_on, ' from ', FORMAT(g.gap_from, 2), ' to ', FORMAT(g.gap_to, 2),
+                      ' has no slab (slabs valid on ', DATE_FORMAT(g.d, '%d %b %Y'),
+                      '). An employee in this range gets 0.')
+          FROM (
+                SELECT x.code, x.based_on, x.d,
+                       COALESCE(x.prev_max + 0.01, 0) AS gap_from, x.slab_min_value - 0.01 AS gap_to,
+                       ROW_NUMBER() OVER (PARTITION BY x.code ORDER BY x.d, x.slab_min_value) AS rn
+                  FROM (
+                        SELECT UPPER(m.component_code) AS code, UPPER(s.slab_based_on) AS based_on, dd.d,
+                               s.slab_min_value,
+                               MAX(COALESCE(s.slab_max_value, 999999999999.99)) OVER (
+                                   PARTITION BY m.component_id, UPPER(s.slab_based_on), dd.d
+                                   ORDER BY s.slab_min_value, s.priority
+                                   ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+                          FROM salary_component_master m
+                          JOIN (SELECT DISTINCT component_id, effective_from AS d FROM salary_component_slab WHERE is_active = 1
+                                UNION
+                                SELECT DISTINCT component_id, CURDATE() FROM salary_component_slab WHERE is_active = 1) dd
+                            ON dd.component_id = m.component_id
+                          JOIN salary_component_slab s
+                            ON s.component_id = m.component_id AND s.is_active = 1
+                           AND s.effective_from <= dd.d AND (s.effective_to IS NULL OR s.effective_to >= dd.d)
+                         WHERE m.is_active = 1 AND m.is_slab = 1
+                           AND (p_component_id IS NULL OR m.component_id = p_component_id)
+                       ) x
+                 WHERE x.slab_min_value > COALESCE(x.prev_max, 0) + 0.01
+               ) g
+         WHERE g.rn = 1;
+
+        
+        INSERT IGNORE INTO tmp_hrms_req_dates (d, label)
+        SELECT pc.period_end,
+               CONCAT('payroll ', ELT(pc.payroll_month, 'January','February','March','April','May','June','July',
+                      'August','September','October','November','December'), ' ', pc.payroll_year)
+          FROM payroll_cycles pc
+         WHERE pc.cycle_status IN ('OPEN','ATTENDANCE_VERIFIED','STRUCTURE_VERIFIED','PROCESSING','CALCULATED','APPROVED');
+        INSERT IGNORE INTO tmp_hrms_req_dates (d, label)
+        SELECT hrms_structure_calc_date(ss.structure_id), CONCAT('salary of ', MIN(ss.emp_id))
+          FROM salary_structure ss
+         WHERE ss.structure_status = 'ACTIVE'
+         GROUP BY hrms_structure_calc_date(ss.structure_id);
+
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'ERROR', 'SLAB', x.code,
+               CONCAT(x.code, ': no slab is valid on ', DATE_FORMAT(x.d, '%d %b %Y'), ' (', x.label,
+                      '), so that calculation would stop. Add a slab whose dates cover it.')
+          FROM (
+                SELECT UPPER(m.component_code) AS code, r.d, r.label,
+                       ROW_NUMBER() OVER (PARTITION BY m.component_id ORDER BY r.d) AS rn
+                  FROM salary_component_master m
+                  JOIN tmp_hrms_req_dates r
+                 WHERE m.is_active = 1 AND m.is_slab = 1
+                   AND EXISTS (SELECT 1 FROM salary_component_slab s WHERE s.component_id = m.component_id AND s.is_active = 1)
+                   AND NOT EXISTS (SELECT 1 FROM salary_component_slab s
+                                    WHERE s.component_id = m.component_id AND s.is_active = 1
+                                      AND s.effective_from <= r.d AND (s.effective_to IS NULL OR s.effective_to >= r.d))
+                   AND (p_component_id IS NULL OR m.component_id = p_component_id)
+               ) x
+         WHERE x.rn = 1;
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'WARNING', 'TOTAL', UPPER(m.component_code),
+               CONCAT(UPPER(m.component_code), ' is ', LOWER(REPLACE(m.component_type, '_', ' ')), ' but is not in ',
+                      t.total_code, ', so it is ',
+                      CASE m.component_type WHEN 'EARNING' THEN 'not paid' WHEN 'DEDUCTION' THEN 'not deducted'
+                           ELSE 'not counted in the CTC' END,
+                      '. Add it to the ', t.total_code, ' formula.')
+          FROM salary_component_master m
+          JOIN (SELECT CONVERT('EARNING' USING utf8mb4) COLLATE utf8mb4_general_ci AS ctype,
+                       CONVERT('GROSS' USING utf8mb4) COLLATE utf8mb4_general_ci AS total_code
+                UNION ALL SELECT 'DEDUCTION', 'TOTAL_DEDUCTIONS'
+                UNION ALL SELECT 'EMPLOYER_CONTRIBUTION', 'TOTAL_EMPLOYER_CONTRIBUTION') t
+            ON t.ctype = m.component_type
+          JOIN salary_component_master tm
+            ON UPPER(tm.component_code) = t.total_code AND tm.is_active = 1 AND tm.calculation_scope = 'AGGREGATE'
+         WHERE m.is_active = 1 AND m.calculation_scope = 'COMPONENT'
+           AND NOT EXISTS (SELECT 1 FROM tmp_hrms_dep d WHERE d.code = t.total_code AND d.uses = UPPER(m.component_code))
+           AND (p_component_id IS NULL OR m.component_id = p_component_id OR tm.component_id = p_component_id);
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'WARNING', 'TOTAL', UPPER(m.component_code),
+               CONCAT(UPPER(m.component_code), ' is ', LOWER(REPLACE(m.component_type, '_', ' ')), ' but is inside ',
+                      d.code, '. Remove it from the ', d.code, ' formula.')
+          FROM tmp_hrms_dep d
+          JOIN (SELECT CONVERT('EARNING' USING utf8mb4) COLLATE utf8mb4_general_ci AS ctype,
+                       CONVERT('GROSS' USING utf8mb4) COLLATE utf8mb4_general_ci AS total_code
+                UNION ALL SELECT 'DEDUCTION', 'TOTAL_DEDUCTIONS'
+                UNION ALL SELECT 'EMPLOYER_CONTRIBUTION', 'TOTAL_EMPLOYER_CONTRIBUTION') t
+            ON t.total_code = d.code
+          JOIN salary_component_master m
+            ON UPPER(m.component_code) = d.uses AND m.is_active = 1 AND m.calculation_scope = 'COMPONENT'
+           AND m.component_type <> t.ctype
+          JOIN salary_component_master tm ON UPPER(tm.component_code) = d.code
+         WHERE (p_component_id IS NULL OR m.component_id = p_component_id OR tm.component_id = p_component_id);
+
+        
+        SELECT GROUP_CONCAT(UPPER(m.component_code) ORDER BY m.calculation_order SEPARATOR ', ') INTO v_list
+          FROM salary_component_master m
+         WHERE m.is_active = 1 AND m.is_slab = 1
+           AND EXISTS (SELECT 1 FROM salary_component_slab s WHERE s.component_id = m.component_id AND s.is_active = 1)
+           AND (NULLIF(TRIM(COALESCE(m.formula_expression, '')), '') IS NOT NULL
+                OR (m.calculation_type = 'PERCENTAGE' AND COALESCE(m.percentage_value, 0) > 0))
+           AND (p_component_id IS NULL OR m.component_id = p_component_id);
+        IF v_list IS NOT NULL THEN
+            INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+            VALUES ('INFO', 'FORMULA', IF(p_component_id IS NULL, NULL, v_focus),
+                    LEFT(CONCAT('Decided by slabs, so the formula / percentage is not used: ', v_list, '.'), 700));
+        END IF;
+
+        
+        INSERT INTO tmp_hrms_findings (level, check_code, component_code, message)
+        SELECT 'WARNING', 'CYCLE', NULL,
+               CONCAT('Payroll ', ELT(pc.payroll_month, 'January','February','March','April','May','June','July',
+                      'August','September','October','November','December'), ' ', pc.payroll_year,
+                      ' is ', pc.cycle_status, '. Saving a rule change sends it back to "Structures verified"; calculate it again.')
+          FROM payroll_cycles pc
+         WHERE pc.cycle_status IN ('PROCESSING', 'CALCULATED', 'APPROVED');
+
+        IF p_output = 1 THEN
+            SELECT level, check_code, component_code, message, suggest_order
+              FROM tmp_hrms_findings
+             ORDER BY FIELD(level, 'ERROR', 'WARNING', 'INFO'), seq;
+        END IF;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_rules_view` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_rules_view`(IN p_emp_id VARCHAR(20), IN p_output TINYINT)
+rv: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view the component rule check.' AS remarks;
+        LEAVE rv;
+    END IF;
+    CALL hrms_component_rules_check(NULL, IF(p_output = 2, 2, 1));
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_slab_apply` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_slab_apply`(
+    IN  p_emp_id       VARCHAR(20),
+    IN  p_component_id BIGINT,
+    IN  p_slab_json    LONGTEXT,
+    OUT p_count        INT,
+    OUT p_msg          VARCHAR(500)
+)
+ap: BEGIN
+    DECLARE v_code   VARCHAR(40);
+    DECLARE v_i      INT DEFAULT 0;
+    DECLARE v_path   VARCHAR(30);
+    DECLARE v_based  VARCHAR(100);
+    DECLARE v_min    VARCHAR(100);
+    DECLARE v_max    VARCHAR(100);
+    DECLARE v_rtype  VARCHAR(100);
+    DECLARE v_rvalue VARCHAR(100);
+    DECLARE v_pbase  VARCHAR(100);
+    DECLARE v_prio   VARCHAR(100);
+    DECLARE v_from   VARCHAR(100);
+    DECLARE v_to     VARCHAR(100);
+    DECLARE v_act    VARCHAR(100);
+
+    SET p_count = 0;
+    SET p_msg = NULL;
+
+    SELECT MAX(UPPER(component_code)) INTO v_code FROM salary_component_master WHERE component_id = p_component_id;
+    IF v_code IS NULL THEN
+        SET p_msg = 'Component not found.';
+        LEAVE ap;
+    END IF;
+    IF p_slab_json IS NULL OR JSON_VALID(p_slab_json) = 0 OR LEFT(TRIM(p_slab_json), 1) <> '[' THEN
+        SET p_msg = 'Slab data must be a JSON array.';
+        LEAVE ap;
+    END IF;
+    SET p_count = JSON_LENGTH(p_slab_json);
+    IF p_count > 50 THEN
+        SET p_msg = 'A component can have at most 50 slabs.';
+        LEAVE ap;
+    END IF;
+
+    DROP TEMPORARY TABLE IF EXISTS tmp_hrms_slab_in;
+    DROP TEMPORARY TABLE IF EXISTS tmp_hrms_slab_in2;
+    CREATE TEMPORARY TABLE tmp_hrms_slab_in (
+        row_no       INT NOT NULL PRIMARY KEY,
+        based_on     VARCHAR(30) NOT NULL,
+        min_v        DECIMAL(12,2) NOT NULL,
+        max_v        DECIMAL(12,2) NULL,
+        result_type  VARCHAR(20) NOT NULL,
+        result_value DECIMAL(12,2) NOT NULL,
+        pct_base     VARCHAR(30) NOT NULL,
+        priority     INT NOT NULL,
+        eff_from     DATE NOT NULL,
+        eff_to       DATE NULL,
+        is_active    TINYINT NOT NULL
+    );
+
+    WHILE p_msg IS NULL AND v_i < p_count DO
+        SET v_path   = CONCAT('$[', v_i, ']');
+        SET v_based  = UPPER(NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.slab_based_on'))), '')), ''), 'null'));
+        SET v_min    = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.slab_min_value'))), '')), ''), 'null');
+        SET v_max    = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.slab_max_value'))), '')), ''), 'null');
+        SET v_rtype  = UPPER(NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.result_type'))), '')), ''), 'null'));
+        SET v_rvalue = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.result_value'))), '')), ''), 'null');
+        SET v_pbase  = UPPER(NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.percentage_base'))), '')), ''), 'null'));
+        SET v_prio   = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.priority'))), '')), ''), 'null');
+        SET v_from   = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.effective_from'))), '')), ''), 'null');
+        SET v_to     = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.effective_to'))), '')), ''), 'null');
+        SET v_act    = NULLIF(NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_slab_json, CONCAT(v_path, '.is_active'))), '')), ''), 'null');
+
+        SET v_min   = COALESCE(v_min, '0');
+        SET v_prio  = COALESCE(v_prio, CAST(v_i + 1 AS CHAR));
+        SET v_from  = COALESCE(v_from, DATE_FORMAT(CURDATE(), '%Y-%m-%d'));
+        SET v_act   = CASE WHEN LOWER(COALESCE(v_act, '1')) IN ('0', 'false', 'n') THEN '0' ELSE '1' END;
+        SET v_pbase = COALESCE(v_pbase, 'NONE');
+
+        IF v_based IS NULL OR CHAR_LENGTH(v_based) > 30 THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': choose what the slab is based on.');
+        ELSEIF v_min NOT REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': "From" must be a number, 0 or more.');
+        ELSEIF v_max IS NOT NULL AND v_max NOT REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': "To" must be a number, or empty for no upper limit.');
+        ELSEIF v_max IS NOT NULL AND CAST(v_max AS DECIMAL(14,2)) < CAST(v_min AS DECIMAL(14,2)) THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': "From" is above "To".');
+        ELSEIF COALESCE(v_rtype, '') NOT IN ('FIXED', 'PERCENTAGE') THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': result must be FIXED or PERCENTAGE.');
+        ELSEIF v_rvalue IS NULL OR v_rvalue NOT REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': value must be a number, 0 or more.');
+        ELSEIF v_rtype = 'PERCENTAGE' AND (v_pbase = 'NONE' OR CHAR_LENGTH(v_pbase) > 30) THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': choose what the percentage is taken of.');
+        ELSEIF v_prio NOT REGEXP '^[0-9]+$' OR CAST(v_prio AS UNSIGNED) < 1 OR CAST(v_prio AS UNSIGNED) > 999 THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': priority must be a whole number from 1 to 999.');
+        ELSEIF v_from NOT REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR STR_TO_DATE(v_from, '%Y-%m-%d') IS NULL THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': "Effective From" must be a date.');
+        ELSEIF v_to IS NOT NULL AND (v_to NOT REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR STR_TO_DATE(v_to, '%Y-%m-%d') IS NULL) THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': "Effective To" must be a date or empty.');
+        ELSEIF v_to IS NOT NULL AND v_to < v_from THEN
+            SET p_msg = CONCAT('Slab ', v_i + 1, ': "Effective To" is before "Effective From".');
+        ELSE
+            INSERT INTO tmp_hrms_slab_in
+                (row_no, based_on, min_v, max_v, result_type, result_value, pct_base, priority, eff_from, eff_to, is_active)
+            VALUES
+                (v_i + 1, v_based, CAST(v_min AS DECIMAL(12,2)),
+                 IF(v_max IS NULL, NULL, CAST(v_max AS DECIMAL(12,2))),
+                 v_rtype, CAST(v_rvalue AS DECIMAL(12,2)),
+                 IF(v_rtype = 'PERCENTAGE', v_pbase, 'NONE'),
+                 CAST(v_prio AS UNSIGNED), STR_TO_DATE(v_from, '%Y-%m-%d'),
+                 IF(v_to IS NULL, NULL, STR_TO_DATE(v_to, '%Y-%m-%d')), CAST(v_act AS UNSIGNED));
+        END IF;
+        SET v_i = v_i + 1;
+    END WHILE;
+
+    IF p_msg IS NULL THEN
+        SELECT MIN(CONCAT('Priority ', x.priority, ' is used by more than one slab. Each slab needs its own priority.'))
+          INTO p_msg
+          FROM (SELECT priority FROM tmp_hrms_slab_in GROUP BY priority HAVING COUNT(*) > 1) x;
+    END IF;
+    
+    IF p_msg IS NULL THEN
+        SELECT MIN(CONCAT('Slab ', t.row_no, ': "', t.based_on, '" is not CTC, GROSS or an active component code.'))
+          INTO p_msg
+          FROM tmp_hrms_slab_in t
+         WHERE t.based_on NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION','ESI_WAGE','STANDARD_ESI_WAGE')
+           AND NOT EXISTS (SELECT 1 FROM salary_component_master m
+                            WHERE UPPER(m.component_code) = t.based_on AND m.component_id <> p_component_id
+                              AND m.is_active = 1);
+    END IF;
+    IF p_msg IS NULL THEN
+        SELECT MIN(CONCAT('Slab ', t.row_no, ': percentage of "', t.pct_base, '" is not CTC, GROSS or an active component code.'))
+          INTO p_msg
+          FROM tmp_hrms_slab_in t
+         WHERE t.result_type = 'PERCENTAGE'
+           AND t.pct_base NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION','ESI_WAGE','STANDARD_ESI_WAGE')
+           AND NOT EXISTS (SELECT 1 FROM salary_component_master m
+                            WHERE UPPER(m.component_code) = t.pct_base AND m.component_id <> p_component_id
+                              AND m.is_active = 1);
+    END IF;
+    
+    
+    
+    
+    IF p_msg IS NOT NULL THEN
+        LEAVE ap;
+    END IF;
+
+    DELETE FROM salary_component_slab WHERE component_id = p_component_id;
+    INSERT INTO salary_component_slab
+        (component_id, slab_based_on, slab_min_value, slab_max_value, result_type, result_value,
+         percentage_base, priority, effective_from, effective_to, is_active, created_by)
+    SELECT p_component_id, based_on, min_v, max_v, result_type, result_value,
+           pct_base, priority, eff_from, eff_to, is_active, p_emp_id
+      FROM tmp_hrms_slab_in
+     ORDER BY priority;
+    UPDATE salary_component_master
+       SET is_slab = IF(p_count > 0, 1, 0), updated_at = CURRENT_TIMESTAMP
+     WHERE component_id = p_component_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_slab_delete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_slab_delete`(
+    IN p_emp_id  VARCHAR(20),
+    IN p_slab_id BIGINT
+)
+dl: BEGIN
+    DECLARE v_role       VARCHAR(30);
+    DECLARE v_ustat      VARCHAR(20);
+    DECLARE v_component  BIGINT DEFAULT NULL;
+    DECLARE v_left       INT DEFAULT 0;
+    DECLARE v_structures INT DEFAULT 0;
+    DECLARE v_changed    INT DEFAULT 0;
+    DECLARE v_errors     INT DEFAULT 0;
+    DECLARE v_msg        VARCHAR(500) DEFAULT NULL;
+    DECLARE v_err        VARCHAR(500);
+    DECLARE v_findings   LONGTEXT DEFAULT NULL;
+    DECLARE v_impact     LONGTEXT DEFAULT NULL;
+    DECLARE v_notice     VARCHAR(500) DEFAULT NULL;
+    DECLARE v_audit_old  JSON DEFAULT NULL;    
+    DECLARE v_audit_new  JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Slab could not be deleted.') AS remarks,
+               v_component AS component_id, 0 AS slab_count, 0 AS employee_rows_changed,
+               NULL AS findings, NULL AS impact;
+    END;
+
+    SELECT MAX(user_category), MAX(status) INTO v_role, v_ustat
+      FROM user_login_details WHERE emp_id = p_emp_id;
+    SELECT MAX(component_id) INTO v_component FROM salary_component_slab WHERE slab_id = p_slab_id;
+
+    IF v_role IS NULL OR LOWER(COALESCE(v_ustat, '')) <> 'active' OR UPPER(v_role) NOT IN ('ADMIN', 'HR') THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can manage slabs.';
+    ELSEIF v_component IS NULL THEN
+        SET v_msg = 'Slab not found.';
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, v_component AS component_id, 0 AS slab_count, 0 AS employee_rows_changed,
+               NULL AS findings, NULL AS impact;
+        LEAVE dl;
+    END IF;
+
+    SET v_audit_old = hrms_audit_component_json(v_component);    
+    START TRANSACTION;
+    DELETE FROM salary_component_slab WHERE slab_id = p_slab_id;
+    SELECT COUNT(*) INTO v_left FROM salary_component_slab WHERE component_id = v_component;
+    UPDATE salary_component_master
+       SET is_slab = IF(v_left > 0, 1, 0), updated_at = CURRENT_TIMESTAMP
+     WHERE component_id = v_component;
+    CALL hrms_component_change_finish(v_component, v_msg, v_findings, v_impact, v_structures, v_changed);
+    IF v_msg IS NOT NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, v_msg AS remarks, v_component AS component_id, 0 AS slab_count, 0 AS employee_rows_changed,
+               v_findings AS findings, v_impact AS impact;
+        LEAVE dl;
+    END IF;
+    
+    SET v_audit_new = hrms_audit_component_json(v_component);
+    CALL hrms_payroll_audit_add('SLAB', 'SLAB_DELETED', 'salary_component_slab', p_slab_id, NULL, NULL, NULL, NULL,
+         v_audit_old, v_audit_new,
+         CONCAT(JSON_UNQUOTE(JSON_EXTRACT(v_audit_new, '$.code')), ': slab ', p_slab_id, ' deleted. Slabs left: ', v_left,
+                '. Employee amounts changed: ', v_changed, '.'), p_emp_id);
+    CALL hrms_component_cycle_guard(p_emp_id, 'A slab was deleted', v_notice);
+    COMMIT;
+    SELECT 'Y' AS status,
+           CONCAT('Slab deleted. Slabs left: ', v_left, '. Employee amounts changed: ', v_changed, '.',
+                  IF(v_notice IS NULL, '', CONCAT(' ', v_notice))) AS remarks,
+           v_component AS component_id, v_left AS slab_count, v_changed AS employee_rows_changed,
+           v_findings AS findings, v_impact AS impact;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_slab_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_slab_list`(
+    IN p_emp_id       VARCHAR(20),
+    IN p_component_id BIGINT
+)
+BEGIN
+    DECLARE v_role  VARCHAR(30);
+    DECLARE v_ustat VARCHAR(20);
+    DECLARE v_n     INT DEFAULT 0;
+
+    SELECT MAX(user_category), MAX(status) INTO v_role, v_ustat
+      FROM user_login_details WHERE emp_id = p_emp_id;
+    SELECT COUNT(*) INTO v_n FROM salary_component_slab WHERE component_id = p_component_id;
+
+    IF v_role IS NULL OR LOWER(COALESCE(v_ustat, '')) <> 'active' OR UPPER(v_role) NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view slabs.' AS remarks, NULL AS slab_id;
+    ELSEIF v_n = 0 THEN
+        SELECT 'Y' AS status, 'No slabs for this component.' AS remarks, NULL AS slab_id;
+    ELSE
+        SELECT 'Y' AS status, 'Slabs retrieved successfully' AS remarks,
+               s.slab_id, s.component_id, s.priority, s.slab_based_on, s.slab_min_value, s.slab_max_value,
+               s.result_type, s.result_value, s.percentage_base, s.effective_from, s.effective_to, s.is_active
+          FROM salary_component_slab s
+         WHERE s.component_id = p_component_id
+         ORDER BY s.priority, s.slab_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_component_slab_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_component_slab_save`(
+    IN p_emp_id       VARCHAR(20),
+    IN p_component_id BIGINT,
+    IN p_slab_json    LONGTEXT
+)
+sv: BEGIN
+    DECLARE v_role       VARCHAR(30);
+    DECLARE v_ustat      VARCHAR(20);
+    DECLARE v_count      INT DEFAULT 0;
+    DECLARE v_msg        VARCHAR(500) DEFAULT NULL;
+    DECLARE v_structures INT DEFAULT 0;
+    DECLARE v_changed    INT DEFAULT 0;
+    DECLARE v_errors     INT DEFAULT 0;
+    DECLARE v_err        VARCHAR(500);
+    DECLARE v_findings   LONGTEXT DEFAULT NULL;
+    DECLARE v_impact     LONGTEXT DEFAULT NULL;
+    DECLARE v_notice     VARCHAR(500) DEFAULT NULL;
+    DECLARE v_audit_old  JSON DEFAULT NULL;    
+    DECLARE v_audit_new  JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Slabs could not be saved. Nothing was changed.') AS remarks,
+               p_component_id AS component_id, 0 AS slab_count, 0 AS employee_rows_changed,
+               NULL AS findings, NULL AS impact;
+    END;
+
+    SELECT MAX(user_category), MAX(status) INTO v_role, v_ustat
+      FROM user_login_details WHERE emp_id = p_emp_id;
+    IF v_role IS NULL OR LOWER(COALESCE(v_ustat, '')) <> 'active' OR UPPER(v_role) NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can manage slabs.' AS remarks,
+               p_component_id AS component_id, 0 AS slab_count, 0 AS employee_rows_changed,
+               NULL AS findings, NULL AS impact;
+        LEAVE sv;
+    END IF;
+
+    SET v_audit_old = hrms_audit_component_json(p_component_id);    
+    START TRANSACTION;
+    CALL hrms_component_slab_apply(p_emp_id, p_component_id, p_slab_json, v_count, v_msg);
+    IF v_msg IS NULL THEN
+        CALL hrms_component_change_finish(p_component_id, v_msg, v_findings, v_impact, v_structures, v_changed);
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, v_msg AS remarks, p_component_id AS component_id,
+               0 AS slab_count, 0 AS employee_rows_changed,
+               v_findings AS findings, v_impact AS impact;
+        LEAVE sv;
+    END IF;
+    
+    SET v_audit_new = hrms_audit_component_json(p_component_id);
+    CALL hrms_payroll_audit_add('SLAB', IF(v_count = 0, 'SLABS_REMOVED', 'SLABS_SAVED'), 'salary_component_slab',
+         p_component_id, NULL, NULL, NULL, NULL, v_audit_old, v_audit_new,
+         CONCAT(JSON_UNQUOTE(JSON_EXTRACT(v_audit_new, '$.code')), ': ', v_count, ' slab(s) saved. Employee amounts changed: ',
+                v_changed, '.'), p_emp_id);
+    CALL hrms_component_cycle_guard(p_emp_id, 'Slabs changed', v_notice);
+    COMMIT;
+    SELECT 'Y' AS status,
+           CONCAT(v_count, ' slab(s) saved. Employee amounts changed: ', v_changed, '.',
+                  IF(v_notice IS NULL, '', CONCAT(' ', v_notice))) AS remarks,
+           p_component_id AS component_id, v_count AS slab_count, v_changed AS employee_rows_changed,
+           v_findings AS findings, v_impact AS impact;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_create_employee_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_create_employee_salary`(
+    IN p_emp_id         VARCHAR(20),
+    IN p_target_emp_id  VARCHAR(20),
+    IN p_monthly_ctc    DECIMAL(12,2),
+    IN p_effective_from DATE,
+    IN p_esi            VARCHAR(1)
+)
+cs: BEGIN
+    DECLARE v_ok        TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_msg       VARCHAR(500) DEFAULT NULL;
+    DECLARE v_cover     VARCHAR(200);
+    DECLARE v_next      DATE;
+    DECLARE v_to        DATE;
+    DECLARE v_structure BIGINT;
+    DECLARE v_attached  INT DEFAULT 0;
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_errs      INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_err       VARCHAR(500);
+    DECLARE v_audit_old JSON DEFAULT NULL;    
+    DECLARE v_audit_new JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'The salary could not be created. Nothing was changed.') AS remarks, NULL AS structure_id;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can create salaries.';
+    ELSEIF NOT EXISTS (SELECT 1 FROM user_login_details WHERE emp_id = p_target_emp_id AND LOWER(status) = 'active') THEN
+        SET v_msg = CONCAT('Employee ', COALESCE(p_target_emp_id, ''), ' does not exist or is not active.');
+    ELSEIF p_monthly_ctc IS NULL OR p_monthly_ctc <= 0 THEN
+        SET v_msg = 'Monthly CTC must be more than 0.';
+    ELSEIF p_effective_from IS NULL THEN
+        SET v_msg = 'The date the salary applies from is required.';
+    ELSEIF UPPER(COALESCE(p_esi, '')) NOT IN ('Y', 'N') THEN
+        SET v_msg = 'Choose whether ESI is applicable.';
+    END IF;
+    IF v_msg IS NULL THEN
+        SELECT MIN(CONCAT(DATE_FORMAT(effective_from, '%d %b %Y'), ' to ', COALESCE(DATE_FORMAT(effective_to, '%d %b %Y'), 'onwards')))
+          INTO v_cover
+          FROM salary_structure
+         WHERE emp_id = p_target_emp_id AND structure_status = 'ACTIVE'
+           AND effective_from <= p_effective_from AND (effective_to IS NULL OR effective_to >= p_effective_from);
+        IF v_cover IS NOT NULL THEN
+            SET v_msg = CONCAT('This employee already has a salary for ', DATE_FORMAT(p_effective_from, '%d %b %Y'),
+                               ' (', v_cover, '). Use Edit to change it.');
+        END IF;
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, NULL AS structure_id;
+        LEAVE cs;
+    END IF;
+
+    
+    SELECT MIN(effective_from) INTO v_next FROM salary_structure
+     WHERE emp_id = p_target_emp_id AND structure_status = 'ACTIVE' AND effective_from > p_effective_from;
+    SET v_to = IF(v_next IS NULL, NULL, DATE_SUB(v_next, INTERVAL 1 DAY));
+
+    START TRANSACTION;
+    INSERT INTO salary_structure (emp_id, monthly_ctc, annual_ctc, effective_from, effective_to, structure_status, esi_applicable, created_by)
+    VALUES (p_target_emp_id, p_monthly_ctc, p_monthly_ctc * 12, p_effective_from, v_to, 'ACTIVE', UPPER(p_esi), p_emp_id);
+    SET v_structure = LAST_INSERT_ID();
+    CALL hrms_salary_attach_all(v_structure, v_attached);
+    CALL hrms_calculate_structure(v_structure, GREATEST(p_effective_from, LEAST(CURDATE(), COALESCE(v_to, CURDATE()))),
+                                  v_changed, v_errs, v_text);
+    IF v_errs > 0 THEN
+        ROLLBACK;
+        SELECT 'N' AS status, LEFT(CONCAT('Not created: ', COALESCE(v_text, 'the salary could not be calculated.')), 500) AS remarks,
+               NULL AS structure_id;
+        LEAVE cs;
+    END IF;
+    
+    SET v_audit_new = hrms_audit_salary_json(v_structure);
+    CALL hrms_payroll_audit_add('SALARY', 'CREATE', 'salary_structure', v_structure, p_target_emp_id, NULL, NULL, NULL,
+         NULL, v_audit_new,
+         CONCAT('Salary created: monthly CTC ', p_monthly_ctc, ' from ', DATE_FORMAT(p_effective_from, '%d %b %Y'),
+                ', ESI ', UPPER(p_esi), '.'), p_emp_id);
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           CONCAT('Salary created from ', DATE_FORMAT(p_effective_from, '%d %b %Y'),
+                  IF(v_to IS NULL, '', CONCAT(' to ', DATE_FORMAT(v_to, '%d %b %Y'))),
+                  ' with ', v_attached, ' components.') AS remarks,
+           v_structure AS structure_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_create_payroll_cycle_complete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_create_payroll_cycle_complete`(
+    IN p_requester_emp_id VARCHAR(20),
+    IN p_payroll_month TINYINT,
+    IN p_payroll_year SMALLINT,
+    IN p_payment_date DATE,
+    IN p_period_start DATE,
+    IN p_period_end DATE,
+    IN p_remarks VARCHAR(500),
+    IN p_cycle_code VARCHAR(50)
+)
+BEGIN
+    
+
+    DECLARE v_requester_found INT DEFAULT 0;
+    DECLARE v_employee_count INT DEFAULT 0;
+    DECLARE v_attendance_count INT DEFAULT 0;
+    DECLARE v_salary_count INT DEFAULT 0;
+    DECLARE v_duplicate_count INT DEFAULT 0;
+
+    DECLARE v_payroll_cycle_id BIGINT;
+    DECLARE v_payroll_run_id BIGINT;
+
+    DECLARE v_period_start DATE;
+    DECLARE v_period_end DATE;
+
+    DECLARE v_expected_start DATE;
+    DECLARE v_expected_end DATE;
+
+    DECLARE v_total_payroll_details INT DEFAULT 0;
+    DECLARE v_total_components INT DEFAULT 0;
+    DECLARE v_error_message VARCHAR(128) DEFAULT 'Payroll creation failed';
+    DECLARE v_original_time_zone VARCHAR(64) DEFAULT '+00:00';
+    DECLARE v_transaction_started TINYINT DEFAULT 0;
+    DECLARE v_engine_employees INT DEFAULT 0;
+    DECLARE v_engine_errors INT DEFAULT 0;
+    DECLARE v_engine_text VARCHAR(500);
+    DECLARE v_engine_signal VARCHAR(128);
+
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_message = MESSAGE_TEXT;
+
+        IF v_transaction_started = 1 THEN
+            ROLLBACK;
+            SET v_transaction_started = 0;
+        END IF;
+
+        SET SESSION time_zone = v_original_time_zone;
+
+        SELECT
+            'N' AS status,
+            COALESCE(v_error_message, 'Payroll creation failed') AS remarks,
+            NULL AS payroll_cycle_id,
+            TRIM(p_cycle_code) AS cycle_code,
+            NULL AS payroll_run_id,
+            p_payroll_month AS payroll_month,
+            p_payroll_year AS payroll_year,
+            p_period_start AS period_start,
+            p_period_end AS period_end,
+            p_payment_date AS payment_date,
+            v_employee_count AS active_employee_count,
+            v_total_payroll_details AS payroll_details_inserted,
+            v_total_components AS payroll_components_inserted,
+            'FAILED' AS payroll_run_status;
+    END;
+
+
+    
+    SET v_original_time_zone = @@SESSION.time_zone;
+    SET SESSION time_zone = '+05:30';
+
+    
+
+    IF p_requester_emp_id IS NULL
+       OR TRIM(p_requester_emp_id) = '' THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Requester employee ID is required';
+
+    END IF;
+
+
+    IF p_payroll_month IS NULL
+       OR p_payroll_month NOT BETWEEN 1 AND 12 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Invalid payroll month';
+
+    END IF;
+
+
+    IF p_payroll_year IS NULL
+       OR p_payroll_year < 2000
+       OR p_payroll_year > 2100 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Invalid payroll year';
+
+    END IF;
+
+
+    IF p_cycle_code IS NULL
+       OR TRIM(p_cycle_code) = '' THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll cycle code is required';
+
+    END IF;
+
+
+    IF p_period_start IS NULL
+       OR p_period_end IS NULL THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll period start and end dates are required';
+
+    END IF;
+
+
+    IF p_period_start > p_period_end THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll start date cannot be after end date';
+
+    END IF;
+
+
+    
+
+    SELECT COUNT(*)
+    INTO v_requester_found
+    FROM user_login_details
+    WHERE emp_id = p_requester_emp_id
+      AND status = 'ACTIVE'
+      AND user_category IN ('ADMIN', 'HR');
+
+
+    IF v_requester_found = 0 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Access denied: Active ADMIN or HR account required';
+
+    END IF;
+
+
+    
+
+    SET v_expected_start = DATE_SUB(
+        STR_TO_DATE(
+            CONCAT(
+                p_payroll_year,
+                '-',
+                LPAD(p_payroll_month, 2, '0'),
+                '-25'
+            ),
+            '%Y-%m-%d'
+        ),
+        INTERVAL 1 MONTH
+    );
+
+
+    SET v_expected_end = STR_TO_DATE(
+        CONCAT(
+            p_payroll_year,
+            '-',
+            LPAD(p_payroll_month, 2, '0'),
+            '-24'
+        ),
+        '%Y-%m-%d'
+    );
+
+
+    IF p_period_start <> v_expected_start
+       OR p_period_end <> v_expected_end THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Invalid payroll period: dates must follow the 25th-to-24th cycle';
+
+    END IF;
+
+
+    SET v_period_start = p_period_start;
+    SET v_period_end = p_period_end;
+
+
+    
+
+    SELECT COUNT(*)
+    INTO v_duplicate_count
+    FROM payroll_cycles
+    WHERE payroll_month = p_payroll_month
+      AND payroll_year = p_payroll_year;
+
+
+    IF v_duplicate_count > 0 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll cycle already exists for this month and year';
+
+    END IF;
+
+
+    SELECT COUNT(*)
+    INTO v_duplicate_count
+    FROM payroll_cycles
+    WHERE cycle_code = TRIM(p_cycle_code);
+
+
+    IF v_duplicate_count > 0 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll cycle code already exists';
+
+    END IF;
+
+
+    
+
+    SELECT COUNT(DISTINCT emp_id)
+    INTO v_employee_count
+    FROM user_login_details
+    WHERE status = 'ACTIVE'
+      AND emp_id IS NOT NULL
+      AND TRIM(emp_id) <> '';
+
+
+    IF v_employee_count = 0 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'No active employees found';
+
+    END IF;
+
+
+    
+
+    SELECT COUNT(DISTINCT u.emp_id)
+    INTO v_attendance_count
+    FROM user_login_details u
+    WHERE u.status = 'ACTIVE'
+      AND u.emp_id IS NOT NULL
+      AND TRIM(u.emp_id) <> ''
+      AND EXISTS (
+          SELECT 1
+          FROM payroll_attendance_summary a
+          WHERE a.emp_id = u.emp_id
+            AND a.payroll_month = p_payroll_month
+            AND a.payroll_year = p_payroll_year
+            AND a.is_finalized = 'Y'
+      );
+
+
+    IF v_attendance_count <> v_employee_count THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Cannot create payroll: Some active employees have missing or unfinalized attendance';
+
+    END IF;
+
+
+    
+
+    SELECT COUNT(DISTINCT u.emp_id)
+    INTO v_salary_count
+    FROM user_login_details u
+    WHERE u.status = 'ACTIVE'
+      AND u.emp_id IS NOT NULL
+      AND TRIM(u.emp_id) <> ''
+      AND EXISTS (
+          SELECT 1
+          FROM salary_structure ss
+          WHERE ss.emp_id = u.emp_id
+            AND ss.structure_status = 'ACTIVE'
+            AND ss.effective_from <= v_period_end
+            AND (
+                ss.effective_to IS NULL
+                OR ss.effective_to >= v_period_start
+            )
+      );
+
+
+    IF v_salary_count <> v_employee_count THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Cannot create payroll: Some active employees do not have an applicable active salary structure';
+
+    END IF;
+
+
+    
+
+    START TRANSACTION;
+    SET v_transaction_started = 1;
+
+
+    
+
+    INSERT INTO payroll_cycles (
+        cycle_code,
+        payroll_month,
+        payroll_year,
+        period_start,
+        period_end,
+        payment_date,
+        cycle_status,
+        created_by,
+        remarks
+    )
+    VALUES (
+        TRIM(p_cycle_code),
+        p_payroll_month,
+        p_payroll_year,
+        v_period_start,
+        v_period_end,
+        p_payment_date,
+        'OPEN',
+        p_requester_emp_id,
+        NULLIF(TRIM(p_remarks), '')
+    );
+
+
+    SET v_payroll_cycle_id = LAST_INSERT_ID();
+
+
+    
+
+    INSERT INTO payroll_runs (
+        payroll_cycle_id,
+        run_number,
+        run_type,
+        run_status,
+        total_employees,
+        created_by
+    )
+    VALUES (
+        v_payroll_cycle_id,
+        1,
+        'REGULAR',
+        'DRAFT',
+        v_employee_count,
+        p_requester_emp_id
+    );
+
+
+    SET v_payroll_run_id = LAST_INSERT_ID();
+
+
+    
+
+    INSERT INTO employee_payroll_details (
+        payroll_run_id,
+        emp_id,
+        structure_id,
+        monthly_ctc,
+        annual_ctc,
+        total_days,
+        payable_days,
+        paid_leave_days,
+        unpaid_leave_days,
+        absent_days,
+        ctc1,
+        gross_earnings,
+        total_deductions,
+        employer_contributions,
+        net_pay,
+        calculation_version,
+        calculation_remarks,
+        employee_payroll_status
+    )
+    SELECT
+        v_payroll_run_id,
+        u.emp_id,
+        ss.structure_id,
+        ss.monthly_ctc,
+        ss.annual_ctc,
+        a.total_days,
+        hrms_pay_days(a.unpaid_days),   
+        0,
+        a.unpaid_days,
+        a.absent_days,
+
+        ROUND(
+            ss.monthly_ctc
+            * hrms_pay_days(a.unpaid_days)
+            / 30,
+            2
+        ),
+
+        0.00,
+        0.00,
+        0.00,
+        0.00,
+
+        1,
+
+        CONCAT(
+            'Payroll created using a fixed 30-day salary basis. ',
+            'Payable days capped at 30. Attendance finalized for ',
+            LPAD(p_payroll_month, 2, '0'),
+            '/',
+            p_payroll_year
+        ),
+
+        'CALCULATED'
+
+    FROM (
+        SELECT DISTINCT emp_id
+        FROM user_login_details
+        WHERE status = 'ACTIVE'
+          AND emp_id IS NOT NULL
+          AND TRIM(emp_id) <> ''
+    ) u
+
+    INNER JOIN payroll_attendance_summary a
+        ON a.emp_id = u.emp_id
+       AND a.payroll_month = p_payroll_month
+       AND a.payroll_year = p_payroll_year
+       AND a.is_finalized = 'Y'
+
+    INNER JOIN salary_structure ss
+        ON ss.emp_id = u.emp_id
+       AND ss.structure_status = 'ACTIVE'
+       AND ss.effective_from <= v_period_end
+       AND (
+            ss.effective_to IS NULL
+            OR ss.effective_to >= v_period_start
+       );
+
+
+    SET v_total_payroll_details = ROW_COUNT();
+
+
+    
+
+    
+    
+    CALL hrms_calculate_payroll_run(v_payroll_run_id, v_engine_employees, v_engine_errors, v_engine_text);
+    IF v_engine_errors > 0 THEN
+        SET v_engine_signal = LEFT(CONCAT('Payroll not created: ', COALESCE(v_engine_text, 'calculation failed')), 128);
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = v_engine_signal;
+    END IF;
+    SELECT COUNT(*)
+    INTO v_total_components
+    FROM employee_payroll_component_details epc
+    INNER JOIN employee_payroll_details epd
+        ON epd.payroll_detail_id = epc.payroll_detail_id
+    WHERE epd.payroll_run_id = v_payroll_run_id;
+    UPDATE payroll_runs pr
+
+    INNER JOIN (
+        SELECT
+            payroll_run_id,
+
+            COUNT(*) AS total_employees,
+
+            ROUND(
+                SUM(gross_earnings),
+                2
+            ) AS total_earnings,
+
+            ROUND(
+                SUM(total_deductions),
+                2
+            ) AS total_deductions,
+
+            ROUND(
+                SUM(employer_contributions),
+                2
+            ) AS total_employer_contributions,
+
+            ROUND(
+                SUM(net_pay),
+                2
+            ) AS total_net_pay
+
+        FROM employee_payroll_details
+
+        WHERE payroll_run_id = v_payroll_run_id
+
+        GROUP BY payroll_run_id
+    ) totals
+        ON totals.payroll_run_id = pr.payroll_run_id
+
+    SET
+        pr.total_employees = totals.total_employees,
+
+        pr.total_earnings = totals.total_earnings,
+
+        pr.total_deductions = totals.total_deductions,
+
+        pr.total_employer_contributions =
+            totals.total_employer_contributions,
+
+        pr.total_net_pay = totals.total_net_pay,
+
+        pr.run_status = 'CALCULATED'
+
+    WHERE pr.payroll_run_id = v_payroll_run_id;
+
+
+    
+
+    IF v_total_payroll_details <> v_employee_count THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll detail count mismatch; transaction cancelled';
+
+    END IF;
+
+
+    
+
+    UPDATE employee_payroll_details
+    SET employee_payroll_status = 'APPROVED'
+    WHERE payroll_run_id = v_payroll_run_id;
+
+    UPDATE payroll_runs
+    SET run_status = 'APPROVED',
+        calculated_by = TRIM(p_requester_emp_id),
+        calculated_at = NOW(),
+        approved_by = TRIM(p_requester_emp_id),
+        approved_at = NOW()
+    WHERE payroll_run_id = v_payroll_run_id;
+
+    
+
+    
+
+    COMMIT;
+    SET v_transaction_started = 0;
+
+
+    
+
+    SET SESSION time_zone = v_original_time_zone;
+
+    SELECT
+        'Y' AS status,
+        'Payroll calculated and directly approved successfully' AS remarks,
+        v_payroll_cycle_id AS payroll_cycle_id,
+        TRIM(p_cycle_code) AS cycle_code,
+        v_payroll_run_id AS payroll_run_id,
+        p_payroll_month AS payroll_month,
+        p_payroll_year AS payroll_year,
+        v_period_start AS period_start,
+        v_period_end AS period_end,
+        p_payment_date AS payment_date,
+        v_employee_count AS active_employee_count,
+        v_total_payroll_details AS payroll_details_inserted,
+        v_total_components AS payroll_components_inserted,
+        'APPROVED' AS payroll_run_status;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_employees_without_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_employees_without_salary`(IN p_emp_id VARCHAR(20))
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salaries.' AS remarks, NULL AS emp_id;
+    ELSE
+        SELECT 'Y' AS status, '' AS remarks, u.emp_id,
+               (SELECT MAX(d.emp_name) FROM user_details d WHERE d.emp_id = u.emp_id) AS emp_name,
+               (SELECT MAX(d.joining_date) FROM user_details d WHERE d.emp_id = u.emp_id) AS joining_date,
+               (SELECT MAX(dm.department_name) FROM user_details d JOIN department_master dm ON dm.department_id = d.department
+                 WHERE d.emp_id = u.emp_id) AS department,
+               (SELECT MAX(dg.designation_name) FROM user_details d JOIN designation_master dg ON dg.designation_id = d.designation
+                 WHERE d.emp_id = u.emp_id) AS designation
+          FROM (SELECT DISTINCT TRIM(emp_id) AS emp_id FROM user_login_details
+                 WHERE LOWER(status) = 'active' AND emp_id IS NOT NULL AND TRIM(emp_id) <> '') u
+         WHERE NOT EXISTS (SELECT 1 FROM salary_structure s WHERE s.emp_id = u.emp_id AND s.structure_status = 'ACTIVE')
+         ORDER BY u.emp_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_employee_dropdown` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_employee_dropdown`()
+BEGIN
+    SELECT emp_id, emp_name
+      FROM user_details;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_employee_payslip_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_employee_payslip_list`(
+    IN p_requester_emp_id VARCHAR(20),
+    IN p_target_emp_id    VARCHAR(20),
+    IN p_month            VARCHAR(20),
+    IN p_year             VARCHAR(10)
+)
+pl: BEGIN
+    DECLARE v_category VARCHAR(50);
+    DECLARE v_status   VARCHAR(20);
+    DECLARE v_target   VARCHAR(20);
+    DECLARE v_month    INT DEFAULT NULL;
+    DECLARE v_from     INT DEFAULT NULL;   
+    DECLARE v_to       INT DEFAULT NULL;
+    DECLARE v_m        VARCHAR(20);
+    DECLARE v_y        VARCHAR(10);
+    DECLARE v_n        INT DEFAULT 0;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_requester_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_category IS NULL OR v_category NOT IN ('ADMIN', 'HR', 'EMP') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN, HR or EMP users can view payslips.' AS remarks;
+        LEAVE pl;
+    END IF;
+
+    SET v_target = NULLIF(TRIM(p_target_emp_id), '');
+    IF v_category = 'EMP' THEN
+        SET v_target = TRIM(p_requester_emp_id);
+    END IF;
+
+    SET v_m = UPPER(TRIM(COALESCE(p_month, '')));
+    IF v_m NOT IN ('', 'ALL') THEN
+        IF v_m REGEXP '^[0-9]{1,2}$' THEN
+            SET v_month = CAST(v_m AS UNSIGNED);
+        ELSE
+            SET v_month = FIELD(LEFT(v_m, 3), 'JAN','FEB','MAR','APR','MAY','JUN',
+                                              'JUL','AUG','SEP','OCT','NOV','DEC');
+        END IF;
+        IF v_month NOT BETWEEN 1 AND 12 THEN
+            SELECT 'N' AS status, 'Invalid month.' AS remarks;
+            LEAVE pl;
+        END IF;
+    END IF;
+
+    SET v_y = TRIM(COALESCE(p_year, ''));
+    IF v_y REGEXP '^[0-9]{4}-[0-9]{2}$' THEN                 
+        SET v_from = CAST(LEFT(v_y, 4) AS UNSIGNED) * 12 + 4;
+        SET v_to   = v_from + 11;
+    ELSEIF v_y REGEXP '^[0-9]{4}$' THEN                      
+        SET v_from = CAST(v_y AS UNSIGNED) * 12 + 1;
+        SET v_to   = v_from + 11;
+    ELSEIF v_y <> '' THEN
+        SELECT 'N' AS status, 'Invalid year.' AS remarks;
+        LEAVE pl;
+    END IF;
+
+    SELECT COUNT(*) INTO v_n
+      FROM employee_payslips ps
+      JOIN employee_payroll_details epd ON epd.payroll_detail_id = ps.payroll_detail_id
+      JOIN payroll_runs pr ON pr.payroll_run_id = epd.payroll_run_id
+      JOIN payroll_cycles pc ON pc.payroll_cycle_id = pr.payroll_cycle_id
+     WHERE ps.payslip_status <> 'REVOKED'
+       AND epd.payment_status = 'PAID'
+       AND (v_target IS NULL OR epd.emp_id = v_target)
+       AND (v_month IS NULL OR pc.payroll_month = v_month)
+       AND (v_from IS NULL OR pc.payroll_year * 12 + pc.payroll_month BETWEEN v_from AND v_to);
+
+    IF v_n = 0 THEN
+        SELECT 'N' AS status, 'No payslips found for the selected period.' AS remarks;
+        LEAVE pl;
+    END IF;
+
+    SELECT 'Y' AS status,
+           'Payslips retrieved successfully' AS remarks,
+           epd.emp_id,
+           ud.emp_name,
+           dm.department_name,
+           ELT(pc.payroll_month, 'January','February','March','April','May','June','July',
+               'August','September','October','November','December') AS month,
+           pc.payroll_month AS month_no,
+           pc.payroll_year AS year,
+           pc.cycle_code,
+           ps.payslip_number,
+           epd.payroll_detail_id,
+           epd.net_pay,
+           epd.paid_at
+      FROM employee_payslips ps
+      JOIN employee_payroll_details epd ON epd.payroll_detail_id = ps.payroll_detail_id
+      JOIN payroll_runs pr ON pr.payroll_run_id = epd.payroll_run_id
+      JOIN payroll_cycles pc ON pc.payroll_cycle_id = pr.payroll_cycle_id
+      LEFT JOIN user_details ud ON ud.emp_id = epd.emp_id
+      LEFT JOIN department_master dm ON dm.department_id = ud.department
+     WHERE ps.payslip_status <> 'REVOKED'
+       AND epd.payment_status = 'PAID'
+       AND (v_target IS NULL OR epd.emp_id = v_target)
+       AND (v_month IS NULL OR pc.payroll_month = v_month)
+       AND (v_from IS NULL OR pc.payroll_year * 12 + pc.payroll_month BETWEEN v_from AND v_to)
+     ORDER BY pc.payroll_year DESC, pc.payroll_month DESC, epd.emp_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_engine_load_vars` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_engine_load_vars`(
+    IN p_structure_id BIGINT,
+    IN p_ctc1         DECIMAL(14,2),
+    IN p_payable_days DECIMAL(5,2)
+)
+BEGIN
+    DECLARE v_found  INT DEFAULT 0;
+    DECLARE v_ctc    DECIMAL(18,4) DEFAULT 50000;
+    DECLARE v_annual DECIMAL(18,4) DEFAULT 600000;
+    DECLARE v_esi    VARCHAR(5) DEFAULT 'N';
+    DECLARE v_std    DECIMAL(18,4) DEFAULT 0;
+    DECLARE v_days   DECIMAL(9,4) DEFAULT 30;
+
+    SELECT COUNT(*), COALESCE(MAX(monthly_ctc), 50000), COALESCE(MAX(annual_ctc), 600000), COALESCE(MAX(esi_applicable), 'N')
+      INTO v_found, v_ctc, v_annual, v_esi
+      FROM salary_structure WHERE structure_id = p_structure_id;
+    SET v_days = COALESCE(p_payable_days, 30);
+
+    SELECT COALESCE(MAX(t.monthly_amount), 0) INTO v_std
+      FROM employee_salary_structure_totals t
+      JOIN salary_component_master m ON m.component_id = t.component_id
+     WHERE t.structure_id = p_structure_id AND UPPER(m.component_code) = 'GROSS';
+    IF v_std = 0 THEN
+        SELECT COALESCE(SUM(e.monthly_amount), 0) INTO v_std
+          FROM employee_salary_structure e
+          JOIN salary_component_master m ON m.component_id = e.component_id
+         WHERE e.structure_id = p_structure_id
+           AND m.component_type = 'EARNING' AND m.is_active = 1 AND m.calculation_scope = 'COMPONENT';
+    END IF;
+
+    DELETE FROM tmp_hrms_formula_vars;
+
+    
+    INSERT IGNORE INTO tmp_hrms_formula_vars (var_code, var_value, var_type, var_scope, var_order, component_id)
+    SELECT UPPER(m.component_code), 0, m.component_type, m.calculation_scope, m.calculation_order, m.component_id
+      FROM salary_component_master m;
+
+    
+    INSERT IGNORE INTO tmp_hrms_formula_vars (var_code, var_value, var_type, var_scope, var_order, component_id) VALUES
+        ('CTC',                         v_ctc,                   'BUILTIN', 'BUILTIN', 0, NULL),
+        ('CTC1',                        COALESCE(p_ctc1, v_ctc), 'BUILTIN', 'BUILTIN', 0, NULL),
+        ('ANNUAL_CTC',                  v_annual,                'BUILTIN', 'BUILTIN', 0, NULL),
+        ('ESI_APPLICABLE',              IF(v_esi = 'Y', 1, 0),   'BUILTIN', 'BUILTIN', 0, NULL),
+        ('PAY_DAYS',                    30,                      'BUILTIN', 'BUILTIN', 0, NULL),
+        ('PAYABLE_DAYS',                v_days,                  'BUILTIN', 'BUILTIN', 0, NULL),
+        ('LOP_DAYS',                    GREATEST(30 - v_days, 0),'BUILTIN', 'BUILTIN', 0, NULL),
+        ('MANUAL_AMOUNT',               0,                       'BUILTIN', 'BUILTIN', 0, NULL),
+        ('ESI_WAGE',                    0,                       'BUILTIN', 'BUILTIN', 0, NULL),
+        ('STANDARD_ESI_WAGE',           IF(p_ctc1 IS NULL, 0, v_std), 'BUILTIN',
+                                        IF(p_ctc1 IS NULL, 'FOLLOW_GROSS', 'BUILTIN'), 0, NULL),
+        ('GROSS',                       0, 'BUILTIN_TOTAL', 'BUILTIN', 0, NULL),
+        ('TOTAL_DEDUCTIONS',            0, 'BUILTIN_TOTAL', 'BUILTIN', 0, NULL),
+        ('TOTAL_EMPLOYER_CONTRIBUTION', 0, 'BUILTIN_TOTAL', 'BUILTIN', 0, NULL);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_engine_prepare` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_engine_prepare`()
+BEGIN
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_formula_vars (
+        var_code     VARCHAR(40) NOT NULL PRIMARY KEY,
+        var_value    DECIMAL(18,4) NOT NULL DEFAULT 0,
+        var_type     VARCHAR(30) NULL,
+        var_scope    VARCHAR(20) NULL,
+        var_order    INT NULL,
+        component_id BIGINT NULL
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_formula_tokens (
+        token VARCHAR(64) NOT NULL PRIMARY KEY
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_calc (
+        cid         BIGINT NOT NULL PRIMARY KEY,
+        ecid        BIGINT NULL,
+        code        VARCHAR(40) NOT NULL,
+        ctype       VARCHAR(30) NOT NULL,
+        scope       VARCHAR(20) NOT NULL,
+        calc_order  INT NOT NULL,
+        eff_calc    VARCHAR(20) NOT NULL,
+        eff_value   DECIMAL(18,4) NOT NULL DEFAULT 0,
+        eff_base    VARCHAR(40) NOT NULL,
+        eff_formula TEXT NULL,
+        eff_slab    TINYINT NOT NULL DEFAULT 0,
+        eff_manual  TINYINT NOT NULL DEFAULT 0,
+        min_amt     DECIMAL(12,2) NULL,
+        max_amt     DECIMAL(12,2) NULL,
+        elig_param  VARCHAR(50) NULL,
+        elig_value  VARCHAR(10) NULL,
+        rounding    INT NOT NULL DEFAULT 2,
+        stored_amt  DECIMAL(14,2) NOT NULL DEFAULT 0,
+        manual_amt  DECIMAL(14,2) NOT NULL DEFAULT 0,
+        overridden  TINYINT NOT NULL DEFAULT 0,
+        new_amt     DECIMAL(18,4) NOT NULL DEFAULT 0
+    );
+    
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_slab_gap (
+        cid      BIGINT NOT NULL PRIMARY KEY,
+        is_gap   TINYINT NOT NULL DEFAULT 0
+    );
+    
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_gap_list (
+        structure_id BIGINT NOT NULL,
+        cid          BIGINT NOT NULL,
+        PRIMARY KEY (structure_id, cid)
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_struct_list (
+        structure_id BIGINT NOT NULL PRIMARY KEY
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_hrms_detail_list (
+        payroll_detail_id BIGINT NOT NULL PRIMARY KEY
+    );
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_engine_refresh_totals` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_engine_refresh_totals`(IN p_exclude_component_id BIGINT)
+BEGIN
+    DECLARE v_n     INT DEFAULT 0;
+    DECLARE v_gross DECIMAL(18,4) DEFAULT 0;
+    DECLARE v_ded   DECIMAL(18,4) DEFAULT 0;
+    DECLARE v_er    DECIMAL(18,4) DEFAULT 0;
+    DECLARE v_g     DECIMAL(18,4) DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_n FROM tmp_hrms_formula_vars WHERE var_type = 'BUILTIN_TOTAL';
+    IF v_n > 0 THEN
+        SELECT COALESCE(SUM(IF(var_type = 'EARNING', var_value, 0)), 0),
+               COALESCE(SUM(IF(var_type = 'DEDUCTION', var_value, 0)), 0),
+               COALESCE(SUM(IF(var_type = 'EMPLOYER_CONTRIBUTION', var_value, 0)), 0)
+          INTO v_gross, v_ded, v_er
+          FROM tmp_hrms_formula_vars
+         WHERE var_scope = 'COMPONENT'
+           AND (p_exclude_component_id IS NULL OR component_id <> p_exclude_component_id);
+        UPDATE tmp_hrms_formula_vars
+           SET var_value = CASE var_code WHEN 'GROSS' THEN v_gross
+                                         WHEN 'TOTAL_DEDUCTIONS' THEN v_ded
+                                         ELSE v_er END
+         WHERE var_type = 'BUILTIN_TOTAL';
+    END IF;
+
+    SELECT COALESCE(MAX(var_value), 0) INTO v_g FROM tmp_hrms_formula_vars WHERE var_code = 'GROSS';
+    UPDATE tmp_hrms_formula_vars
+       SET var_value = v_g
+     WHERE var_code = 'ESI_WAGE'
+        OR (var_code = 'STANDARD_ESI_WAGE' AND var_scope = 'FOLLOW_GROSS');
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_engine_run` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_engine_run`(
+    IN  p_structure_id BIGINT,
+    IN  p_ctc1         DECIMAL(14,2),
+    IN  p_payable_days DECIMAL(5,2),
+    IN  p_emp_id       VARCHAR(20),
+    IN  p_month        INT,
+    IN  p_year         INT,
+    IN  p_on_date      DATE,
+    OUT p_passes       INT,
+    OUT p_errors       INT,
+    OUT p_error_text   VARCHAR(500)
+)
+BEGIN
+    DECLARE v_done       INT DEFAULT 0;
+    DECLARE v_cid        BIGINT;
+    DECLARE v_code       VARCHAR(40);
+    DECLARE v_calc       VARCHAR(20);
+    DECLARE v_value      DECIMAL(18,4);
+    DECLARE v_base       VARCHAR(40);
+    DECLARE v_formula    TEXT;
+    DECLARE v_slab       TINYINT;
+    DECLARE v_manual     TINYINT;
+    DECLARE v_min        DECIMAL(12,2);
+    DECLARE v_max        DECIMAL(12,2);
+    DECLARE v_eparam     VARCHAR(50);
+    DECLARE v_evalue     VARCHAR(10);
+    DECLARE v_rounding   INT;
+    DECLARE v_stored     DECIMAL(14,2);
+    DECLARE v_manual_amt DECIMAL(14,2);
+    DECLARE v_overridden TINYINT;
+    DECLARE v_esi        VARCHAR(5) DEFAULT 'N';
+    DECLARE v_new        DECIMAL(18,4);
+    DECLARE v_prev       DECIMAL(18,4);
+    DECLARE v_delta      DECIMAL(18,4);
+    DECLARE v_delta_code VARCHAR(40);
+    DECLARE v_limits     TINYINT;
+    DECLARE v_bad        VARCHAR(500);
+    DECLARE v_n          INT;
+    DECLARE v_base_val   DECIMAL(18,4);
+    DECLARE v_matched    TINYINT;
+    DECLARE v_st         CHAR(1);
+    DECLARE v_rm         VARCHAR(500);
+    DECLARE v_date       DATE;
+    DECLARE cur CURSOR FOR
+        SELECT cid, code, eff_calc, eff_value, eff_base, eff_formula, eff_slab, eff_manual,
+               min_amt, max_amt, elig_param, elig_value, rounding, stored_amt, manual_amt, overridden
+          FROM tmp_hrms_calc
+         ORDER BY calc_order, cid;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = 1;
+
+    SET p_passes = 0;
+    SET p_errors = 0;
+    SET p_error_text = NULL;
+    SET v_date = COALESCE(p_on_date, CURDATE());
+
+    CALL hrms_engine_prepare();
+    CALL hrms_engine_load_vars(p_structure_id, p_ctc1, p_payable_days);
+    SELECT COALESCE(MAX(esi_applicable), 'N') INTO v_esi FROM salary_structure WHERE structure_id = p_structure_id;
+
+    DELETE FROM tmp_hrms_calc;
+    DELETE FROM tmp_hrms_slab_gap;
+    INSERT INTO tmp_hrms_calc
+        (cid, ecid, code, ctype, scope, calc_order, eff_calc, eff_value, eff_base, eff_formula, eff_slab, eff_manual,
+         min_amt, max_amt, elig_param, elig_value, rounding, stored_amt, manual_amt, overridden, new_amt)
+    SELECT m.component_id, e.employee_component_id, UPPER(m.component_code), m.component_type,
+           m.calculation_scope, m.calculation_order,
+           CASE WHEN COALESCE(e.is_overridden, 0) = 1 THEN e.calculation_type ELSE m.calculation_type END,
+           CASE WHEN COALESCE(e.is_overridden, 0) = 1 THEN COALESCE(e.component_value, 0) ELSE COALESCE(m.percentage_value, 0) END,
+           UPPER(COALESCE(CASE WHEN COALESCE(e.is_overridden, 0) = 1 THEN e.percentage_base ELSE m.percentage_base END, 'NONE')),
+           CASE WHEN COALESCE(e.is_overridden, 0) = 1 THEN e.formula_expression ELSE m.formula_expression END,
+           CASE WHEN COALESCE(e.is_overridden, 0) = 1 THEN 0
+                WHEN m.is_slab = 1 AND EXISTS (SELECT 1 FROM salary_component_slab s
+                                                WHERE s.component_id = m.component_id AND s.is_active = 1) THEN 1
+                ELSE 0 END,
+           CASE WHEN COALESCE(e.is_overridden, 0) = 1 THEN IF(e.calculation_type = 'MANUAL', 1, 0)
+                ELSE IF(m.is_manual = 1 OR m.calculation_type = 'MANUAL', 1, 0) END,
+           m.minimum_amount, m.maximum_amount, m.eligibility_parameter, m.eligibility_required_value,
+           COALESCE(m.rounding_precision, 2),
+           COALESCE(e.monthly_amount, t.monthly_amount, 0),
+           COALESCE(i.amount, e.monthly_amount, 0),
+           COALESCE(e.is_overridden, 0),
+           0
+      FROM salary_component_master m
+      LEFT JOIN employee_salary_structure e
+             ON e.component_id = m.component_id AND e.structure_id = p_structure_id
+      LEFT JOIN employee_salary_structure_totals t
+             ON t.component_id = m.component_id AND t.structure_id = p_structure_id
+      LEFT JOIN payroll_manual_inputs i
+             ON i.component_id = m.component_id AND i.emp_id = p_emp_id
+            AND i.payroll_month = p_month AND i.payroll_year = p_year
+     WHERE m.is_active = 1
+       AND (m.calculation_scope = 'AGGREGATE' OR e.employee_component_id IS NOT NULL);
+
+    passes: LOOP
+        SET p_passes = p_passes + 1;
+        SET v_delta = 0;
+
+        OPEN cur;
+        comp: LOOP
+            SET v_done = 0;
+            FETCH cur INTO v_cid, v_code, v_calc, v_value, v_base, v_formula, v_slab, v_manual,
+                           v_min, v_max, v_eparam, v_evalue, v_rounding, v_stored, v_manual_amt, v_overridden;
+            IF v_done = 1 THEN
+                LEAVE comp;
+            END IF;
+
+            CALL hrms_engine_refresh_totals(v_cid);
+            SET v_new = NULL;
+            SET v_bad = NULL;
+            SET v_limits = 0;
+
+            IF v_manual = 1 THEN
+                SET v_new = v_manual_amt;
+            ELSEIF TRIM(COALESCE(v_eparam, '')) <> ''
+               AND UPPER(v_eparam) IN ('EMPLOYEE_ESI_ELIGIBLE', 'ESI_APPLICABLE')
+               AND UPPER(v_esi) <> UPPER(COALESCE(NULLIF(TRIM(v_evalue), ''), 'Y')) THEN
+                SET v_new = 0;
+            ELSEIF v_slab = 1 THEN
+                CALL hrms_slab_resolve(v_cid, v_date, v_new, v_matched);
+                
+                
+                IF v_matched = 0 THEN
+                    SET v_new = 0;
+                    SET v_bad = CONCAT('no slab is valid on ', DATE_FORMAT(v_date, '%d %b %Y'),
+                                       '. Add a slab that covers this date.');
+                END IF;
+                INSERT INTO tmp_hrms_slab_gap (cid, is_gap) VALUES (v_cid, IF(v_matched = 2, 1, 0))
+                    ON DUPLICATE KEY UPDATE is_gap = IF(v_matched = 2, 1, 0);
+                SET v_limits = 1;
+            ELSEIF v_calc IN ('FORMULA', 'STATUTORY') AND TRIM(COALESCE(v_formula, '')) <> '' THEN
+                UPDATE tmp_hrms_formula_vars SET var_value = v_manual_amt WHERE var_code = 'MANUAL_AMOUNT';
+                CALL hrms_formula_evaluate(v_formula, 'EVAL', v_new, v_st, v_rm);
+                IF v_st = 'Y' THEN
+                    SET v_limits = 1;
+                ELSEIF v_overridden = 1 THEN
+                    SET v_new = v_stored;
+                ELSE
+                    SET v_new = 0;
+                    SET v_bad = v_rm;
+                END IF;
+            ELSEIF v_calc = 'PERCENTAGE' THEN
+                SELECT COUNT(*), COALESCE(MAX(var_value), 0) INTO v_n, v_base_val
+                  FROM tmp_hrms_formula_vars WHERE var_code = v_base;
+                IF v_n > 0 THEN
+                    SET v_new = v_base_val * v_value / 100;
+                    SET v_limits = 1;
+                ELSEIF v_overridden = 1 THEN
+                    SET v_new = v_stored;
+                ELSE
+                    SET v_new = 0;
+                    SET v_bad = CONCAT('"Based On" name ', v_base, ' is not known.');
+                END IF;
+            ELSEIF v_calc = 'FIXED' THEN
+                SET v_new = v_value;
+                SET v_limits = 1;
+            ELSE
+                SET v_new = v_stored;
+            END IF;
+
+            IF v_limits = 1 THEN
+                IF v_min IS NOT NULL AND v_new < v_min THEN SET v_new = v_min; END IF;
+                IF v_max IS NOT NULL AND v_new > v_max THEN SET v_new = v_max; END IF;
+            END IF;
+            SET v_new = ROUND(COALESCE(v_new, 0), LEAST(GREATEST(COALESCE(v_rounding, 2), 0), 2));
+
+            IF v_bad IS NOT NULL THEN
+                SET p_errors = p_errors + 1;
+                IF p_error_text IS NULL THEN
+                    SET p_error_text = LEFT(CONCAT(v_code, ': ', v_bad), 500);
+                END IF;
+            END IF;
+
+            SELECT COALESCE(MAX(var_value), 0) INTO v_prev FROM tmp_hrms_formula_vars WHERE var_code = v_code;
+            IF ABS(v_new - v_prev) > v_delta THEN
+                SET v_delta = ABS(v_new - v_prev);
+                SET v_delta_code = v_code;
+            END IF;
+            UPDATE tmp_hrms_formula_vars SET var_value = v_new WHERE var_code = v_code;
+        END LOOP comp;
+        CLOSE cur;
+
+        IF p_errors > 0 OR v_delta < 0.005 THEN
+            LEAVE passes;
+        END IF;
+        
+        
+        
+        IF p_passes >= 6 AND v_delta < 0.05 THEN
+            LEAVE passes;
+        END IF;
+        IF p_passes >= 30 THEN
+            SET p_errors = p_errors + 1;
+            SET p_error_text = CONCAT('The amounts never settle: ', COALESCE(v_delta_code, '?'), ' still changes by ',
+                                      ROUND(v_delta, 2), ' after 30 passes. Components refer to each other in a circle.');
+            LEAVE passes;
+        END IF;
+    END LOOP passes;
+
+    UPDATE tmp_hrms_calc c
+      JOIN tmp_hrms_formula_vars v ON v.var_code = c.code
+       SET c.new_amt = v.var_value;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_formula_check` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_formula_check`(
+    IN  p_component_id      BIGINT,
+    IN  p_component_code    VARCHAR(30),
+    IN  p_calculation_order INT,
+    IN  p_formula           TEXT,
+    OUT p_status            CHAR(1),
+    OUT p_remarks           VARCHAR(500),
+    OUT p_sample            DECIMAL(18,4)
+)
+chk: BEGIN
+    DECLARE v_code VARCHAR(40);
+    DECLARE v_list TEXT;
+    DECLARE v_st   CHAR(1);
+    DECLARE v_rm   VARCHAR(500);
+    DECLARE v_res  DECIMAL(18,4);
+    DECLARE v_n    INT DEFAULT 0;
+
+    SET p_status = 'N';
+    SET p_remarks = '';
+    SET p_sample = NULL;
+    SET v_code = UPPER(TRIM(COALESCE(p_component_code, '')));
+
+    CALL hrms_engine_prepare();
+    CALL hrms_formula_evaluate(p_formula, 'TOKENS', v_res, v_st, v_rm);
+    IF v_st <> 'Y' THEN
+        SET p_remarks = v_rm;
+        LEAVE chk;
+    END IF;
+
+    SELECT COUNT(*) INTO v_n FROM tmp_hrms_formula_tokens WHERE token = v_code;
+    IF v_code <> '' AND v_n > 0 THEN
+        SET p_remarks = CONCAT('A component cannot use itself in its own formula (', v_code, ').');
+        LEAVE chk;
+    END IF;
+
+    SELECT GROUP_CONCAT(t.token ORDER BY t.token SEPARATOR ', ') INTO v_list
+      FROM tmp_hrms_formula_tokens t
+     WHERE t.token NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION',
+                           'ESI_APPLICABLE','PAY_DAYS','PAYABLE_DAYS','LOP_DAYS','MANUAL_AMOUNT','ESI_WAGE','STANDARD_ESI_WAGE')
+       AND NOT EXISTS (SELECT 1 FROM salary_component_master m WHERE UPPER(m.component_code) = t.token);
+    IF v_list IS NOT NULL THEN
+        SET p_remarks = LEFT(CONCAT('Unknown name in formula: ', v_list,
+            '. Use a component code or CTC, CTC1, GROSS, ESI_WAGE, STANDARD_ESI_WAGE, MANUAL_AMOUNT, PAYABLE_DAYS, LOP_DAYS.'), 500);
+        LEAVE chk;
+    END IF;
+
+    
+    SELECT GROUP_CONCAT(t.token ORDER BY t.token SEPARATOR ', ') INTO v_list
+      FROM tmp_hrms_formula_tokens t
+     WHERE t.token NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION',
+                           'ESI_APPLICABLE','PAY_DAYS','PAYABLE_DAYS','LOP_DAYS','MANUAL_AMOUNT','ESI_WAGE','STANDARD_ESI_WAGE')
+       AND NOT EXISTS (SELECT 1 FROM salary_component_master m
+                        WHERE UPPER(m.component_code) = t.token AND m.is_active = 1);
+    IF v_list IS NOT NULL THEN
+        SET p_remarks = LEFT(CONCAT('Inactive component in formula: ', v_list,
+            '. An inactive component is always 0. Activate it or remove it from the formula.'), 500);
+        LEAVE chk;
+    END IF;
+
+    
+    CALL hrms_engine_load_vars(NULL, NULL, NULL);
+    UPDATE tmp_hrms_formula_vars SET var_value = 1000;
+    CALL hrms_formula_evaluate(p_formula, 'EVAL', v_res, v_st, v_rm);
+    IF v_st <> 'Y' AND v_rm NOT LIKE 'Formula gives no result%' THEN
+        SET p_remarks = v_rm;
+        LEAVE chk;
+    END IF;
+
+    SET p_sample  = v_res;
+    SET p_status  = 'Y';
+    SET p_remarks = 'Formula is valid.';
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_formula_evaluate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_formula_evaluate`(
+    IN  p_formula TEXT,
+    IN  p_mode    VARCHAR(10),
+    OUT p_result  DECIMAL(18,4),
+    OUT p_status  CHAR(1),
+    OUT p_remarks VARCHAR(500)
+)
+fx: BEGIN
+    DECLARE v_rest   TEXT;
+    DECLARE v_out    TEXT DEFAULT '';
+    DECLARE v_token  VARCHAR(64);
+    DECLARE v_prefix TEXT;
+    DECLARE v_pos    INT DEFAULT 0;
+    DECLARE v_found  INT DEFAULT 0;
+    DECLARE v_val    DECIMAL(18,4);
+    DECLARE v_guard  INT DEFAULT 0;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_result  = NULL;
+        SET p_status  = 'N';
+        SET p_remarks = 'Formula is not valid. Check the brackets, operators, commas and function names.';
+    END;
+
+    SET p_result = NULL;
+    SET p_status = 'N';
+    SET p_remarks = '';
+    DELETE FROM tmp_hrms_formula_tokens;
+
+    SET v_rest = UPPER(TRIM(COALESCE(p_formula, '')));
+    IF v_rest = '' THEN
+        SET p_remarks = 'Formula is empty.';
+        LEAVE fx;
+    END IF;
+    IF CHAR_LENGTH(v_rest) > 2000 THEN
+        SET p_remarks = 'Formula is too long (maximum 2000 characters).';
+        LEAVE fx;
+    END IF;
+    IF v_rest REGEXP '[^A-Z0-9_ .,()+*/<>=!\\-]' THEN
+        SET p_remarks = 'Formula has characters that are not allowed. Use names, numbers, + - * / ( ) , < > = ! and the functions ROUND, LEAST, GREATEST, IF, CEIL, FLOOR, ABS.';
+        LEAVE fx;
+    END IF;
+    IF LOCATE('--', v_rest) > 0 OR LOCATE('/*', v_rest) > 0 OR LOCATE('*/', v_rest) > 0 THEN
+        SET p_remarks = 'Formula must not contain --, /* or */.';
+        LEAVE fx;
+    END IF;
+
+    tok: LOOP
+        SET v_guard = v_guard + 1;
+        IF v_guard > 500 THEN
+            SET p_remarks = 'Formula is too complex.';
+            LEAVE fx;
+        END IF;
+        SET v_token = REGEXP_SUBSTR(v_rest, '[A-Z_][A-Z0-9_]*');
+        IF v_token IS NULL OR v_token = '' THEN
+            SET v_out = CONCAT(v_out, v_rest);
+            LEAVE tok;
+        END IF;
+        SET v_pos    = LOCATE(v_token, v_rest);
+        SET v_prefix = LEFT(v_rest, v_pos - 1);
+        IF v_prefix REGEXP '[0-9.]$' THEN
+            SET p_remarks = CONCAT('Formula is not valid near "', RIGHT(CONCAT(v_prefix, v_token), 25), '": a number is joined to a name.');
+            LEAVE fx;
+        END IF;
+        SET v_rest = SUBSTRING(v_rest, v_pos + CHAR_LENGTH(v_token));
+
+        IF v_token IN ('ROUND','LEAST','GREATEST','IF','CEIL','FLOOR','ABS','AND','OR','NOT') THEN
+            SET v_out = CONCAT(v_out, v_prefix, v_token);
+        ELSE
+            INSERT IGNORE INTO tmp_hrms_formula_tokens (token) VALUES (v_token);
+            IF p_mode = 'EVAL' THEN
+                SELECT COUNT(*), MAX(var_value) INTO v_found, v_val
+                  FROM tmp_hrms_formula_vars WHERE var_code = v_token;
+                IF v_found = 0 THEN
+                    SET p_remarks = CONCAT('Unknown name in formula: ', v_token);
+                    LEAVE fx;
+                END IF;
+                SET v_out = CONCAT(v_out, v_prefix, '(', CAST(COALESCE(v_val, 0) AS CHAR), ')');
+            ELSE
+                SET v_out = CONCAT(v_out, v_prefix, '(1)');
+            END IF;
+        END IF;
+    END LOOP tok;
+
+    IF p_mode <> 'EVAL' THEN
+        SET p_status = 'Y';
+        LEAVE fx;
+    END IF;
+
+    SET @hrms_fx_result = NULL;
+    SET @hrms_fx_sql = CONCAT('SELECT (', v_out, ') INTO @hrms_fx_result');
+    PREPARE hrms_fx_stmt FROM @hrms_fx_sql;
+    EXECUTE hrms_fx_stmt;
+    DEALLOCATE PREPARE hrms_fx_stmt;
+
+    IF @hrms_fx_result IS NULL THEN
+        SET p_remarks = 'Formula gives no result (check for division by zero).';
+        LEAVE fx;
+    END IF;
+    SET p_result = CAST(@hrms_fx_result AS DECIMAL(18,4));
+    SET p_status = 'Y';
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_formula_validate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_formula_validate`(
+    IN p_emp_id            VARCHAR(20),
+    IN p_component_id      BIGINT,
+    IN p_component_code    VARCHAR(30),
+    IN p_calculation_order INT,
+    IN p_formula           TEXT
+)
+BEGIN
+    DECLARE v_role   VARCHAR(30);
+    DECLARE v_ustat  VARCHAR(20);
+    DECLARE v_st     CHAR(1) DEFAULT 'N';
+    DECLARE v_rm     VARCHAR(500) DEFAULT '';
+    DECLARE v_sample DECIMAL(18,4);
+    DECLARE v_err    VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        SELECT 'N' AS status, COALESCE(v_err, 'Formula check failed.') AS remarks, NULL AS sample_result;
+    END;
+
+    SELECT MAX(user_category), MAX(status) INTO v_role, v_ustat
+      FROM user_login_details WHERE emp_id = p_emp_id;
+
+    IF v_role IS NULL OR LOWER(COALESCE(v_ustat, '')) <> 'active' OR UPPER(v_role) NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can check formulas.' AS remarks, NULL AS sample_result;
+    ELSE
+        CALL hrms_formula_check(p_component_id, p_component_code, COALESCE(p_calculation_order, 9999), p_formula, v_st, v_rm, v_sample);
+        SELECT v_st AS status, v_rm AS remarks, ROUND(v_sample, 2) AS sample_result;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_generate_employee_payslips` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_generate_employee_payslips`(
+    IN p_requester_emp_id VARCHAR(20),
+    IN p_payroll_month    TINYINT,
+    IN p_payroll_year     SMALLINT
+)
+BEGIN
+    DECLARE v_cycle BIGINT;
+    SELECT MAX(payroll_cycle_id) INTO v_cycle FROM payroll_cycles
+     WHERE payroll_month = p_payroll_month AND payroll_year = p_payroll_year;
+    IF v_cycle IS NULL THEN
+        SELECT 'N' AS status, 'No payroll cycle exists for the selected month and year.' AS remarks;
+    ELSE
+        CALL hrms_payroll_cycle_action(p_requester_emp_id, v_cycle, 'GENERATE_PAYSLIPS', NULL);
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_employee_salary_structure` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_employee_salary_structure`(
+    IN p_requester_emp_id VARCHAR(20),
+    IN p_target_emp_id VARCHAR(20)
+)
+BEGIN
+    DECLARE v_user_category VARCHAR(50) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_user_found INT DEFAULT 0;
+    DECLARE v_target_found INT DEFAULT 0;
+
+    
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_requester_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salary details.' AS remarks;
+    ELSE
+
+            
+            IF NULLIF(TRIM(p_target_emp_id), '') IS NOT NULL THEN
+
+                SELECT COUNT(*)
+                INTO v_target_found
+                FROM user_login_details
+                WHERE emp_id = TRIM(p_target_emp_id)
+                  AND LOWER(COALESCE(status, '')) = 'active';
+
+                IF v_target_found = 0 THEN
+
+                    SELECT 'N' AS status,
+                           'Target employee not found or inactive'
+                           AS remarks;
+
+                ELSE
+
+                    SELECT
+                        'Y' AS status,
+                        'Employee salary details retrieved successfully'
+                            AS remarks,
+
+                        ud.emp_id,
+                        ud.emp_name,
+                        ss.structure_id,
+                        ss.monthly_ctc,
+                        ss.annual_ctc,
+                        ss.effective_from,
+                        ss.effective_to,
+                        ss.structure_status,
+
+                        COUNT(ess.employee_component_id)
+                            AS total_components,
+
+                        COALESCE(SUM(
+                            scm.component_type = 'EARNING'
+                        ), 0) AS earnings_count,
+
+                        COALESCE(SUM(
+                            scm.component_type = 'DEDUCTION'
+                        ), 0) AS deductions_count,
+
+                        COALESCE(SUM(
+                            scm.component_type = 'EMPLOYER_CONTRIBUTION'
+                        ), 0) AS employer_contribution_count,
+
+                        COALESCE(
+                            JSON_ARRAYAGG(
+                                JSON_OBJECT(
+                                    'employee_component_id',
+                                        ess.employee_component_id,
+                                    'component_id',
+                                        scm.component_id,
+                                    'component_code',
+                                        scm.component_code,
+                                    'component_name',
+                                        scm.component_name,
+                                    'component_type',
+                                        scm.component_type,
+                                    'calculation_type',
+                                        ess.calculation_type,
+                                    'component_value',
+                                        ess.component_value,
+                                    'percentage_base',
+                                        ess.percentage_base,
+                                    'formula_expression',
+                                        ess.formula_expression,
+                                    'monthly_amount',
+                                        ess.monthly_amount,
+                                    'is_taxable',
+                                        scm.is_taxable,
+                                    'is_active',
+                                        scm.is_active
+                                )
+                            ),
+                            JSON_ARRAY()
+                        ) AS salary_components
+
+                    FROM user_details ud
+
+                    INNER JOIN salary_structure ss
+                        ON ss.emp_id = ud.emp_id
+
+                    INNER JOIN employee_salary_structure ess
+                        ON ess.structure_id = ss.structure_id
+
+                    INNER JOIN salary_component_master scm
+                        ON scm.component_id = ess.component_id
+                       AND scm.is_active = 1
+
+                    WHERE ud.emp_id = TRIM(p_target_emp_id)
+                      AND ss.effective_from <= CURDATE()
+                      AND (
+                          ss.effective_to IS NULL
+                          OR ss.effective_to >= CURDATE()
+                      )
+                      AND UPPER(COALESCE(ss.structure_status, ''))
+                          = 'ACTIVE'
+
+                    GROUP BY
+                        ud.emp_id,
+                        ud.emp_name,
+                        ss.structure_id,
+                        ss.monthly_ctc,
+                        ss.annual_ctc,
+                        ss.effective_from,
+                        ss.effective_to,
+                        ss.structure_status;
+
+                END IF;
+
+            ELSE
+
+                
+                SELECT
+                    'Y' AS status,
+                    'Active employee salary details retrieved successfully'
+                        AS remarks,
+
+                    ud.emp_id,
+                    ud.emp_name,
+                    ss.structure_id,
+                    ss.monthly_ctc,
+                    ss.annual_ctc,
+                    ss.effective_from,
+                    ss.effective_to,
+                    ss.structure_status,
+
+                    COUNT(ess.employee_component_id)
+                        AS total_components,
+
+                    COALESCE(SUM(
+                        scm.component_type = 'EARNING'
+                    ), 0) AS earnings_count,
+
+                    COALESCE(SUM(
+                        scm.component_type = 'DEDUCTION'
+                    ), 0) AS deductions_count,
+
+                    COALESCE(SUM(
+                        scm.component_type = 'EMPLOYER_CONTRIBUTION'
+                    ), 0) AS employer_contribution_count,
+
+                    COALESCE(
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'employee_component_id',
+                                    ess.employee_component_id,
+                                'component_id',
+                                    scm.component_id,
+                                'component_code',
+                                    scm.component_code,
+                                'component_name',
+                                    scm.component_name,
+                                'component_type',
+                                    scm.component_type,
+                                'calculation_type',
+                                    ess.calculation_type,
+                                'component_value',
+                                    ess.component_value,
+                                'percentage_base',
+                                    ess.percentage_base,
+                                'formula_expression',
+                                    ess.formula_expression,
+                                'monthly_amount',
+                                    ess.monthly_amount,
+                                'is_taxable',
+                                    scm.is_taxable,
+                                'is_active',
+                                    scm.is_active
+                            )
+                        ),
+                        JSON_ARRAY()
+                    ) AS salary_components
+
+                FROM user_details ud
+
+                INNER JOIN user_login_details ul
+                    ON ul.emp_id = ud.emp_id
+
+                INNER JOIN salary_structure ss
+                    ON ss.emp_id = ud.emp_id
+
+                INNER JOIN employee_salary_structure ess
+                    ON ess.structure_id = ss.structure_id
+
+                INNER JOIN salary_component_master scm
+                    ON scm.component_id = ess.component_id
+                   AND scm.is_active = 1
+
+                WHERE LOWER(COALESCE(ul.status, '')) = 'active'
+                  AND ss.effective_from <= CURDATE()
+                  AND (
+                      ss.effective_to IS NULL
+                      OR ss.effective_to >= CURDATE()
+                  )
+                  AND UPPER(COALESCE(ss.structure_status, ''))
+                      = 'ACTIVE'
+
+                GROUP BY
+                    ud.emp_id,
+                    ud.emp_name,
+                    ss.structure_id,
+                    ss.monthly_ctc,
+                    ss.annual_ctc,
+                    ss.effective_from,
+                    ss.effective_to,
+                    ss.structure_status
+
+                ORDER BY ud.emp_id;
+
+            END IF;
+
+        END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_payroll_cycles` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_payroll_cycles`(
+    IN p_emp_id VARCHAR(20),
+    IN p_year SMALLINT
+)
+BEGIN
+    DECLARE v_requester_found INT DEFAULT 0;
+    DECLARE v_remarks VARCHAR(500) DEFAULT NULL;
+    DECLARE v_cycle_count INT DEFAULT 0;
+
+    
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_remarks = MESSAGE_TEXT;
+
+        SELECT
+            'N' AS status,
+            v_remarks AS remarks;
+    END;
+
+    
+
+    SET time_zone = '+05:30';
+
+    
+
+    IF p_emp_id IS NULL OR TRIM(p_emp_id) = '' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Employee ID is required';
+    END IF;
+
+    IF p_year IS NULL OR p_year < 2000 OR p_year > 2100 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Invalid payroll year';
+    END IF;
+
+    
+
+    SELECT COUNT(*)
+    INTO v_requester_found
+    FROM user_login_details
+    WHERE emp_id = p_emp_id
+      AND status = 'ACTIVE'
+      AND user_category IN ('ADMIN', 'HR');
+
+    IF v_requester_found = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Access denied: Active ADMIN or HR account required';
+    END IF;
+
+    
+
+    SELECT COUNT(*)
+    INTO v_cycle_count
+    FROM payroll_cycles
+    WHERE payroll_year = p_year;
+
+    IF v_cycle_count = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'No payroll cycles found for the selected year';
+    END IF;
+
+    
+
+    SELECT
+        'Y' AS status,
+        'Payroll cycles retrieved successfully' AS remarks,
+
+        pc.payroll_cycle_id,
+        pc.payroll_month,
+
+        MONTHNAME(
+            STR_TO_DATE(
+                CONCAT(
+                    pc.payroll_year,
+                    '-',
+                    LPAD(pc.payroll_month, 2, '0'),
+                    '-01'
+                ),
+                '%Y-%m-%d'
+            )
+        ) AS month_name,
+
+        pc.payroll_year,
+        pc.period_start,
+        pc.period_end,
+        pc.payment_date,
+        pc.cycle_status,
+
+        pr.payroll_run_id,
+        pr.run_number,
+        pr.run_type,
+        pr.run_status,
+
+        COALESCE(pr.total_employees, 0)
+            AS total_employees,
+
+        COUNT(DISTINCT epd.payroll_detail_id)
+            AS payroll_records,
+
+        COALESCE(SUM(epd.gross_earnings), 0)
+            AS total_gross_earnings,
+
+        COALESCE(SUM(epd.total_deductions), 0)
+            AS total_deductions,
+
+        COALESCE(SUM(epd.net_pay), 0)
+            AS total_net_pay
+
+    FROM payroll_cycles pc
+
+    LEFT JOIN payroll_runs pr
+        ON pr.payroll_cycle_id = pc.payroll_cycle_id
+
+    LEFT JOIN employee_payroll_details epd
+        ON epd.payroll_run_id = pr.payroll_run_id
+
+    WHERE pc.payroll_year = p_year
+
+    GROUP BY
+        pc.payroll_cycle_id,
+        pc.payroll_month,
+        pc.payroll_year,
+        pc.period_start,
+        pc.period_end,
+        pc.payment_date,
+        pc.cycle_status,
+        pr.payroll_run_id,
+        pr.run_number,
+        pr.run_type,
+        pr.run_status,
+        pr.total_employees
+
+    ORDER BY
+        pc.payroll_month DESC,
+        pr.run_number DESC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_payroll_dashboard` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_payroll_dashboard`(
+    IN p_emp_id VARCHAR(20)
+)
+main_block: BEGIN
+
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_access_status CHAR(1) DEFAULT 'N';
+    DECLARE v_remarks VARCHAR(255) DEFAULT NULL;
+
+    
+    SET time_zone = '+05:30';
+
+    
+
+    IF p_emp_id IS NULL OR TRIM(p_emp_id) = '' THEN
+
+        SET v_access_status = 'N';
+        SET v_remarks = 'Employee ID is required';
+
+    ELSE
+
+        SELECT
+            MAX(user_category),
+            MAX(status)
+        INTO
+            v_user_category,
+            v_user_status
+        FROM user_login_details
+        WHERE emp_id = p_emp_id;
+
+        IF v_user_category IS NULL THEN
+
+            SET v_access_status = 'N';
+            SET v_remarks = 'Employee login account not found';
+
+        ELSEIF UPPER(TRIM(COALESCE(v_user_status, ''))) <> 'ACTIVE' THEN
+
+            SET v_access_status = 'N';
+            SET v_remarks = 'User account is inactive';
+
+        ELSEIF UPPER(TRIM(v_user_category)) NOT IN ('ADMIN', 'HR') THEN
+
+            SET v_access_status = 'N';
+            SET v_remarks =
+                'Access denied. Only ADMIN and HR can access payroll dashboard';
+
+        ELSE
+
+            SET v_access_status = 'Y';
+            SET v_remarks = 'Access granted successfully';
+
+        END IF;
+
+    END IF;
+
+    
+
+    IF v_access_status = 'N' THEN
+
+        SELECT
+            'N' AS status,
+            v_remarks AS remarks,
+            p_emp_id AS emp_id;
+
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    WITH latest_cycles AS (
+
+        SELECT
+            payroll_cycle_id,
+            payroll_month,
+            payroll_year,
+            period_start,
+            period_end,
+            payment_date,
+            cycle_status
+        FROM payroll_cycles
+        ORDER BY
+            period_end DESC,
+            payroll_cycle_id DESC
+        LIMIT 2
+
+    ),
+
+    
+
+    latest_runs AS (
+
+        SELECT
+            pr.payroll_run_id,
+            pr.payroll_cycle_id,
+            pr.run_number,
+            pr.run_type,
+            pr.run_status
+        FROM payroll_runs pr
+
+        INNER JOIN (
+
+            SELECT
+                payroll_cycle_id,
+                MAX(payroll_run_id) AS payroll_run_id
+            FROM payroll_runs
+            WHERE run_status <> 'CANCELLED'
+            GROUP BY payroll_cycle_id
+
+        ) selected_runs
+            ON selected_runs.payroll_run_id = pr.payroll_run_id
+
+    )
+
+    
+
+    SELECT
+
+        
+        'Y' AS status,
+        'Access granted successfully' AS remarks,
+        p_emp_id AS requested_by,
+
+        
+        lc.payroll_cycle_id,
+        lc.payroll_month,
+        lc.payroll_year,
+        lc.period_start AS start_date,
+        lc.period_end AS end_date,
+        lc.payment_date,
+        lc.cycle_status,
+
+        
+        lr.payroll_run_id,
+        lr.run_number,
+        lr.run_type,
+
+        COALESCE(lr.run_status, 'NO_RUN') AS payroll_status,
+
+        
+
+        COALESCE(
+            (
+                SELECT SUM(ss.monthly_ctc)
+                FROM salary_structure ss
+
+                WHERE ss.structure_status = 'ACTIVE'
+
+                  AND ss.effective_from <= lc.period_end
+
+                  AND (
+                      ss.effective_to IS NULL
+                      OR ss.effective_to >= lc.period_end
+                  )
+
+                  
+                  AND ss.structure_id = (
+
+                      SELECT ss2.structure_id
+                      FROM salary_structure ss2
+
+                      WHERE ss2.emp_id = ss.emp_id
+
+                        AND ss2.structure_status = 'ACTIVE'
+
+                        AND ss2.effective_from <= lc.period_end
+
+                        AND (
+                            ss2.effective_to IS NULL
+                            OR ss2.effective_to >= lc.period_end
+                        )
+
+                      ORDER BY
+                          ss2.effective_from DESC,
+                          ss2.structure_id DESC
+
+                      LIMIT 1
+
+                  )
+
+            ),
+            0.00
+        ) AS approx_ctc,
+
+        
+        COUNT(DISTINCT epd.emp_id) AS total_employees,
+
+        
+        COALESCE(
+            SUM(epd.gross_earnings),
+            0.00
+        ) AS total_gross_earnings,
+
+        COALESCE(
+            SUM(epd.total_deductions),
+            0.00
+        ) AS total_deductions,
+
+        COALESCE(
+            SUM(epd.employer_contributions),
+            0.00
+        ) AS total_employer_contributions,
+
+        COALESCE(
+            SUM(epd.net_pay),
+            0.00
+        ) AS total_net_pay,
+
+        
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.payment_status = 'PAID'
+                THEN epd.emp_id
+            END
+        ) AS paid_employees,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.payment_status = 'NOT_PAID'
+                THEN epd.emp_id
+            END
+        ) AS unpaid_employees,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.payment_status = 'PARTIALLY_PAID'
+                THEN epd.emp_id
+            END
+        ) AS partially_paid_employees,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.payment_status = 'ON_HOLD'
+                THEN epd.emp_id
+            END
+        ) AS employees_on_hold,
+
+        
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.employee_payroll_status = 'CALCULATED'
+                THEN epd.emp_id
+            END
+        ) AS calculated_employees,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.employee_payroll_status = 'UNDER_REVIEW'
+                THEN epd.emp_id
+            END
+        ) AS employees_under_review,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.employee_payroll_status = 'APPROVED'
+                THEN epd.emp_id
+            END
+        ) AS approved_employees,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.employee_payroll_status = 'FINALIZED'
+                THEN epd.emp_id
+            END
+        ) AS finalized_employees,
+
+        
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.payment_decision = 'RELEASE'
+                THEN epd.emp_id
+            END
+        ) AS employees_released,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN epd.payment_decision = 'HOLD'
+                THEN epd.emp_id
+            END
+        ) AS employees_with_payment_hold
+
+    FROM latest_cycles lc
+
+    LEFT JOIN latest_runs lr
+        ON lr.payroll_cycle_id = lc.payroll_cycle_id
+
+    LEFT JOIN employee_payroll_details epd
+        ON epd.payroll_run_id = lr.payroll_run_id
+
+    GROUP BY
+        lc.payroll_cycle_id,
+        lc.payroll_month,
+        lc.payroll_year,
+        lc.period_start,
+        lc.period_end,
+        lc.payment_date,
+        lc.cycle_status,
+        lr.payroll_run_id,
+        lr.run_number,
+        lr.run_type,
+        lr.run_status
+
+    ORDER BY
+        lc.period_end DESC,
+        lc.payroll_cycle_id DESC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_payroll_month_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_payroll_month_details`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month TINYINT,
+    IN p_year SMALLINT
+)
+BEGIN
+    DECLARE v_requester_found INT DEFAULT 0;
+    DECLARE v_cycle_found INT DEFAULT 0;
+    DECLARE v_remarks VARCHAR(500) DEFAULT NULL;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+
+    
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_remarks = MESSAGE_TEXT;
+
+        SELECT
+            'N' AS status,
+            v_remarks AS remarks;
+    END;
+
+    
+
+    SET time_zone = '+05:30';
+
+    
+
+    IF p_emp_id IS NULL OR TRIM(p_emp_id) = '' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Requester employee ID is required';
+    END IF;
+
+    
+
+    IF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Invalid payroll month';
+    END IF;
+
+    
+
+    IF p_year IS NULL OR p_year NOT BETWEEN 2000 AND 2100 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Invalid payroll year';
+    END IF;
+
+    
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SIGNAL SQLSTATE '45000'   
+            SET MESSAGE_TEXT = 'Access denied: only active ADMIN or HR users can view payroll month details.';
+    END IF;
+
+    
+
+    SELECT COUNT(*)
+    INTO v_cycle_found
+    FROM payroll_cycles
+    WHERE payroll_month = p_month
+      AND payroll_year = p_year;
+
+    IF v_cycle_found = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT =
+            'Payroll cycle not found for the selected month and year';
+    END IF;
+
+    
+
+    WITH ranked_payroll AS
+    (
+        SELECT
+            pc.payroll_cycle_id,
+            pc.payroll_month,
+            pc.payroll_year,
+            pc.period_start,
+            pc.period_end,
+            pc.payment_date,
+            pc.cycle_status,
+
+            pr.payroll_run_id,
+            pr.run_number,
+            pr.run_type,
+            pr.run_status,
+            pr.total_employees,
+
+            epd.payroll_detail_id,
+            epd.emp_id,
+            epd.structure_id,
+
+            epd.monthly_ctc,
+            epd.annual_ctc,
+
+            epd.total_days,
+            epd.payable_days,
+            epd.paid_leave_days,
+            epd.unpaid_leave_days,
+            epd.absent_days,
+
+            epd.ctc1,
+            epd.gross_earnings,
+            epd.total_deductions,
+            epd.employer_contributions,
+            epd.net_pay,
+
+            epd.calculation_version,
+            epd.calculation_remarks,
+            epd.employee_payroll_status,
+
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY epd.emp_id
+                ORDER BY
+                    pr.run_number DESC,
+                    pr.payroll_run_id DESC,
+                    epd.payroll_detail_id DESC
+            ) AS row_num
+
+        FROM payroll_cycles pc
+
+        INNER JOIN payroll_runs pr
+            ON pr.payroll_cycle_id = pc.payroll_cycle_id
+
+        INNER JOIN employee_payroll_details epd
+            ON epd.payroll_run_id = pr.payroll_run_id
+
+        WHERE pc.payroll_month = p_month
+          AND pc.payroll_year = p_year
+    )
+
+    SELECT
+        
+        'Y' AS status,
+        'Payroll month details retrieved successfully' AS remarks,
+
+        
+        rp.payroll_cycle_id,
+        rp.payroll_month,
+
+        MONTHNAME(
+            STR_TO_DATE(
+                CONCAT(
+                    rp.payroll_year,
+                    '-',
+                    LPAD(rp.payroll_month, 2, '0'),
+                    '-01'
+                ),
+                '%Y-%m-%d'
+            )
+        ) AS month_name,
+
+        rp.payroll_year,
+        rp.period_start,
+        rp.period_end,
+        rp.payment_date,
+        rp.cycle_status AS payroll_cycle_status,
+
+        
+        rp.payroll_run_id,
+        rp.run_number,
+        rp.run_type,
+        rp.run_status AS payroll_run_status,
+        rp.total_employees,
+
+        
+        rp.payroll_detail_id,
+        rp.emp_id,
+        ud.ref_id,
+        ud.emp_name,
+        ud.email,
+        ud.mobile,
+
+        
+        ud.dob,
+        ud.gender,
+        ud.marital_status,
+        ud.father_name,
+        ud.mother_name,
+        ud.current_address,
+        ud.perminent_address,
+
+        
+        ud.bank_holder_name,
+        ud.bank_name,
+        ud.bank_branch,
+        ud.bank_account_no,
+        ud.ifsc,
+        ud.upi_id,
+        ud.bank_account_type,
+
+        
+        ud.pan,
+        ud.pf_account_no,
+        ud.esic_no,
+        ud.aadhaar,
+        ud.uan,
+
+        
+        ud.location,
+        ud.department,
+        ud.designation,
+        ud.reporting,
+        ud.joining_date,
+        ud.at_blooms,
+        ud.profisional_details_status,
+
+        
+        rp.structure_id,
+        rp.monthly_ctc,
+        rp.annual_ctc,
+
+        
+        rp.total_days,
+        rp.payable_days,
+        rp.paid_leave_days,
+        rp.unpaid_leave_days,
+        rp.absent_days,
+
+        
+        rp.ctc1,
+        rp.gross_earnings,
+        rp.total_deductions,
+        rp.employer_contributions,
+        rp.net_pay,
+
+        
+        rp.employee_payroll_status
+            AS monthly_employee_payroll_status,
+
+        rp.calculation_version,
+        rp.calculation_remarks,
+
+        
+        COALESCE(
+            (
+                SELECT JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'component_id', epcd.component_id,
+                        'component_code', epcd.component_code,
+                        'component_name', epcd.component_name,
+                        'component_type', epcd.component_type,
+                        'calculation_type', epcd.calculation_type,
+                        'component_value', epcd.component_value,
+                        'percentage_base', epcd.percentage_base,
+                        'percentage_value', epcd.percentage_value,
+                        'formula_expression', epcd.formula_expression,
+                        'calculated_amount', epcd.calculated_amount,
+                        'is_taxable', epcd.is_taxable
+                    )
+                )
+                FROM employee_payroll_component_details epcd
+                WHERE epcd.payroll_detail_id =
+                      rp.payroll_detail_id
+                  AND epcd.calculation_scope = 'COMPONENT'   
+            ),
+            JSON_ARRAY()
+        ) AS salary_components,
+
+        
+        COALESCE(
+            (
+                SELECT JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'component_code', epcd.component_code,
+                        'component_name', epcd.component_name,
+                        'component_type', epcd.component_type,
+                        'calculation_order', epcd.calculation_order,
+                        'calculated_amount', epcd.calculated_amount
+                    )
+                )
+                FROM employee_payroll_component_details epcd
+                WHERE epcd.payroll_detail_id = rp.payroll_detail_id
+                  AND epcd.calculation_scope = 'AGGREGATE'
+            ),
+            JSON_ARRAY()
+        ) AS salary_totals
+
+    FROM ranked_payroll rp
+
+    LEFT JOIN user_details ud
+        ON ud.emp_id = rp.emp_id
+
+    WHERE rp.row_num = 1
+
+    ORDER BY rp.emp_id;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_payslip` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_payslip`(
+    IN p_requester_emp_id VARCHAR(20),
+    IN p_target_emp_id VARCHAR(20),
+    IN p_payroll_month TINYINT,
+    IN p_payroll_year SMALLINT
+)
+main: BEGIN
+
+    
+
+    DECLARE v_user_found INT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(50) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_record_count INT DEFAULT 0;
+    DECLARE v_err VARCHAR(500) DEFAULT NULL;
+    
+    DECLARE EXIT HANDLER FOR SQLSTATE '45000'
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        SELECT 'N' AS status, v_err AS remarks;
+    END;
+
+    SET SESSION group_concat_max_len = 1000000;   
+
+    
+
+    IF p_requester_emp_id IS NULL
+       OR TRIM(p_requester_emp_id) = '' THEN
+
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Requester employee ID is required';
+
+    END IF;
+
+    
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_requester_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR', 'EMP') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN, HR or EMP users can view payslips.' AS remarks;
+        LEAVE main;
+    END IF;
+
+    
+
+    IF (p_payroll_month IS NULL AND p_payroll_year IS NOT NULL)
+       OR (p_payroll_month IS NOT NULL AND p_payroll_year IS NULL) THEN
+
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Payroll month and year must be supplied together';
+
+    END IF;
+
+    IF p_payroll_month IS NOT NULL
+       AND p_payroll_month NOT BETWEEN 1 AND 12 THEN
+
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid payroll month';
+
+    END IF;
+
+    IF p_payroll_year IS NOT NULL
+       AND p_payroll_year NOT BETWEEN 2000 AND 2100 THEN
+
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid payroll year';
+
+    END IF;
+
+    
+
+    IF v_user_category = 'EMP' THEN
+
+        IF p_target_emp_id IS NOT NULL
+           AND TRIM(p_target_emp_id) <> ''
+           AND TRIM(p_target_emp_id)
+               <> TRIM(p_requester_emp_id) THEN
+
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT =
+                    'Access denied: Employees can view only their own payslips';
+
+        END IF;
+
+    END IF;
+
+    
+
+    SELECT COUNT(*)
+    INTO v_record_count
+    FROM payroll_cycles pc
+
+    INNER JOIN payroll_runs pr
+        ON pr.payroll_cycle_id = pc.payroll_cycle_id
+
+    INNER JOIN employee_payroll_details epd
+        ON epd.payroll_run_id = pr.payroll_run_id
+
+    WHERE
+        UPPER(pc.cycle_status) IN ('FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED')
+
+        AND UPPER(pr.run_status) = 'FINALIZED'
+
+        AND UPPER(epd.employee_payroll_status) = 'FINALIZED'
+
+        AND (
+            p_payroll_month IS NULL
+            OR (
+                pc.payroll_month = p_payroll_month
+                AND pc.payroll_year = p_payroll_year
+            )
+        )
+
+        AND (
+            (
+                v_user_category IN ('ADMIN', 'HR')
+                AND (
+                    p_target_emp_id IS NULL
+                    OR TRIM(p_target_emp_id) = ''
+                    OR epd.emp_id = TRIM(p_target_emp_id)
+                )
+            )
+
+            OR
+
+            (
+                v_user_category = 'EMP'
+                AND epd.emp_id = TRIM(p_requester_emp_id)
+            )
+        );
+
+    
+
+    IF v_record_count = 0 THEN
+
+        SELECT
+            'N' AS status,
+            CASE
+                WHEN p_payroll_month IS NOT NULL THEN
+                    'No finalized payslip found for the requested payroll month and year'
+                ELSE
+                    'No finalized payslips found for the requested employee or access scope'
+            END AS remarks,
+
+            NULL AS payroll_cycle_id,
+            NULL AS payroll_month,
+            NULL AS payroll_year,
+            NULL AS cycle_status,
+
+            NULL AS payroll_run_id,
+            NULL AS run_status,
+
+            NULL AS emp_id,
+            NULL AS ref_id,
+            NULL AS emp_name,
+            NULL AS email,
+            NULL AS mobile,
+
+            NULL AS department_name,
+            NULL AS designation_name,
+            NULL AS reporting,
+            NULL AS joining_date,
+
+            NULL AS pan,
+            NULL AS pf_account_no,
+            NULL AS esic_no,
+            NULL AS uan,
+
+            NULL AS payroll_detail_id,
+            NULL AS gross_earnings,
+            NULL AS total_deductions,
+            NULL AS employer_contributions,
+            NULL AS net_pay,
+            NULL AS payment_decision,
+            NULL AS payment_status,
+            NULL AS employee_payroll_status,
+
+            JSON_ARRAY() AS components,
+            JSON_ARRAY() AS totals;
+
+    ELSE
+
+        
+
+        SELECT
+
+            
+
+            'Y' AS status,
+
+            'Payslip retrieved successfully' AS remarks,
+
+            
+
+           
+            pc.payroll_month,
+            pc.payroll_year,
+           
+
+            
+
+            
+            pr.run_status,
+            
+            
+            COALESCE(epd.monthly_ctc,
+                     (SELECT ss.monthly_ctc FROM salary_structure ss
+                       WHERE ss.structure_id = epd.structure_id)) AS monthly_ctc,
+
+            
+
+            epd.emp_id,
+            
+            ud.emp_name,
+            
+            ud.mobile,
+            ud.bank_name,
+            ud.bank_account_no,
+
+            
+
+            dm.department_name,
+            dsm.designation_name,
+            
+            cs.city AS company_city,
+            
+            ud.joining_date,
+
+            
+
+            ud.pan,
+            ud.pf_account_no,
+            ud.esic_no,
+            ud.uan,
+
+            
+
+            epd.payroll_detail_id,
+            epd.gross_earnings,
+            epd.total_deductions,
+            epd.employer_contributions,
+            epd.net_pay,
+            epd.payment_decision,
+            epd.payment_status,
+            epd.employee_payroll_status,
+
+            
+
+            COALESCE(
+                (
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'component_name',
+                            epcd.component_name,
+                            'component_type',
+                            epcd.component_type,
+                            'calculated_amount',
+                            epcd.calculated_amount
+                        )
+                    )
+                    FROM employee_payroll_component_details epcd
+                    WHERE epcd.payroll_detail_id =
+                          epd.payroll_detail_id
+                      AND epcd.calculation_scope = 'COMPONENT'
+                ),
+                JSON_ARRAY()
+            ) AS components,
+            
+            COALESCE(
+                (
+                    SELECT CAST(CONCAT('[', GROUP_CONCAT(
+                               JSON_OBJECT('component_code', epcd.component_code,
+                                           'component_name', epcd.component_name,
+                                           'component_type', epcd.component_type,
+                                           'calculation_order', epcd.calculation_order,
+                                           'calculated_amount', epcd.calculated_amount)
+                               ORDER BY epcd.calculation_order, epcd.component_id SEPARATOR ','), ']') AS JSON)
+                    FROM employee_payroll_component_details epcd
+                    WHERE epcd.payroll_detail_id = epd.payroll_detail_id
+                      AND epcd.calculation_scope = 'AGGREGATE'
+                ),
+                JSON_ARRAY()
+            ) AS totals
+
+        FROM payroll_cycles pc
+
+        INNER JOIN payroll_runs pr
+            ON pr.payroll_cycle_id = pc.payroll_cycle_id
+
+        INNER JOIN employee_payroll_details epd
+            ON epd.payroll_run_id = pr.payroll_run_id
+
+        LEFT JOIN user_details ud
+            ON ud.emp_id = epd.emp_id
+
+        LEFT JOIN department_master dm
+            ON dm.department_id = ud.department
+
+        LEFT JOIN designation_master dsm
+            ON dsm.designation_id = ud.designation
+            
+        LEFT JOIN company_settings cs
+    ON cs.id = 1    
+
+        WHERE
+
+            
+
+            UPPER(pc.cycle_status) IN ('FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED')
+
+            AND UPPER(pr.run_status) = 'FINALIZED'
+
+            AND UPPER(epd.employee_payroll_status) = 'FINALIZED'
+
+            
+
+            AND (
+                p_payroll_month IS NULL
+                OR (
+                    pc.payroll_month = p_payroll_month
+                    AND pc.payroll_year = p_payroll_year
+                )
+            )
+
+            
+
+            AND (
+                (
+                    v_user_category IN ('ADMIN', 'HR')
+                    AND (
+                        p_target_emp_id IS NULL
+                        OR TRIM(p_target_emp_id) = ''
+                        OR epd.emp_id = TRIM(p_target_emp_id)
+                    )
+                )
+
+                OR
+
+                (
+                    v_user_category = 'EMP'
+                    AND epd.emp_id = TRIM(p_requester_emp_id)
+                )
+            )
+
+        ORDER BY
+            pc.payroll_year DESC,
+            pc.payroll_month DESC,
+            epd.emp_id;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_requests` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_requests`(
+    IN p_actor_emp_id VARCHAR(20)
+)
+main_block:BEGIN
+    DECLARE v_actor_category VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT user_category INTO v_actor_category
+    FROM user_login_details
+    WHERE emp_id = p_actor_emp_id AND status = 'ACTIVE';
+
+    
+    IF v_actor_category IN ('HR', 'ADMIN') THEN
+        SELECT 
+            request_id, emp_id, category, subject, description, 
+            attachment_path, progress, status, reason, resolved_id, created_at
+        FROM general_requests
+        WHERE status <> 'CANCELLED'
+        ORDER BY created_at DESC;
+        LEAVE main_block;
+        
+    
+    ELSE
+        SELECT 
+            request_id, emp_id, category, subject, description, 
+            attachment_path, progress, status, reason, resolved_id, created_at
+        FROM general_requests
+        WHERE emp_id = p_actor_emp_id
+        ORDER BY created_at desc;
+        LEAVE main_block;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_salary_components` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_salary_components`(
+    IN p_emp_id VARCHAR(20)
+)
+BEGIN
+    DECLARE v_user_category VARCHAR(50) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_user_found INT DEFAULT 0;
+    DECLARE v_total_components INT DEFAULT 0;
+    DECLARE v_earnings_count INT DEFAULT 0;
+    DECLARE v_deductions_count INT DEFAULT 0;
+    DECLARE v_employer_contribution_count INT DEFAULT 0;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salary components.' AS remarks,
+               0 AS total_components, 0 AS earnings_count, 0 AS deductions_count, 0 AS employer_contribution_count;
+    ELSE
+        SELECT COUNT(*),
+               COALESCE(SUM(component_type = 'EARNING' AND calculation_scope = 'COMPONENT'), 0),
+               COALESCE(SUM(component_type = 'DEDUCTION' AND calculation_scope = 'COMPONENT'), 0),
+               COALESCE(SUM(component_type = 'EMPLOYER_CONTRIBUTION' AND calculation_scope = 'COMPONENT'), 0)
+          INTO v_total_components, v_earnings_count, v_deductions_count, v_employer_contribution_count
+          FROM salary_component_master;
+
+        IF v_total_components = 0 THEN
+            SELECT 'N' AS status, 'No active salary components found' AS remarks,
+                   v_total_components AS total_components, v_earnings_count AS earnings_count,
+                   v_deductions_count AS deductions_count,
+                   v_employer_contribution_count AS employer_contribution_count;
+        ELSE
+            SELECT 'Y' AS status,
+                   'Salary components retrieved successfully' AS remarks,
+                   v_total_components AS total_components,
+                   v_earnings_count AS earnings_count,
+                   v_deductions_count AS deductions_count,
+                   v_employer_contribution_count AS employer_contribution_count,
+                   m.component_id,
+                   m.component_code,
+                   m.component_name,
+                   m.component_type,
+                   m.calculation_type,
+                   m.percentage_base,
+                   m.percentage_value,
+                   m.is_taxable,
+                   m.is_active,
+                   m.formula_expression,
+                   m.minimum_amount,
+                   m.maximum_amount,
+                   m.calculation_scope,
+                   m.calculation_order,
+                   m.eligibility_parameter,
+                   m.eligibility_required_value,
+                   m.is_slab,
+                   m.rounding_precision,
+                   m.is_manual,
+                   (SELECT COUNT(*) FROM salary_component_slab s
+                     WHERE s.component_id = m.component_id AND s.is_active = 1) AS slab_count
+              FROM salary_component_master m
+             ORDER BY m.is_active DESC, m.calculation_order, m.component_id;
+        END IF;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_get_single_employee_salary_structure` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_get_single_employee_salary_structure`(
+    IN p_emp_id VARCHAR(20)
+)
+BEGIN
+    DECLARE v_user_exists INT DEFAULT 0;
+    DECLARE v_user_status VARCHAR(20);
+    DECLARE v_user_category VARCHAR(30);
+
+    
+    SELECT COUNT(*), MAX(status), MAX(user_category)
+    INTO v_user_exists, v_user_status, v_user_category
+    FROM user_login_details
+    WHERE emp_id = p_emp_id;
+
+    
+    IF v_user_exists = 0 THEN
+
+        SELECT
+            'N' AS status,
+            'Employee not found.' AS remarks;
+
+    
+    ELSEIF LOWER(COALESCE(v_user_status, '')) <> 'active' THEN
+
+        SELECT
+            'N' AS status,
+            'Employee account is inactive.' AS remarks;
+
+    
+    ELSEIF UPPER(COALESCE(v_user_category, '')) IN ('ADMIN', 'HR') THEN
+
+        SELECT
+            'N' AS status,
+            'This procedure is only for regular employees.' AS remarks;
+
+    ELSE
+
+        SELECT
+            'Y' AS status,
+            'Employee salary structure retrieved successfully.' AS remarks,
+            ud.emp_id,
+            ud.emp_name,
+            ss.structure_id,
+            ss.monthly_ctc,
+            ss.annual_ctc,
+            ss.effective_from,
+            ss.effective_to,
+            ss.structure_status,
+            COUNT(ess.employee_component_id) AS total_components,
+
+            COALESCE(
+                JSON_ARRAYAGG(
+                    IF(
+                        ess.employee_component_id IS NOT NULL,
+                        JSON_OBJECT(
+                            'employee_component_id', ess.employee_component_id,
+                            'component_id', scm.component_id,
+                            'component_code', scm.component_code,
+                            'component_name', scm.component_name,
+                            'component_type', scm.component_type,
+                            'calculation_type', ess.calculation_type,
+                            'component_value', ess.component_value,
+                            'percentage_base', ess.percentage_base,
+                            'monthly_amount', ess.monthly_amount,
+                            'formula_expression', ess.formula_expression
+                        ),
+                        NULL
+                    )
+                ),
+                JSON_ARRAY()
+            ) AS salary_components
+
+        FROM user_details ud
+
+        INNER JOIN user_login_details ul
+            ON ul.emp_id = ud.emp_id
+
+        LEFT JOIN salary_structure ss
+            ON ss.emp_id = ud.emp_id
+            AND ss.structure_status = 'ACTIVE'
+            AND ss.effective_from <= CURDATE()
+            AND (
+                ss.effective_to IS NULL
+                OR ss.effective_to >= CURDATE()
+            )
+
+        LEFT JOIN employee_salary_structure ess
+            ON ess.structure_id = ss.structure_id
+
+        LEFT JOIN salary_component_master scm
+            ON scm.component_id = ess.component_id
+            AND scm.is_active = 1
+
+        WHERE ud.emp_id = p_emp_id
+          AND LOWER(ul.status) = 'active'
+
+        GROUP BY
+            ud.emp_id,
+            ud.emp_name,
+            ss.structure_id,
+            ss.monthly_ctc,
+            ss.annual_ctc,
+            ss.effective_from,
+            ss.effective_to,
+            ss.structure_status;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_manage_payroll_status` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_manage_payroll_status`(
+    IN p_requester_emp_id VARCHAR(20),
+    IN p_payroll_month    TINYINT,
+    IN p_payroll_year     SMALLINT,
+    IN p_action           VARCHAR(20)
+)
+BEGIN
+    DECLARE v_cycle BIGINT;
+    SELECT MAX(payroll_cycle_id) INTO v_cycle FROM payroll_cycles
+     WHERE payroll_month = p_payroll_month AND payroll_year = p_payroll_year;
+    IF v_cycle IS NULL THEN
+        SELECT 'N' AS status, 'No payroll cycle exists for the selected month and year.' AS remarks;
+    ELSEIF UPPER(TRIM(COALESCE(p_action, ''))) NOT IN ('FINALIZE', 'PAID') THEN
+        SELECT 'N' AS status, 'Action must be FINALIZE or PAID.' AS remarks;
+    ELSE
+        CALL hrms_payroll_cycle_action(p_requester_emp_id, v_cycle,
+                                       IF(UPPER(TRIM(p_action)) = 'PAID', 'MARK_PAID', 'FINALIZE'), NULL);
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_audit_add` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_audit_add`(
+    IN p_module    VARCHAR(20),
+    IN p_action    VARCHAR(40),
+    IN p_ref_table VARCHAR(64),
+    IN p_ref_id    VARCHAR(64),
+    IN p_affected  VARCHAR(20),
+    IN p_cycle_id  BIGINT,
+    IN p_month     INT,
+    IN p_year      INT,
+    IN p_old       JSON,
+    IN p_new       JSON,
+    IN p_remarks   VARCHAR(1000),
+    IN p_by        VARCHAR(20)
+)
+BEGIN
+    DECLARE v_remarks VARCHAR(1000);
+    SET v_remarks = NULLIF(TRIM(COALESCE(p_remarks, '')), '');
+    IF p_old IS NOT NULL AND p_new IS NOT NULL AND JSON_CONTAINS(p_old, p_new) AND JSON_CONTAINS(p_new, p_old) THEN
+        SET v_remarks = LEFT(CONCAT('No values changed.', IF(v_remarks IS NULL, '', CONCAT(' ', v_remarks))), 1000);
+    END IF;
+    INSERT INTO hrms_payroll_audit
+        (module, action, ref_table, ref_id, affected_emp_id, payroll_cycle_id, payroll_month, payroll_year,
+         old_values, new_values, remarks, performed_by)
+    VALUES
+        (UPPER(p_module), UPPER(p_action), p_ref_table, LEFT(p_ref_id, 64), NULLIF(TRIM(COALESCE(p_affected, '')), ''),
+         p_cycle_id, p_month, p_year, p_old, p_new, v_remarks, COALESCE(NULLIF(TRIM(p_by), ''), 'UNKNOWN'));
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_audit_event` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_audit_event`(
+    IN p_emp_id   VARCHAR(20),
+    IN p_action   VARCHAR(40),
+    IN p_ref_id   VARCHAR(64),
+    IN p_affected VARCHAR(20),
+    IN p_month    INT,
+    IN p_year     INT,
+    IN p_remarks  VARCHAR(1000)
+)
+ev: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_action        VARCHAR(40);
+    DECLARE v_cycle         BIGINT DEFAULT NULL;
+
+    SET v_action = UPPER(TRIM(COALESCE(p_action, '')));
+
+    IF v_action = 'ACCESS_DENIED' THEN
+        CALL hrms_payroll_audit_add('SECURITY', 'ACCESS_DENIED', 'procedure', p_ref_id, NULL, NULL, NULL, NULL,
+                                    NULL, NULL, p_remarks, COALESCE(NULLIF(TRIM(p_emp_id), ''), 'UNKNOWN'));
+        SELECT 'Y' AS status, 'Recorded.' AS remarks;
+        LEAVE ev;
+    END IF;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR', 'EMP') THEN
+        SELECT 'N' AS status, 'Access denied: only active users can record payroll events.' AS remarks;
+        LEAVE ev;
+    END IF;
+
+    IF v_action <> 'PAYSLIP_DOWNLOAD' THEN
+        SELECT 'N' AS status, 'Unknown payroll event.' AS remarks;
+        LEAVE ev;
+    END IF;
+    IF v_user_category = 'EMP' AND TRIM(COALESCE(p_affected, '')) <> TRIM(p_emp_id) THEN
+        SELECT 'N' AS status, 'Access denied: employees can only download their own payslips.' AS remarks;
+        LEAVE ev;
+    END IF;
+
+    SELECT MAX(payroll_cycle_id) INTO v_cycle FROM payroll_cycles
+     WHERE payroll_month = p_month AND payroll_year = p_year;
+    CALL hrms_payroll_audit_add('PAYSLIP', 'PAYSLIP_DOWNLOAD', 'employee_payslips', p_ref_id, p_affected, v_cycle,
+                                p_month, p_year, NULL, NULL, p_remarks, p_emp_id);
+    SELECT 'Y' AS status, 'Recorded.' AS remarks;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_audit_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_audit_list`(
+    IN p_emp_id VARCHAR(20),
+    IN p_module VARCHAR(20),
+    IN p_emp    VARCHAR(20),
+    IN p_from   DATE,
+    IN p_to     DATE,
+    IN p_search VARCHAR(100),
+    IN p_limit  INT,
+    IN p_offset INT
+)
+al: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_module        VARCHAR(20);
+    DECLARE v_emp           VARCHAR(20);
+    DECLARE v_search        VARCHAR(102);
+    DECLARE v_limit         INT;
+    DECLARE v_offset        INT;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view the payroll audit log.' AS remarks;
+        LEAVE al;
+    END IF;
+
+    SET v_module = NULLIF(UPPER(TRIM(COALESCE(p_module, ''))), '');
+    SET v_emp    = NULLIF(UPPER(TRIM(COALESCE(p_emp, ''))), '');
+    SET v_search = IF(NULLIF(TRIM(COALESCE(p_search, '')), '') IS NULL, NULL, CONCAT('%', TRIM(p_search), '%'));
+    SET v_limit  = LEAST(GREATEST(COALESCE(p_limit, 100), 1), 500);
+    SET v_offset = GREATEST(COALESCE(p_offset, 0), 0);
+
+    SELECT 'Y' AS status, '' AS remarks,
+           x.source, x.id, x.module, x.action, x.ref_table, x.ref_id,
+           x.affected_emp_id, na.emp_name AS affected_name,
+           x.payroll_cycle_id, x.payroll_month, x.payroll_year,
+           x.old_values, x.new_values, x.details,
+           x.performed_by, COALESCE(nb.emp_name, x.performed_by) AS performed_by_name, x.performed_at,
+           COUNT(*) OVER () AS total_rows
+      FROM (SELECT 'AUDIT' AS source, a.audit_id AS id, a.module, a.action, a.ref_table, a.ref_id,
+                   a.affected_emp_id, a.payroll_cycle_id, a.payroll_month, a.payroll_year,
+                   a.old_values, a.new_values, a.remarks AS details, a.performed_by, a.performed_at
+              FROM hrms_payroll_audit a
+            UNION ALL
+            SELECT 'CYCLE', l.log_id, 'CYCLE', l.action, 'payroll_cycles', l.cycle_code,
+                   l.emp_id, l.payroll_cycle_id, pc.payroll_month, pc.payroll_year,
+                   IF(l.from_status IS NULL, NULL, JSON_OBJECT('status', l.from_status)),
+                   IF(l.to_status IS NULL, NULL, JSON_OBJECT('status', l.to_status)),
+                   l.remarks, l.performed_by, l.performed_at
+              FROM payroll_cycle_status_log l
+              LEFT JOIN payroll_cycles pc ON pc.payroll_cycle_id = l.payroll_cycle_id) x
+      LEFT JOIN (SELECT emp_id, MAX(emp_name) AS emp_name FROM user_details GROUP BY emp_id) na ON na.emp_id = x.affected_emp_id
+      LEFT JOIN (SELECT emp_id, MAX(emp_name) AS emp_name FROM user_details GROUP BY emp_id) nb ON nb.emp_id = x.performed_by
+     WHERE (v_module IS NULL OR x.module = v_module)
+       AND (v_emp IS NULL OR UPPER(x.affected_emp_id) = v_emp OR UPPER(x.performed_by) = v_emp)
+       AND (p_from IS NULL OR x.performed_at >= p_from)
+       AND (p_to IS NULL OR x.performed_at < DATE_ADD(p_to, INTERVAL 1 DAY))
+       AND (v_search IS NULL OR x.action LIKE v_search OR x.ref_id LIKE v_search OR x.details LIKE v_search
+            OR na.emp_name LIKE v_search OR nb.emp_name LIKE v_search
+            OR CAST(x.old_values AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_general_ci LIKE v_search
+            OR CAST(x.new_values AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_general_ci LIKE v_search)
+     ORDER BY x.performed_at DESC, x.id DESC
+     LIMIT v_limit OFFSET v_offset;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_calculate_employee` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_calculate_employee`(IN p_emp_id VARCHAR(20), IN p_cycle_id BIGINT, IN p_detail_id BIGINT)
+ce: BEGIN
+    DECLARE v_ok      TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_status  VARCHAR(30);
+    DECLARE v_run     BIGINT;
+    DECLARE v_emp     VARCHAR(20);
+    DECLARE v_name    VARCHAR(150);
+    DECLARE v_dstat   VARCHAR(30);
+    DECLARE v_msg     VARCHAR(500) DEFAULT NULL;
+    DECLARE v_errs    INT DEFAULT 0;
+    DECLARE v_text    VARCHAR(500);
+    DECLARE v_net     DECIMAL(14,2);
+    DECLARE v_left    INT DEFAULT 0;
+    DECLARE v_failed  INT DEFAULT 0;
+    DECLARE v_n       INT DEFAULT 0;
+    DECLARE v_err     VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        UPDATE employee_payroll_details
+           SET employee_payroll_status = 'ERROR', calculation_remarks = LEFT(CONCAT('Calculation failed: ', COALESCE(v_err, '?')), 1000)
+         WHERE payroll_detail_id = p_detail_id AND employee_payroll_status IN ('PENDING', 'ERROR', 'CALCULATED');
+        SELECT 'N' AS status, COALESCE(v_err, 'Calculation failed.') AS remarks, p_detail_id AS payroll_detail_id,
+               v_emp AS emp_id, v_name AS emp_name, NULL AS net_pay, NULL AS pending_left, NULL AS error_count;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT MAX(pc.cycle_status), MAX(pr.payroll_run_id) INTO v_status, v_run
+      FROM payroll_cycles pc LEFT JOIN payroll_runs pr ON pr.payroll_cycle_id = pc.payroll_cycle_id
+     WHERE pc.payroll_cycle_id = p_cycle_id;
+    SELECT MAX(d.emp_id), MAX(d.employee_payroll_status) INTO v_emp, v_dstat
+      FROM employee_payroll_details d WHERE d.payroll_detail_id = p_detail_id AND d.payroll_run_id = v_run;
+    SELECT MAX(emp_name) INTO v_name FROM user_details WHERE emp_id = v_emp;
+    SET v_name = COALESCE(v_name, v_emp);
+
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can run payroll.';
+    ELSEIF v_status IS NULL THEN
+        SET v_msg = 'Payroll cycle not found.';
+    ELSEIF v_status NOT IN ('PROCESSING', 'CALCULATED') THEN
+        SET v_msg = CONCAT('Salaries can be calculated only while the cycle is PROCESSING or CALCULATED (now ', v_status, ').');
+    ELSEIF v_emp IS NULL THEN
+        SET v_msg = 'This employee is not part of the payroll cycle.';
+    ELSEIF v_dstat NOT IN ('PENDING', 'ERROR', 'CALCULATED') THEN
+        SET v_msg = CONCAT('Employee is ', v_dstat, ' and cannot be recalculated.');
+    END IF;
+
+    IF v_msg IS NULL THEN
+        CALL hrms_payroll_load_cycle_emps(p_cycle_id, v_emp);
+        SELECT COUNT(*) INTO v_n FROM tmp_hrms_cycle_emps WHERE att_final = 1 AND structure_id IS NOT NULL AND components > 0;
+        IF v_n = 0 THEN
+            SET v_msg = 'Attendance is not finalized or the employee has no active salary structure for this pay period.';
+        END IF;
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        IF v_emp IS NOT NULL AND v_dstat IN ('PENDING', 'ERROR', 'CALCULATED') AND v_status IN ('PROCESSING', 'CALCULATED') THEN
+            UPDATE employee_payroll_details SET employee_payroll_status = 'ERROR', calculation_remarks = v_msg
+             WHERE payroll_detail_id = p_detail_id;
+        END IF;
+        SELECT 'N' AS status, v_msg AS remarks, p_detail_id AS payroll_detail_id, v_emp AS emp_id, v_name AS emp_name,
+               NULL AS net_pay, NULL AS pending_left, NULL AS error_count;
+        LEAVE ce;
+    END IF;
+
+    START TRANSACTION;
+    UPDATE employee_payroll_details d
+      JOIN tmp_hrms_cycle_emps t ON t.emp_id = d.emp_id
+       SET d.structure_id = t.structure_id, d.monthly_ctc = t.monthly_ctc, d.annual_ctc = t.annual_ctc,
+           d.total_days = t.total_days, d.payable_days = hrms_pay_days(t.unpaid_days),
+           d.unpaid_leave_days = t.unpaid_days, d.absent_days = t.absent_days,
+           d.ctc1 = ROUND(t.monthly_ctc * hrms_pay_days(t.unpaid_days) / 30, 2),
+           d.calculation_remarks = CONCAT('Pay days ', hrms_pay_days(t.unpaid_days), ' of 30 (30 - ', t.unpaid_days, ' unpaid days).')
+     WHERE d.payroll_detail_id = p_detail_id;
+
+    CALL hrms_calculate_payroll_detail(p_detail_id, v_errs, v_text);
+    IF v_errs > 0 THEN
+        UPDATE employee_payroll_details
+           SET employee_payroll_status = 'ERROR', calculation_remarks = LEFT(COALESCE(v_text, 'Calculation failed.'), 1000)
+         WHERE payroll_detail_id = p_detail_id;
+    END IF;
+    IF v_status = 'CALCULATED' THEN
+        CALL hrms_payroll_refresh_run_totals(v_run);
+        CALL hrms_payroll_log(p_cycle_id, p_detail_id, v_emp, 'RECALCULATE_EMPLOYEE', v_dstat,
+                              IF(v_errs > 0, 'ERROR', 'CALCULATED'), COALESCE(v_text, 'Recalculated'), p_emp_id);
+    END IF;
+    COMMIT;
+
+    SELECT MAX(net_pay) INTO v_net FROM employee_payroll_details WHERE payroll_detail_id = p_detail_id;
+    SELECT COALESCE(SUM(employee_payroll_status = 'PENDING'), 0), COALESCE(SUM(employee_payroll_status = 'ERROR'), 0)
+      INTO v_left, v_failed FROM employee_payroll_details WHERE payroll_run_id = v_run;
+
+    SELECT IF(v_errs > 0, 'N', 'Y') AS status,
+           IF(v_errs > 0, COALESCE(v_text, 'Calculation failed.'), CONCAT('Net pay ', FORMAT(v_net, 2))) AS remarks,
+           p_detail_id AS payroll_detail_id, v_emp AS emp_id, v_name AS emp_name,
+           v_net AS net_pay, v_left AS pending_left, v_failed AS error_count;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_action` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_action`(
+    IN p_emp_id   VARCHAR(20),
+    IN p_cycle_id BIGINT,
+    IN p_action   VARCHAR(40),
+    IN p_remarks  VARCHAR(500)
+)
+ca: BEGIN
+    DECLARE v_ok      TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_action  VARCHAR(40);
+    DECLARE v_status  VARCHAR(30);
+    DECLARE v_new     VARCHAR(30);
+    DECLARE v_msg     VARCHAR(500) DEFAULT NULL;
+    DECLARE v_done    VARCHAR(500) DEFAULT NULL;
+    DECLARE v_run     BIGINT;
+    DECLARE v_n       INT DEFAULT 0;
+    DECLARE v_m       INT DEFAULT 0;
+    DECLARE v_list    VARCHAR(500);
+    DECLARE v_pending INT DEFAULT 0;
+    DECLARE v_allowed VARCHAR(200) DEFAULT '';
+    DECLARE v_err     VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'The step could not be completed. Nothing was changed.') AS remarks,
+               p_cycle_id AS payroll_cycle_id, v_status AS cycle_status, 0 AS pending_count;
+    END;
+
+    SET v_action = UPPER(TRIM(COALESCE(p_action, '')));
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can run payroll.' AS remarks,
+               p_cycle_id AS payroll_cycle_id, NULL AS cycle_status, 0 AS pending_count;
+        LEAVE ca;
+    END IF;
+
+    START TRANSACTION;
+    SELECT MAX(cycle_status) INTO v_status FROM payroll_cycles WHERE payroll_cycle_id = p_cycle_id FOR UPDATE;
+    SELECT MAX(payroll_run_id) INTO v_run FROM payroll_runs WHERE payroll_cycle_id = p_cycle_id;
+    SET v_allowed = COALESCE(hrms_payroll_cycle_actions(v_status), '');
+    SET SESSION group_concat_max_len = 1000000;
+
+    IF v_status IS NULL THEN
+        SET v_msg = 'Payroll cycle not found.';
+    ELSEIF FIND_IN_SET(v_action, v_allowed) = 0 THEN
+        SET v_msg = IF(v_action = 'BACK',
+                       CONCAT('A cycle in status ', v_status, ' cannot go back.'),
+                       CONCAT('"', v_action, '" is not allowed while the cycle is ', v_status,
+                              IF(v_allowed = '', '.', CONCAT('. Allowed: ', REPLACE(v_allowed, ',', ', '), '.'))));
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'BACK' THEN
+        SET v_new = CASE v_status
+            WHEN 'ATTENDANCE_VERIFIED' THEN 'OPEN'
+            WHEN 'STRUCTURE_VERIFIED'  THEN 'ATTENDANCE_VERIFIED'
+            WHEN 'PROCESSING'          THEN 'STRUCTURE_VERIFIED'
+            WHEN 'CALCULATED'          THEN 'STRUCTURE_VERIFIED'
+            WHEN 'APPROVED'            THEN 'CALCULATED' END;
+        IF v_status IN ('PROCESSING', 'CALCULATED') AND v_run IS NOT NULL THEN
+            UPDATE employee_payroll_details
+               SET employee_payroll_status = 'PENDING', calculation_remarks = 'Sent back: recalculate after the changes.'
+             WHERE payroll_run_id = v_run;
+            UPDATE payroll_runs SET run_status = 'DRAFT' WHERE payroll_run_id = v_run;
+            SET v_done = 'Back to salary structures. Employee results will be calculated again.';
+        ELSEIF v_status = 'APPROVED' THEN
+            UPDATE employee_payroll_details SET employee_payroll_status = 'CALCULATED'
+             WHERE payroll_run_id = v_run AND employee_payroll_status = 'APPROVED';
+            UPDATE payroll_runs SET run_status = 'CALCULATED', approved_by = NULL, approved_at = NULL WHERE payroll_run_id = v_run;
+            SET v_done = 'Approval withdrawn. The payroll is back to CALCULATED.';
+        ELSE
+            SET v_done = CONCAT('Moved back to ', v_new, '.');
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action IN ('VERIFY_ATTENDANCE', 'VERIFY_STRUCTURE', 'START_CALCULATION', 'RECALCULATE') THEN
+        CALL hrms_payroll_load_cycle_emps(p_cycle_id, NULL);
+        SELECT COUNT(*), COALESCE(SUM(att_final = 0), 0) INTO v_n, v_m FROM tmp_hrms_cycle_emps;
+        IF v_n = 0 THEN
+            SET v_msg = 'There are no active employees.';
+        ELSEIF v_m > 0 THEN
+            SELECT LEFT(CONCAT(v_m, ' employee(s) have no finalized attendance for this month: ',
+                               GROUP_CONCAT(CONCAT(emp_id, ' ', emp_name) ORDER BY emp_id SEPARATOR ', ')), 500)
+              INTO v_msg FROM tmp_hrms_cycle_emps WHERE att_final = 0;
+        END IF;
+        
+        
+        IF v_msg IS NULL THEN
+            SELECT COUNT(*) INTO v_m FROM tmp_hrms_cycle_emps
+             WHERE att_final = 1 AND ABS(COALESCE(paid_days, 0) + COALESCE(unpaid_days, 0) - COALESCE(total_days, 0)) > 0.01;
+            IF v_m > 0 THEN
+                SELECT LEFT(CONCAT(v_m, ' employee(s) have attendance that does not add up (paid + unpaid days is not the ',
+                                   'days of the period), so their pay days cannot be trusted. Correct the attendance first: ',
+                                   GROUP_CONCAT(CONCAT(emp_id, ' ', COALESCE(paid_days, 0), '+', COALESCE(unpaid_days, 0), '/', COALESCE(total_days, 0))
+                                                ORDER BY emp_id SEPARATOR ', ')), 500)
+                  INTO v_msg FROM tmp_hrms_cycle_emps
+                 WHERE att_final = 1 AND ABS(COALESCE(paid_days, 0) + COALESCE(unpaid_days, 0) - COALESCE(total_days, 0)) > 0.01;
+            END IF;
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND v_action IN ('VERIFY_STRUCTURE', 'START_CALCULATION', 'RECALCULATE') THEN
+        SELECT COUNT(*) INTO v_m FROM tmp_hrms_cycle_emps WHERE structure_id IS NULL OR components = 0;
+        IF v_m > 0 THEN
+            SELECT LEFT(CONCAT(v_m, ' employee(s) have no active salary structure for this pay period: ',
+                               GROUP_CONCAT(CONCAT(emp_id, ' ', emp_name) ORDER BY emp_id SEPARATOR ', ')), 500)
+              INTO v_msg FROM tmp_hrms_cycle_emps WHERE structure_id IS NULL OR components = 0;
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND v_action = 'VERIFY_ATTENDANCE' THEN
+        SET v_new = 'ATTENDANCE_VERIFIED';
+        SET v_done = CONCAT('Attendance of all ', v_n, ' employees is finalized. Next: check the salary structures.');
+    END IF;
+    IF v_msg IS NULL AND v_action = 'VERIFY_STRUCTURE' THEN
+        SET v_new = 'STRUCTURE_VERIFIED';
+        SET v_done = CONCAT('All ', v_n, ' employees have a salary structure. Next: calculate salaries.');
+    END IF;
+    IF v_msg IS NULL AND v_action IN ('START_CALCULATION', 'RECALCULATE') THEN
+        CALL hrms_payroll_prepare_run(p_cycle_id, p_emp_id, v_run, v_pending);
+        SET v_new = 'PROCESSING';
+        SET v_done = CONCAT(v_pending, ' employees are ready to be calculated.');
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'FINISH_CALCULATION' THEN
+        SELECT COUNT(*), COALESCE(SUM(employee_payroll_status = 'PENDING'), 0), COALESCE(SUM(employee_payroll_status = 'ERROR'), 0)
+          INTO v_n, v_pending, v_m
+          FROM employee_payroll_details WHERE payroll_run_id = v_run;
+        IF v_n = 0 THEN
+            SET v_msg = 'No employees in this payroll yet. Start the calculation first.';
+        ELSEIF v_pending > 0 THEN
+            SET v_msg = CONCAT(v_pending, ' employee(s) are not calculated yet.');
+        ELSEIF v_m > 0 THEN
+            SET v_msg = CONCAT(v_m, ' employee(s) could not be calculated. Fix them and calculate them again.');
+        ELSE
+            CALL hrms_payroll_refresh_run_totals(v_run);
+            UPDATE payroll_runs SET run_status = 'CALCULATED', calculated_by = p_emp_id, calculated_at = NOW()
+             WHERE payroll_run_id = v_run;
+            SET v_new = 'CALCULATED';
+            SET v_done = CONCAT('Salaries of ', v_n, ' employees calculated. Review, put employees on hold if needed, then approve.');
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'APPROVE' THEN
+        SELECT COUNT(*) INTO v_m FROM employee_payroll_details
+         WHERE payroll_run_id = v_run AND employee_payroll_status IN ('PENDING', 'ERROR');
+        IF v_m > 0 THEN
+            SET v_msg = CONCAT(v_m, ' employee(s) are not calculated. Recalculate them before approving.');
+        ELSE
+            CALL hrms_payroll_refresh_run_totals(v_run);
+            UPDATE employee_payroll_details SET employee_payroll_status = 'APPROVED'
+             WHERE payroll_run_id = v_run AND employee_payroll_status = 'CALCULATED';
+            UPDATE payroll_runs SET run_status = 'APPROVED', approved_by = p_emp_id, approved_at = NOW()
+             WHERE payroll_run_id = v_run;
+            SET v_new = 'APPROVED';
+            SET v_done = 'Payroll approved. Next: finalize (after that the cycle cannot go back).';
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'FINALIZE' THEN
+        UPDATE employee_payroll_details SET employee_payroll_status = 'FINALIZED'
+         WHERE payroll_run_id = v_run AND employee_payroll_status = 'APPROVED';
+        UPDATE payroll_runs SET run_status = 'FINALIZED', finalized_by = p_emp_id, finalized_at = NOW()
+         WHERE payroll_run_id = v_run;
+        UPDATE payroll_cycles SET finalized_by = p_emp_id, finalized_at = NOW() WHERE payroll_cycle_id = p_cycle_id;
+        SET v_new = 'FINALIZED';
+        SET v_done = 'Payroll finalized. Next: mark as paid.';
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'MARK_PAID' THEN
+        UPDATE employee_payroll_details
+           SET payment_status = 'PAID', paid_by = p_emp_id, paid_at = NOW()
+         WHERE payroll_run_id = v_run AND payment_decision = 'RELEASE' AND payment_status <> 'PAID';
+        SET v_n = ROW_COUNT();
+        UPDATE employee_payroll_details SET payment_status = 'ON_HOLD'
+         WHERE payroll_run_id = v_run AND payment_decision = 'HOLD' AND payment_status <> 'PAID';
+        SET v_m = ROW_COUNT();
+        UPDATE payroll_cycles SET paid_by = p_emp_id, paid_at = NOW() WHERE payroll_cycle_id = p_cycle_id;
+        SET v_new = IF(v_m > 0, 'PARTIALLY_PAID', 'PAID');
+        SET v_done = IF(v_m > 0,
+            CONCAT(v_n, ' employees marked as paid. ', v_m, ' employee(s) are on hold: pay them from the hold list. Next: generate payslips.'),
+            CONCAT(v_n, ' employees marked as paid. Next: generate payslips.'));
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'GENERATE_PAYSLIPS' THEN
+        CALL hrms_payroll_generate_payslips(p_cycle_id, NULL, p_emp_id, v_n);
+        SET v_new = v_status;
+        SET v_done = CONCAT(v_n, ' payslip(s) generated',
+                            IF(v_status = 'PAID', '. Next: close the cycle.', '. Employees on hold get a payslip when they are paid.'));
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'CLOSE' THEN
+        SELECT COUNT(*) INTO v_m FROM employee_payroll_details WHERE payroll_run_id = v_run AND payment_status <> 'PAID';
+        SELECT COUNT(*) INTO v_n FROM employee_payroll_details d
+         WHERE d.payroll_run_id = v_run AND d.payment_status = 'PAID'
+           AND NOT EXISTS (SELECT 1 FROM employee_payslips s WHERE s.payroll_detail_id = d.payroll_detail_id AND s.payslip_status <> 'REVOKED');
+        IF v_m > 0 THEN
+            SET v_msg = CONCAT(v_m, ' employee(s) are not paid yet. The cycle cannot be closed.');
+        ELSEIF v_n > 0 THEN
+            SET v_msg = CONCAT(v_n, ' paid employee(s) have no payslip yet. Generate payslips first.');
+        ELSE
+            UPDATE payroll_cycles SET closed_by = p_emp_id, closed_at = NOW() WHERE payroll_cycle_id = p_cycle_id;
+            SET v_new = 'CLOSED';
+            SET v_done = 'Payroll cycle closed.';
+        END IF;
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, v_msg AS remarks, p_cycle_id AS payroll_cycle_id, v_status AS cycle_status, 0 AS pending_count;
+        LEAVE ca;
+    END IF;
+
+    UPDATE payroll_cycles SET cycle_status = v_new WHERE payroll_cycle_id = p_cycle_id;
+    CALL hrms_payroll_log(p_cycle_id, NULL, NULL, v_action, v_status, v_new,
+                          CONCAT(v_done, IF(NULLIF(TRIM(p_remarks), '') IS NULL, '', CONCAT(' Note: ', TRIM(p_remarks)))), p_emp_id);
+    COMMIT;
+
+    SELECT COUNT(*) INTO v_pending FROM employee_payroll_details
+     WHERE payroll_run_id = v_run AND employee_payroll_status IN ('PENDING', 'ERROR');
+    SELECT 'Y' AS status, v_done AS remarks, p_cycle_id AS payroll_cycle_id, v_new AS cycle_status, v_pending AS pending_count;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_breakdown` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_breakdown`(IN p_emp_id VARCHAR(20), IN p_cycle_id BIGINT)
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salaries.' AS remarks, NULL AS emp_id;
+    ELSE
+        CALL hrms_payroll_load_cycle_emps(p_cycle_id, NULL);
+        SELECT 'Y' AS status, '' AS remarks,
+               t.emp_id, t.emp_name, t.structure_id, ss.effective_from, ss.effective_to, t.monthly_ctc,
+               m.component_id, m.component_code, m.component_name, m.component_type, m.calculation_scope,
+               m.calculation_order, x.monthly_amount, x.is_overridden,
+               x.calculation_type AS own_calculation_type, x.component_value AS own_value,
+               x.percentage_base AS own_base, x.formula_expression AS own_formula
+          FROM tmp_hrms_cycle_emps t
+          LEFT JOIN salary_structure ss ON ss.structure_id = t.structure_id
+          LEFT JOIN (
+                SELECT e.structure_id, e.component_id, e.monthly_amount, e.is_overridden,
+                       e.calculation_type, e.component_value, e.percentage_base, e.formula_expression
+                  FROM employee_salary_structure e
+                UNION ALL
+                SELECT s.structure_id, s.component_id, s.monthly_amount, 0, NULL, NULL, NULL, NULL
+                  FROM employee_salary_structure_totals s
+               ) x ON x.structure_id = t.structure_id
+          LEFT JOIN salary_component_master m ON m.component_id = x.component_id
+         WHERE x.component_id IS NULL OR m.is_active = 1
+         ORDER BY t.emp_id, m.calculation_order, m.component_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_create` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_create`(
+    IN p_emp_id       VARCHAR(20),
+    IN p_month        INT,
+    IN p_year         INT,
+    IN p_cycle_code   VARCHAR(50),
+    IN p_period_start DATE,
+    IN p_period_end   DATE,
+    IN p_payment_date DATE,
+    IN p_remarks      VARCHAR(500)
+)
+cc: BEGIN
+    DECLARE v_ok   TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_msg  VARCHAR(500) DEFAULT NULL;
+    DECLARE v_n    INT DEFAULT 0;
+    DECLARE v_code VARCHAR(50);
+    DECLARE v_id   BIGINT;
+    DECLARE v_err  VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Payroll cycle could not be created.') AS remarks, NULL AS payroll_cycle_id;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SET v_code = TRIM(COALESCE(p_cycle_code, ''));
+
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can create payroll cycles.';
+    ELSEIF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12 OR p_year IS NULL OR p_year NOT BETWEEN 2000 AND 2100 THEN
+        SET v_msg = 'Invalid payroll month or year.';
+    ELSEIF v_code = '' THEN
+        SET v_msg = 'Payroll cycle code is required.';
+    ELSEIF p_period_start IS NULL OR p_period_end IS NULL THEN
+        SET v_msg = 'Start date and end date are required.';
+    ELSEIF p_period_start > p_period_end THEN
+        SET v_msg = 'Start date cannot be after end date.';
+    ELSEIF DATEDIFF(p_period_end, p_period_start) > 61 THEN
+        SET v_msg = 'A pay period cannot be longer than 62 days.';
+    ELSEIF p_payment_date IS NOT NULL AND p_payment_date < p_period_start THEN
+        SET v_msg = 'Payment date cannot be before the start date.';
+    END IF;
+
+    
+    IF v_msg IS NULL THEN
+        SELECT COUNT(*) INTO v_n FROM payroll_cycles WHERE payroll_month = p_month AND payroll_year = p_year;
+        IF v_n > 0 THEN
+            SET v_msg = CONCAT('A payroll cycle already exists for ',
+                               ELT(p_month, 'January','February','March','April','May','June','July',
+                                   'August','September','October','November','December'), ' ', p_year, '.');
+        END IF;
+    END IF;
+    
+    IF v_msg IS NULL THEN
+        SELECT MIN(CONCAT('Payroll for ',
+                          ELT(payroll_month, 'January','February','March','April','May','June','July',
+                              'August','September','October','November','December'),
+                          ' ', payroll_year, ' (', COALESCE(cycle_code, payroll_cycle_id), ') is still ', cycle_status,
+                          '. Finish or delete it before creating another payroll cycle.'))
+          INTO v_msg
+          FROM payroll_cycles
+         WHERE cycle_status <> 'CLOSED';
+    END IF;
+    IF v_msg IS NULL THEN
+        SELECT COUNT(*) INTO v_n FROM payroll_cycles WHERE cycle_code = v_code;
+        IF v_n > 0 THEN
+            SET v_msg = CONCAT('Payroll cycle code already exists: ', v_code);
+        END IF;
+    END IF;
+    IF v_msg IS NULL THEN
+        SELECT MIN(CONCAT('The period overlaps the cycle ', COALESCE(cycle_code, payroll_cycle_id), ' (',
+                          DATE_FORMAT(period_start, '%d %b %Y'), ' - ', DATE_FORMAT(period_end, '%d %b %Y'), ').'))
+          INTO v_msg
+          FROM payroll_cycles
+         WHERE period_start <= p_period_end AND period_end >= p_period_start;
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, NULL AS payroll_cycle_id;
+        LEAVE cc;
+    END IF;
+
+    START TRANSACTION;
+    INSERT INTO payroll_cycles
+        (cycle_code, payroll_month, payroll_year, period_start, period_end, payment_date, cycle_status, created_by, remarks)
+    VALUES
+        (v_code, p_month, p_year, p_period_start, p_period_end, p_payment_date, 'OPEN', p_emp_id, NULLIF(TRIM(p_remarks), ''));
+    SET v_id = LAST_INSERT_ID();
+    CALL hrms_payroll_log(v_id, NULL, NULL, 'CREATE', NULL, 'OPEN', CONCAT('Cycle ', v_code, ' created'), p_emp_id);
+    COMMIT;
+
+    SELECT 'Y' AS status, CONCAT('Payroll cycle ', v_code, ' created. Next: verify attendance.') AS remarks,
+           v_id AS payroll_cycle_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_defaults` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_defaults`(IN p_emp_id VARCHAR(20), IN p_month INT, IN p_year INT)
+df: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_sd    INT;
+    DECLARE v_ed    INT;
+    DECLARE v_pd    INT;
+    DECLARE v_first DATE;
+    DECLARE v_prev  DATE;
+    DECLARE v_start DATE;
+    DECLARE v_end   DATE;
+    DECLARE v_pay   DATE;
+    DECLARE v_next  DATE;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can create payroll cycles.' AS remarks;
+        LEAVE df;
+    END IF;
+
+    IF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12 OR p_year IS NULL OR p_year NOT BETWEEN 2000 AND 2100 THEN
+        SELECT 'N' AS status, 'Invalid payroll month or year.' AS remarks;
+    ELSE
+        SELECT MAX(payroll_cycle_start_day), MAX(payroll_cycle_end_day), MAX(salary_pay_day)
+          INTO v_sd, v_ed, v_pd FROM company_settings;
+        SET v_first = STR_TO_DATE(CONCAT(p_year, '-', p_month, '-01'), '%Y-%c-%d');
+        SET v_prev  = DATE_SUB(v_first, INTERVAL 1 MONTH);
+
+        IF v_sd IS NULL OR v_ed IS NULL OR v_sd NOT BETWEEN 1 AND 31 OR v_ed NOT BETWEEN 1 AND 31 THEN
+            SET v_start = v_first;
+            SET v_end   = LAST_DAY(v_first);
+        ELSEIF v_sd > v_ed THEN
+            SET v_start = DATE_ADD(v_prev, INTERVAL LEAST(v_sd, DAY(LAST_DAY(v_prev))) - 1 DAY);
+            SET v_end   = DATE_ADD(v_first, INTERVAL LEAST(v_ed, DAY(LAST_DAY(v_first))) - 1 DAY);
+        ELSE
+            SET v_start = DATE_ADD(v_first, INTERVAL LEAST(v_sd, DAY(LAST_DAY(v_first))) - 1 DAY);
+            SET v_end   = DATE_ADD(v_first, INTERVAL LEAST(v_ed, DAY(LAST_DAY(v_first))) - 1 DAY);
+        END IF;
+
+        IF v_pd IS NULL OR v_pd NOT BETWEEN 1 AND 31 THEN
+            SET v_pay = v_end;
+        ELSE
+            SET v_next = DATE_ADD(DATE_FORMAT(v_end, '%Y-%m-01'), INTERVAL IF(v_pd <= DAY(v_end), 1, 0) MONTH);
+            SET v_pay  = DATE_ADD(v_next, INTERVAL LEAST(v_pd, DAY(LAST_DAY(v_next))) - 1 DAY);
+        END IF;
+
+        SELECT 'Y' AS status, 'Defaults from company settings' AS remarks,
+               v_start AS period_start, v_end AS period_end, v_pay AS payment_date,
+               CONCAT('pay-', DATE_FORMAT(v_start, '%d%m'), '-', DATE_FORMAT(v_end, '%d%m'), '-', p_year) AS cycle_code,
+               v_sd AS start_day, v_ed AS end_day, v_pd AS pay_day;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_delete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_delete`(
+    IN p_emp_id   VARCHAR(20),
+    IN p_cycle_id BIGINT,
+    IN p_reason   VARCHAR(500)
+)
+cd: BEGIN
+    DECLARE v_ok      TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_status  VARCHAR(30);
+    DECLARE v_code    VARCHAR(50);
+    DECLARE v_month   INT;
+    DECLARE v_year    INT;
+    DECLARE v_emps    INT DEFAULT 0;
+    DECLARE v_net     DECIMAL(14,2) DEFAULT 0;
+    DECLARE v_paid    INT DEFAULT 0;
+    DECLARE v_slips   INT DEFAULT 0;
+    DECLARE v_msg     VARCHAR(500) DEFAULT NULL;
+    DECLARE v_label   VARCHAR(60);
+    DECLARE v_err     VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'The payroll cycle could not be deleted. Nothing was changed.') AS remarks,
+               p_cycle_id AS payroll_cycle_id;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can delete payroll cycles.' AS remarks, p_cycle_id AS payroll_cycle_id;
+        LEAVE cd;
+    END IF;
+    IF NULLIF(TRIM(COALESCE(p_reason, '')), '') IS NULL THEN
+        SELECT 'N' AS status, 'A reason is required to delete a payroll cycle.' AS remarks, p_cycle_id AS payroll_cycle_id;
+        LEAVE cd;
+    END IF;
+
+    START TRANSACTION;
+    SELECT MAX(cycle_status), MAX(cycle_code), MAX(payroll_month), MAX(payroll_year)
+      INTO v_status, v_code, v_month, v_year
+      FROM payroll_cycles WHERE payroll_cycle_id = p_cycle_id FOR UPDATE;
+
+    SELECT COUNT(*), COALESCE(SUM(d.net_pay), 0), COALESCE(SUM(d.payment_status = 'PAID'), 0)
+      INTO v_emps, v_net, v_paid
+      FROM employee_payroll_details d
+      JOIN payroll_runs r ON r.payroll_run_id = d.payroll_run_id
+     WHERE r.payroll_cycle_id = p_cycle_id;
+    SELECT COUNT(*) INTO v_slips
+      FROM employee_payslips s
+      JOIN employee_payroll_details d ON d.payroll_detail_id = s.payroll_detail_id
+      JOIN payroll_runs r ON r.payroll_run_id = d.payroll_run_id
+     WHERE r.payroll_cycle_id = p_cycle_id;
+
+    IF v_status IS NULL THEN
+        SET v_msg = 'Payroll cycle not found.';
+    ELSEIF v_status NOT IN ('OPEN', 'ATTENDANCE_VERIFIED', 'STRUCTURE_VERIFIED', 'PROCESSING', 'CALCULATED', 'APPROVED') THEN
+        SET v_msg = CONCAT('A payroll cycle that is ', v_status, ' cannot be deleted. Only cycles that are not finalized can be deleted.');
+    ELSEIF v_paid > 0 OR v_slips > 0 THEN
+        SET v_msg = 'This payroll has paid employees or payslips and cannot be deleted.';
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, v_msg AS remarks, p_cycle_id AS payroll_cycle_id;
+        LEAVE cd;
+    END IF;
+
+    SET v_label = CONCAT(ELT(v_month, 'January','February','March','April','May','June','July',
+                             'August','September','October','November','December'), ' ', v_year);
+
+    DELETE c FROM employee_payroll_component_details c
+      JOIN employee_payroll_details d ON d.payroll_detail_id = c.payroll_detail_id
+      JOIN payroll_runs r ON r.payroll_run_id = d.payroll_run_id
+     WHERE r.payroll_cycle_id = p_cycle_id;
+    DELETE d FROM employee_payroll_details d
+      JOIN payroll_runs r ON r.payroll_run_id = d.payroll_run_id
+     WHERE r.payroll_cycle_id = p_cycle_id;
+    DELETE FROM payroll_runs WHERE payroll_cycle_id = p_cycle_id;
+
+    CALL hrms_payroll_log(p_cycle_id, NULL, NULL, 'DELETE', v_status, 'DELETED',
+                          LEFT(CONCAT('Payroll ', v_label, ' deleted. Reason: ', TRIM(p_reason),
+                                      IF(v_emps > 0, CONCAT('. It had ', v_emps, ' employees, net pay ', FORMAT(v_net, 2)), '')), 500),
+                          p_emp_id);
+    UPDATE payroll_cycle_status_log
+       SET payroll_cycle_id = -p_cycle_id, cycle_code = COALESCE(cycle_code, v_code)
+     WHERE payroll_cycle_id = p_cycle_id;
+    DELETE FROM payroll_cycles WHERE payroll_cycle_id = p_cycle_id;
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           CONCAT('Payroll ', v_label, ' (', v_code, ') deleted.', IF(v_emps > 0, CONCAT(' ', v_emps, ' employee results removed.'), '')) AS remarks,
+           p_cycle_id AS payroll_cycle_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_employees` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_employees`(IN p_emp_id VARCHAR(20), IN p_cycle_id BIGINT, IN p_filter VARCHAR(20))
+BEGIN
+    DECLARE v_ok  TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_run BIGINT;
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT MAX(payroll_run_id) INTO v_run FROM payroll_runs WHERE payroll_cycle_id = p_cycle_id;
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view payroll cycles.' AS remarks, NULL AS payroll_detail_id;
+    ELSE
+        SELECT 'Y' AS status, '' AS remarks,
+               d.payroll_detail_id, d.emp_id, COALESCE(n.emp_name, d.emp_id) AS emp_name,
+               d.structure_id, d.monthly_ctc, d.total_days, d.payable_days, d.unpaid_leave_days, d.absent_days, d.ctc1,
+               d.gross_earnings, d.total_deductions, d.employer_contributions, d.net_pay,
+               d.employee_payroll_status, d.payment_decision, d.payment_status,
+               d.hold_reason, d.hold_by, d.hold_at, d.released_by, d.released_at, d.paid_by, d.paid_at,
+               d.calculation_remarks,
+               (SELECT MAX(s.payslip_number) FROM employee_payslips s
+                 WHERE s.payroll_detail_id = d.payroll_detail_id AND s.payslip_status <> 'REVOKED') AS payslip_number
+          FROM employee_payroll_details d
+          LEFT JOIN (SELECT emp_id, MAX(emp_name) AS emp_name FROM user_details GROUP BY emp_id) n ON n.emp_id = d.emp_id
+         WHERE d.payroll_run_id = v_run
+           AND (p_filter IS NULL OR p_filter = ''
+                OR (p_filter = 'PENDING' AND d.employee_payroll_status IN ('PENDING', 'ERROR'))
+                OR (p_filter = 'HOLD' AND d.payment_decision = 'HOLD' AND d.payment_status <> 'PAID')
+                OR (p_filter = 'UNPAID' AND d.payment_status <> 'PAID'))
+         ORDER BY d.emp_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_get`(IN p_emp_id VARCHAR(20), IN p_cycle_id BIGINT)
+BEGIN
+    DECLARE v_ok       TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_n        INT DEFAULT 0;
+    DECLARE v_run      BIGINT;
+    DECLARE v_active   INT DEFAULT 0;
+    DECLARE v_att_ok   INT DEFAULT 0;
+    DECLARE v_att_miss VARCHAR(500);
+    DECLARE v_str_ok   INT DEFAULT 0;
+    DECLARE v_str_miss VARCHAR(500);
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT COUNT(*) INTO v_n FROM payroll_cycles WHERE payroll_cycle_id = p_cycle_id;
+
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view payroll cycles.' AS remarks;
+    ELSEIF v_n = 0 THEN
+        SELECT 'N' AS status, 'Payroll cycle not found.' AS remarks;
+    ELSE
+        CALL hrms_payroll_load_cycle_emps(p_cycle_id, NULL);
+        SELECT COUNT(*), COALESCE(SUM(att_final), 0), COALESCE(SUM(structure_id IS NOT NULL AND components > 0), 0)
+          INTO v_active, v_att_ok, v_str_ok
+          FROM tmp_hrms_cycle_emps;
+        SELECT LEFT(GROUP_CONCAT(CONCAT(emp_id, ' ', emp_name) ORDER BY emp_id SEPARATOR ', '), 500) INTO v_att_miss
+          FROM tmp_hrms_cycle_emps WHERE att_final = 0;
+        SELECT LEFT(GROUP_CONCAT(CONCAT(emp_id, ' ', emp_name) ORDER BY emp_id SEPARATOR ', '), 500) INTO v_str_miss
+          FROM tmp_hrms_cycle_emps WHERE structure_id IS NULL OR components = 0;
+        SELECT MAX(payroll_run_id) INTO v_run FROM payroll_runs WHERE payroll_cycle_id = p_cycle_id;
+
+        SELECT 'Y' AS status, 'Payroll cycle retrieved' AS remarks,
+               pc.payroll_cycle_id, pc.cycle_code, pc.payroll_month,
+               ELT(pc.payroll_month, 'January','February','March','April','May','June','July',
+                   'August','September','October','November','December') AS month_name,
+               pc.payroll_year, pc.period_start, pc.period_end, pc.payment_date, pc.cycle_status, pc.remarks AS cycle_remarks,
+               pc.created_by, pc.created_at, pc.finalized_by, pc.finalized_at, pc.paid_by, pc.paid_at, pc.closed_by, pc.closed_at,
+               hrms_payroll_cycle_actions(pc.cycle_status) AS allowed_actions,
+               v_active AS active_employees,
+               v_att_ok AS attendance_finalized, v_att_miss AS attendance_missing,
+               v_str_ok AS structures_ready, v_str_miss AS structures_missing,
+               v_run AS payroll_run_id, pr.run_status,
+               COALESCE(pr.total_employees, 0) AS run_employees,
+               COALESCE(pr.total_earnings, 0) AS total_earnings,
+               COALESCE(pr.total_deductions, 0) AS total_deductions,
+               COALESCE(pr.total_employer_contributions, 0) AS total_employer_contributions,
+               COALESCE(pr.total_net_pay, 0) AS total_net_pay,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run) AS detail_count,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.employee_payroll_status = 'PENDING') AS pending_count,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.employee_payroll_status = 'ERROR') AS error_count,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.payment_decision = 'HOLD' AND d.payment_status <> 'PAID') AS on_hold_count,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.payment_status = 'PAID') AS paid_count,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.payment_status <> 'PAID') AS unpaid_count,
+               (SELECT COUNT(*) FROM employee_payslips s JOIN employee_payroll_details d ON d.payroll_detail_id = s.payroll_detail_id
+                 WHERE d.payroll_run_id = v_run AND s.payslip_status <> 'REVOKED') AS payslip_count,
+               (SELECT COALESCE(SUM(d.net_pay), 0) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.payment_status = 'PAID') AS paid_net_pay,
+               (SELECT COALESCE(SUM(d.net_pay), 0) FROM employee_payroll_details d WHERE d.payroll_run_id = v_run AND d.payment_decision = 'HOLD' AND d.payment_status <> 'PAID') AS on_hold_net_pay
+          FROM payroll_cycles pc
+          LEFT JOIN payroll_runs pr ON pr.payroll_run_id = v_run
+         WHERE pc.payroll_cycle_id = p_cycle_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_id_for` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_id_for`(
+    IN p_month INT,
+    IN p_year  INT
+)
+BEGIN
+    SELECT MAX(payroll_cycle_id) AS id
+      FROM payroll_cycles
+     WHERE payroll_month = p_month
+       AND payroll_year  = p_year;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_list`(IN p_emp_id VARCHAR(20), IN p_year INT)
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view payroll cycles.' AS remarks, NULL AS payroll_cycle_id;
+    ELSE
+        SELECT 'Y' AS status, 'Payroll cycles retrieved' AS remarks,
+               pc.payroll_cycle_id, pc.cycle_code, pc.payroll_month, MONTHNAME(pc.period_end) AS period_month_name,
+               ELT(pc.payroll_month, 'January','February','March','April','May','June','July',
+                   'August','September','October','November','December') AS month_name,
+               pc.payroll_year, pc.period_start, pc.period_end, pc.payment_date, pc.cycle_status, pc.remarks,
+               pr.payroll_run_id, COALESCE(pr.run_status, 'DRAFT') AS run_status,
+               COALESCE(pr.total_employees, 0) AS total_employees,
+               COALESCE(pr.total_earnings, 0) AS total_earnings,
+               COALESCE(pr.total_deductions, 0) AS total_deductions,
+               COALESCE(pr.total_net_pay, 0) AS total_net_pay,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = pr.payroll_run_id
+                   AND d.payment_decision = 'HOLD' AND d.payment_status <> 'PAID') AS on_hold_count,
+               (SELECT COUNT(*) FROM employee_payroll_details d WHERE d.payroll_run_id = pr.payroll_run_id
+                   AND d.payment_status = 'PAID') AS paid_count,
+               hrms_payroll_cycle_actions(pc.cycle_status) AS allowed_actions
+          FROM payroll_cycles pc
+          LEFT JOIN payroll_runs pr
+            ON pr.payroll_run_id = (SELECT MAX(r.payroll_run_id) FROM payroll_runs r WHERE r.payroll_cycle_id = pc.payroll_cycle_id)
+         WHERE p_year IS NULL OR pc.payroll_year = p_year
+         ORDER BY pc.payroll_year DESC, pc.payroll_month DESC;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_log_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_log_list`(IN p_emp_id VARCHAR(20), IN p_cycle_id BIGINT)
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view payroll cycles.' AS remarks, NULL AS log_id;
+    ELSE
+        SELECT 'Y' AS status, '' AS remarks, l.log_id, l.payroll_detail_id, l.emp_id, l.action, l.from_status, l.to_status,
+               l.remarks AS log_remarks, l.performed_by, COALESCE(n.emp_name, l.performed_by) AS performed_by_name, l.performed_at
+          FROM payroll_cycle_status_log l
+          LEFT JOIN (SELECT emp_id, MAX(emp_name) AS emp_name FROM user_details GROUP BY emp_id) n ON n.emp_id = l.performed_by
+         WHERE l.payroll_cycle_id = p_cycle_id
+         ORDER BY l.log_id DESC
+         LIMIT 200;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_cycle_readiness` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_cycle_readiness`(IN p_emp_id VARCHAR(20), IN p_cycle_id BIGINT)
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view payroll cycles.' AS remarks, NULL AS emp_id;
+    ELSE
+        CALL hrms_payroll_load_cycle_emps(p_cycle_id, NULL);
+        SELECT 'Y' AS status, '' AS remarks, t.emp_id, t.emp_name, t.has_att, t.att_final,
+               t.total_days, t.paid_days, t.unpaid_days, t.absent_days,
+               t.structure_id, t.monthly_ctc, t.annual_ctc, t.components,
+               IF(t.structure_id IS NULL, NULL, (SELECT COUNT(*) FROM employee_salary_structure e
+                                                  WHERE e.structure_id = t.structure_id AND e.is_overridden = 1)) AS overridden_components,
+               (SELECT ROUND(MAX(x.monthly_amount), 2) FROM employee_salary_structure_totals x
+                  JOIN salary_component_master m ON m.component_id = x.component_id
+                 WHERE x.structure_id = t.structure_id AND m.component_code = 'NET_PAY') AS full_month_net_pay
+          FROM tmp_hrms_cycle_emps t
+         ORDER BY (t.att_final = 1 AND t.structure_id IS NOT NULL AND t.components > 0), t.emp_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_employee_hold` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_employee_hold`(
+    IN p_emp_id    VARCHAR(20),
+    IN p_detail_id BIGINT,
+    IN p_action    VARCHAR(20),
+    IN p_reason    VARCHAR(500)
+)
+eh: BEGIN
+    DECLARE v_ok     TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_action VARCHAR(20);
+    DECLARE v_cycle  BIGINT;
+    DECLARE v_status VARCHAR(30);
+    DECLARE v_emp    VARCHAR(20);
+    DECLARE v_dec    VARCHAR(20);
+    DECLARE v_pay    VARCHAR(20);
+    DECLARE v_msg    VARCHAR(500) DEFAULT NULL;
+    DECLARE v_err    VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Hold could not be changed.') AS remarks, p_detail_id AS payroll_detail_id;
+    END;
+
+    SET v_action = UPPER(TRIM(COALESCE(p_action, '')));
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT MAX(pc.payroll_cycle_id), MAX(pc.cycle_status), MAX(d.emp_id), MAX(d.payment_decision), MAX(d.payment_status)
+      INTO v_cycle, v_status, v_emp, v_dec, v_pay
+      FROM employee_payroll_details d
+      JOIN payroll_runs pr ON pr.payroll_run_id = d.payroll_run_id
+      JOIN payroll_cycles pc ON pc.payroll_cycle_id = pr.payroll_cycle_id
+     WHERE d.payroll_detail_id = p_detail_id;
+
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can hold or release salaries.';
+    ELSEIF v_emp IS NULL THEN
+        SET v_msg = 'Employee payroll row not found.';
+    ELSEIF v_action NOT IN ('HOLD', 'RELEASE') THEN
+        SET v_msg = 'Action must be HOLD or RELEASE.';
+    ELSEIF v_status NOT IN ('CALCULATED', 'APPROVED', 'FINALIZED', 'PARTIALLY_PAID') THEN
+        SET v_msg = CONCAT('Salaries can be held or released only after calculation and before the cycle is fully paid (now ', v_status, ').');
+    ELSEIF v_pay = 'PAID' THEN
+        SET v_msg = 'This employee is already paid.';
+    ELSEIF v_action = 'HOLD' AND NULLIF(TRIM(p_reason), '') IS NULL THEN
+        SET v_msg = 'A reason is required to hold a salary.';
+    ELSEIF v_action = 'HOLD' AND v_dec = 'HOLD' THEN
+        SET v_msg = 'This salary is already on hold.';
+    ELSEIF v_action = 'RELEASE' AND v_dec = 'RELEASE' THEN
+        SET v_msg = 'This salary is not on hold.';
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, p_detail_id AS payroll_detail_id;
+        LEAVE eh;
+    END IF;
+
+    START TRANSACTION;
+    IF v_action = 'HOLD' THEN
+        UPDATE employee_payroll_details
+           SET payment_decision = 'HOLD', hold_reason = TRIM(p_reason), hold_by = p_emp_id, hold_at = NOW(),
+               payment_status = IF(v_status = 'PARTIALLY_PAID', 'ON_HOLD', payment_status)
+         WHERE payroll_detail_id = p_detail_id;
+    ELSE
+        UPDATE employee_payroll_details
+           SET payment_decision = 'RELEASE', released_by = p_emp_id, released_at = NOW(),
+               payment_status = IF(payment_status = 'ON_HOLD', 'NOT_PAID', payment_status)
+         WHERE payroll_detail_id = p_detail_id;
+    END IF;
+    CALL hrms_payroll_log(v_cycle, p_detail_id, v_emp, CONCAT('EMPLOYEE_', v_action), v_dec, v_action,
+                          COALESCE(NULLIF(TRIM(p_reason), ''), CONCAT('Salary ', LOWER(v_action), 'd')), p_emp_id);
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           IF(v_action = 'HOLD', CONCAT('Salary of ', v_emp, ' is on hold.'),
+              CONCAT('Salary of ', v_emp, ' released', IF(v_status = 'PARTIALLY_PAID', '. Pay it from the hold list.', '.'))) AS remarks,
+           p_detail_id AS payroll_detail_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_employee_pay` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_employee_pay`(IN p_emp_id VARCHAR(20), IN p_detail_id BIGINT, IN p_remarks VARCHAR(500))
+ep: BEGIN
+    DECLARE v_ok     TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_cycle  BIGINT;
+    DECLARE v_run    BIGINT;
+    DECLARE v_status VARCHAR(30);
+    DECLARE v_emp    VARCHAR(20);
+    DECLARE v_dec    VARCHAR(20);
+    DECLARE v_pay    VARCHAR(20);
+    DECLARE v_left   INT DEFAULT 0;
+    DECLARE v_slips  INT DEFAULT 0;
+    DECLARE v_msg    VARCHAR(500) DEFAULT NULL;
+    DECLARE v_err    VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Payment could not be recorded.') AS remarks,
+               p_detail_id AS payroll_detail_id, NULL AS cycle_status;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT MAX(pc.payroll_cycle_id), MAX(pr.payroll_run_id), MAX(pc.cycle_status), MAX(d.emp_id),
+           MAX(d.payment_decision), MAX(d.payment_status)
+      INTO v_cycle, v_run, v_status, v_emp, v_dec, v_pay
+      FROM employee_payroll_details d
+      JOIN payroll_runs pr ON pr.payroll_run_id = d.payroll_run_id
+      JOIN payroll_cycles pc ON pc.payroll_cycle_id = pr.payroll_cycle_id
+     WHERE d.payroll_detail_id = p_detail_id;
+
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can record payments.';
+    ELSEIF v_emp IS NULL THEN
+        SET v_msg = 'Employee payroll row not found.';
+    ELSEIF v_status <> 'PARTIALLY_PAID' THEN
+        SET v_msg = CONCAT('Single payments are made only for held salaries after the cycle is marked paid (now ', v_status, ').');
+    ELSEIF v_pay = 'PAID' THEN
+        SET v_msg = 'This employee is already paid.';
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, p_detail_id AS payroll_detail_id, v_status AS cycle_status;
+        LEAVE ep;
+    END IF;
+
+    START TRANSACTION;
+    UPDATE payroll_cycles SET cycle_status = cycle_status WHERE payroll_cycle_id = v_cycle;
+    UPDATE employee_payroll_details
+       SET released_by = IF(payment_decision = 'HOLD', p_emp_id, released_by),
+           released_at = IF(payment_decision = 'HOLD', NOW(), released_at),
+           payment_decision = 'RELEASE', payment_status = 'PAID', paid_by = p_emp_id, paid_at = NOW()
+     WHERE payroll_detail_id = p_detail_id;
+    CALL hrms_payroll_generate_payslips(v_cycle, p_detail_id, p_emp_id, v_slips);
+    CALL hrms_payroll_log(v_cycle, p_detail_id, v_emp, 'EMPLOYEE_PAID', v_pay, 'PAID',
+                          COALESCE(NULLIF(TRIM(p_remarks), ''), 'Held salary paid'), p_emp_id);
+
+    SELECT COUNT(*) INTO v_left FROM employee_payroll_details WHERE payroll_run_id = v_run AND payment_status <> 'PAID';
+    IF v_left = 0 THEN
+        UPDATE payroll_cycles SET cycle_status = 'PAID' WHERE payroll_cycle_id = v_cycle;
+        CALL hrms_payroll_log(v_cycle, NULL, NULL, 'ALL_PAID', 'PARTIALLY_PAID', 'PAID', 'Last held salary paid', p_emp_id);
+    END IF;
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           CONCAT('Salary of ', v_emp, ' paid', IF(v_slips > 0, ' and payslip generated', ''),
+                  IF(v_left = 0, '. Everybody is paid: the cycle can now be closed.', CONCAT('. Still unpaid: ', v_left, '.'))) AS remarks,
+           p_detail_id AS payroll_detail_id, IF(v_left = 0, 'PAID', 'PARTIALLY_PAID') AS cycle_status;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_generate_payslips` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_generate_payslips`(
+    IN p_cycle_id BIGINT, IN p_detail_id BIGINT, IN p_by VARCHAR(20), OUT p_created INT)
+BEGIN
+    DECLARE v_prefix VARCHAR(20);
+    
+    
+    DECLARE CONTINUE HANDLER FOR 1062 SET p_created = 0;
+    SET p_created = 0;
+    SELECT COALESCE(NULLIF(TRIM(MAX(payslip_prefix)), ''), 'PS-') INTO v_prefix FROM company_settings;
+    SET v_prefix = COALESCE(v_prefix, 'PS-');
+
+    INSERT INTO employee_payslips
+        (payroll_detail_id, payslip_number, payslip_status, file_path, generated_by, generated_at)
+    SELECT epd.payroll_detail_id,
+           CONCAT(v_prefix, pc.payroll_year, '-', LPAD(pc.payroll_month, 2, '0'), '-',
+                  REPLACE(TRIM(epd.emp_id), ' ', ''), '-', epd.payroll_detail_id),
+           'GENERATED', NULL, p_by, NOW()
+      FROM employee_payroll_details epd
+      JOIN payroll_runs pr ON pr.payroll_run_id = epd.payroll_run_id
+      JOIN payroll_cycles pc ON pc.payroll_cycle_id = pr.payroll_cycle_id
+     WHERE pc.payroll_cycle_id = p_cycle_id
+       AND (p_detail_id IS NULL OR epd.payroll_detail_id = p_detail_id)
+       AND epd.payment_status = 'PAID'
+       AND epd.employee_payroll_status <> 'CANCELLED'
+       AND NOT EXISTS (SELECT 1 FROM employee_payslips x
+                        WHERE x.payroll_detail_id = epd.payroll_detail_id AND x.payslip_status <> 'REVOKED');
+    SET p_created = GREATEST(ROW_COUNT(), 0);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_load_cycle_emps` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_load_cycle_emps`(IN p_cycle_id BIGINT, IN p_emp_filter VARCHAR(20))
+BEGIN
+    DECLARE v_month INT;
+    DECLARE v_year  INT;
+    DECLARE v_start DATE;
+    DECLARE v_end   DATE;
+
+    SET SESSION group_concat_max_len = 1000000;
+    SELECT MAX(payroll_month), MAX(payroll_year), MAX(period_start), MAX(period_end)
+      INTO v_month, v_year, v_start, v_end
+      FROM payroll_cycles WHERE payroll_cycle_id = p_cycle_id;
+
+    DROP TEMPORARY TABLE IF EXISTS tmp_hrms_cycle_emps;
+    CREATE TEMPORARY TABLE tmp_hrms_cycle_emps (
+        emp_id        VARCHAR(20) NOT NULL PRIMARY KEY,
+        emp_name      VARCHAR(150) NULL,
+        has_att       TINYINT NOT NULL DEFAULT 0,
+        att_final     TINYINT NOT NULL DEFAULT 0,
+        total_days    DECIMAL(5,2) NOT NULL DEFAULT 0,
+        paid_days     DECIMAL(5,2) NOT NULL DEFAULT 0,
+        unpaid_days   DECIMAL(5,2) NOT NULL DEFAULT 0,
+        absent_days   DECIMAL(5,2) NOT NULL DEFAULT 0,
+        structure_id  BIGINT NULL,
+        monthly_ctc   DECIMAL(12,2) NOT NULL DEFAULT 0,
+        annual_ctc    DECIMAL(14,2) NOT NULL DEFAULT 0,
+        components    INT NOT NULL DEFAULT 0
+    );
+
+    INSERT INTO tmp_hrms_cycle_emps (emp_id, emp_name)
+    SELECT u.emp_id, COALESCE(n.emp_name, u.emp_id)
+      FROM (SELECT DISTINCT TRIM(emp_id) AS emp_id FROM user_login_details
+             WHERE LOWER(status) = 'active' AND emp_id IS NOT NULL AND TRIM(emp_id) <> '') u
+      LEFT JOIN (SELECT emp_id, MAX(emp_name) AS emp_name FROM user_details GROUP BY emp_id) n ON n.emp_id = u.emp_id
+     WHERE p_emp_filter IS NULL OR u.emp_id = p_emp_filter;
+
+    UPDATE tmp_hrms_cycle_emps t
+      JOIN payroll_attendance_summary a
+        ON a.emp_id = t.emp_id AND a.payroll_month = v_month AND a.payroll_year = v_year
+       SET t.has_att = 1,
+           t.att_final = IF(a.is_finalized = 'Y', 1, 0),
+           t.total_days = COALESCE(a.total_days, 0),
+           t.paid_days = COALESCE(a.paid_days, 0),
+           t.unpaid_days = COALESCE(a.unpaid_days, 0),
+           t.absent_days = COALESCE(a.absent_days, 0);
+
+    UPDATE tmp_hrms_cycle_emps t
+       SET t.structure_id = (SELECT ss.structure_id FROM salary_structure ss
+                              WHERE ss.emp_id = t.emp_id AND ss.structure_status = 'ACTIVE'
+                                AND ss.effective_from <= v_end
+                                AND (ss.effective_to IS NULL OR ss.effective_to >= v_start)
+                              ORDER BY ss.effective_from DESC, ss.structure_id DESC LIMIT 1);
+
+    UPDATE tmp_hrms_cycle_emps t
+      JOIN salary_structure ss ON ss.structure_id = t.structure_id
+       SET t.monthly_ctc = ss.monthly_ctc,
+           t.annual_ctc = ss.annual_ctc,
+           t.components = (SELECT COUNT(*) FROM employee_salary_structure e
+                             JOIN salary_component_master m ON m.component_id = e.component_id AND m.is_active = 1
+                            WHERE e.structure_id = ss.structure_id);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_log` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_log`(
+    IN p_cycle_id BIGINT, IN p_detail_id BIGINT, IN p_emp VARCHAR(20), IN p_action VARCHAR(40),
+    IN p_from VARCHAR(30), IN p_to VARCHAR(30), IN p_remarks VARCHAR(500), IN p_by VARCHAR(20))
+BEGIN
+    INSERT INTO payroll_cycle_status_log
+        (payroll_cycle_id, cycle_code, payroll_detail_id, emp_id, action, from_status, to_status, remarks, performed_by)
+    VALUES (p_cycle_id, (SELECT MAX(cycle_code) FROM payroll_cycles WHERE payroll_cycle_id = p_cycle_id),
+            p_detail_id, p_emp, p_action, p_from, p_to, LEFT(p_remarks, 500), p_by);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_manual_inputs_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_manual_inputs_list`(IN p_emp_id VARCHAR(20), IN p_month INT, IN p_year INT)
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view manual amounts.' AS remarks, NULL AS input_id;
+    ELSE
+        SELECT 'Y' AS status, '' AS remarks, i.input_id, i.emp_id, COALESCE(n.emp_name, i.emp_id) AS emp_name,
+               i.component_id, m.component_code, m.component_name, m.component_type, i.amount, i.remarks AS input_remarks,
+               i.created_by, i.updated_at
+          FROM payroll_manual_inputs i
+          JOIN salary_component_master m ON m.component_id = i.component_id
+          LEFT JOIN (SELECT emp_id, MAX(emp_name) AS emp_name FROM user_details GROUP BY emp_id) n ON n.emp_id = i.emp_id
+         WHERE i.payroll_month = p_month AND i.payroll_year = p_year
+         ORDER BY i.emp_id, m.calculation_order;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_prepare_run` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_prepare_run`(IN p_cycle_id BIGINT, IN p_by VARCHAR(20), OUT p_run_id BIGINT, OUT p_count INT)
+BEGIN
+    CALL hrms_payroll_load_cycle_emps(p_cycle_id, NULL);
+
+    SELECT MAX(payroll_run_id) INTO p_run_id FROM payroll_runs WHERE payroll_cycle_id = p_cycle_id;
+    IF p_run_id IS NULL THEN
+        INSERT INTO payroll_runs (payroll_cycle_id, run_number, run_type, run_status, total_employees, created_by)
+        VALUES (p_cycle_id, 1, 'REGULAR', 'DRAFT', 0, p_by);
+        SET p_run_id = LAST_INSERT_ID();
+    END IF;
+
+    DELETE c FROM employee_payroll_component_details c
+      JOIN employee_payroll_details d ON d.payroll_detail_id = c.payroll_detail_id
+     WHERE d.payroll_run_id = p_run_id
+       AND NOT EXISTS (SELECT 1 FROM tmp_hrms_cycle_emps t WHERE t.emp_id = d.emp_id);
+    DELETE d FROM employee_payroll_details d
+     WHERE d.payroll_run_id = p_run_id
+       AND NOT EXISTS (SELECT 1 FROM tmp_hrms_cycle_emps t WHERE t.emp_id = d.emp_id);
+
+    INSERT INTO employee_payroll_details
+        (payroll_run_id, emp_id, structure_id, monthly_ctc, annual_ctc, total_days, payable_days, paid_leave_days,
+         unpaid_leave_days, absent_days, ctc1, gross_earnings, total_deductions, employer_contributions, net_pay,
+         calculation_version, calculation_remarks, employee_payroll_status)
+    SELECT p_run_id, t.emp_id, t.structure_id, t.monthly_ctc, t.annual_ctc, t.total_days,
+           hrms_pay_days(t.unpaid_days), 0, t.unpaid_days, t.absent_days,
+           ROUND(t.monthly_ctc * hrms_pay_days(t.unpaid_days) / 30, 2), 0, 0, 0, 0,
+           1, 'Waiting to be calculated.', 'PENDING'
+      FROM tmp_hrms_cycle_emps t
+    ON DUPLICATE KEY UPDATE
+           structure_id = VALUES(structure_id), monthly_ctc = VALUES(monthly_ctc), annual_ctc = VALUES(annual_ctc),
+           total_days = VALUES(total_days), payable_days = VALUES(payable_days),
+           unpaid_leave_days = VALUES(unpaid_leave_days), absent_days = VALUES(absent_days), ctc1 = VALUES(ctc1),
+           calculation_version = employee_payroll_details.calculation_version + 1,
+           calculation_remarks = 'Waiting to be calculated.', employee_payroll_status = 'PENDING';
+
+    SELECT COUNT(*) INTO p_count FROM employee_payroll_details WHERE payroll_run_id = p_run_id;
+    UPDATE payroll_runs SET run_status = 'DRAFT', total_employees = p_count WHERE payroll_run_id = p_run_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_payroll_refresh_run_totals` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_payroll_refresh_run_totals`(IN p_run_id BIGINT)
+BEGIN
+    UPDATE payroll_runs pr
+      LEFT JOIN (SELECT payroll_run_id, COUNT(*) n, SUM(gross_earnings) g, SUM(total_deductions) d,
+                        SUM(employer_contributions) e, SUM(net_pay) np
+                   FROM employee_payroll_details WHERE payroll_run_id = p_run_id GROUP BY payroll_run_id) t
+        ON t.payroll_run_id = pr.payroll_run_id
+       SET pr.total_employees = COALESCE(t.n, 0),
+           pr.total_earnings = COALESCE(t.g, 0),
+           pr.total_deductions = COALESCE(t.d, 0),
+           pr.total_employer_contributions = COALESCE(t.e, 0),
+           pr.total_net_pay = COALESCE(t.np, 0)
+     WHERE pr.payroll_run_id = p_run_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_preview_employee_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_preview_employee_salary`(
+    IN p_emp_id        VARCHAR(20),
+    IN p_target_emp_id VARCHAR(20),
+    IN p_structure_id  BIGINT,
+    IN p_monthly_ctc   DECIMAL(12,2),
+    IN p_changes       LONGTEXT
+)
+pv: BEGIN
+    DECLARE v_ok        TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_structure BIGINT;
+    DECLARE v_count     INT DEFAULT 0;
+    DECLARE v_i         INT DEFAULT 0;
+    DECLARE v_path      VARCHAR(30);
+    DECLARE v_cid       BIGINT;
+    DECLARE v_calc      VARCHAR(20);
+    DECLARE v_value     VARCHAR(40);
+    DECLARE v_base      VARCHAR(40);
+    DECLARE v_formula   TEXT;
+    DECLARE v_code      VARCHAR(40);
+    DECLARE v_order     INT;
+    DECLARE v_st        CHAR(1);
+    DECLARE v_rm        VARCHAR(500);
+    DECLARE v_sample    DECIMAL(18,4);
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_errs      INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_err       VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Preview failed.') AS remarks;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF p_structure_id IS NOT NULL AND p_structure_id > 0 THEN
+        
+        SELECT MAX(structure_id) INTO v_structure FROM salary_structure
+         WHERE structure_id = p_structure_id AND emp_id = p_target_emp_id AND structure_status = 'ACTIVE';
+    ELSE
+        
+        SELECT ss.structure_id INTO v_structure
+          FROM salary_structure ss
+         WHERE ss.emp_id = p_target_emp_id AND ss.structure_status = 'ACTIVE'
+           AND (ss.effective_to IS NULL OR ss.effective_to >= CURDATE())
+         ORDER BY ss.effective_from DESC, ss.structure_id DESC LIMIT 1;
+    END IF;
+
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can preview salaries.' AS remarks;
+        LEAVE pv;
+    ELSEIF v_structure IS NULL THEN
+        SELECT 'N' AS status, 'Employee has no active salary structure.' AS remarks;
+        LEAVE pv;
+    ELSEIF p_monthly_ctc IS NOT NULL AND p_monthly_ctc < 0 THEN
+        SELECT 'N' AS status, 'Monthly CTC cannot be negative.' AS remarks;
+        LEAVE pv;
+    ELSEIF NULLIF(TRIM(COALESCE(p_changes, '')), '') IS NOT NULL
+       AND (JSON_VALID(p_changes) = 0 OR LEFT(TRIM(p_changes), 1) <> '[') THEN
+        SELECT 'N' AS status, 'Changes must be a JSON array.' AS remarks;
+        LEAVE pv;
+    END IF;
+
+    START TRANSACTION;
+
+    IF p_monthly_ctc IS NOT NULL AND p_monthly_ctc > 0 THEN
+        UPDATE salary_structure SET monthly_ctc = p_monthly_ctc, annual_ctc = p_monthly_ctc * 12
+         WHERE structure_id = v_structure;
+    END IF;
+
+    SET v_count = COALESCE(JSON_LENGTH(NULLIF(TRIM(COALESCE(p_changes, '')), '')), 0);
+    WHILE v_i < v_count DO
+        SET v_path    = CONCAT('$[', v_i, ']');
+        SET v_cid     = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.component_id'))), 'null') AS UNSIGNED);
+        SET v_calc    = UPPER(TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.calculation_type'))), 'null'), '')));
+        SET v_value   = NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.component_value'))), '')), 'null');
+        SET v_base    = UPPER(TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.percentage_base'))), 'null'), 'NONE')));
+        SET v_formula = NULLIF(UPPER(TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.formula_expression'))), 'null'), ''))), '');
+        IF v_value IS NULL OR v_value NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$' THEN
+            SET v_value = '0';
+        END IF;
+
+        
+        IF v_calc = 'FORMULA' THEN
+            SELECT MAX(UPPER(component_code)), MAX(calculation_order) INTO v_code, v_order
+              FROM salary_component_master WHERE component_id = v_cid;
+            IF v_formula IS NULL THEN
+                SET v_st = 'N';
+                SET v_rm = 'A formula is required.';
+            ELSE
+                CALL hrms_formula_check(v_cid, v_code, v_order, v_formula, v_st, v_rm, v_sample);
+            END IF;
+            IF v_st <> 'Y' THEN
+                ROLLBACK;
+                SELECT 'N' AS status, LEFT(CONCAT(COALESCE(v_code, 'Formula'), ': ', v_rm), 500) AS remarks;
+                LEAVE pv;
+            END IF;
+        END IF;
+
+        IF v_calc = 'DEFAULT' THEN
+            UPDATE employee_salary_structure e
+              JOIN salary_component_master m ON m.component_id = e.component_id
+               SET e.calculation_type = CASE WHEN m.calculation_type = 'STATUTORY' THEN 'MANUAL' ELSE m.calculation_type END,
+                   e.component_value = COALESCE(m.percentage_value, 0), e.percentage_base = COALESCE(m.percentage_base, 'NONE'),
+                   e.formula_expression = m.formula_expression, e.is_overridden = 0
+             WHERE e.structure_id = v_structure AND e.component_id = v_cid;
+        ELSEIF v_calc IN ('FIXED', 'PERCENTAGE', 'FORMULA', 'MANUAL') THEN
+            UPDATE employee_salary_structure
+               SET calculation_type = v_calc,
+                   component_value = GREATEST(CAST(v_value AS DECIMAL(12,2)), 0),
+                   percentage_base = IF(v_calc = 'PERCENTAGE', v_base, 'NONE'),
+                   formula_expression = IF(v_calc = 'FORMULA', v_formula, NULL),
+                   monthly_amount = IF(v_calc = 'MANUAL', GREATEST(CAST(v_value AS DECIMAL(12,2)), 0), monthly_amount),
+                   is_overridden = 1
+             WHERE structure_id = v_structure AND component_id = v_cid;
+        END IF;
+        SET v_i = v_i + 1;
+    END WHILE;
+
+    SET @hrms_calc_date = hrms_structure_calc_date(v_structure);
+    CALL hrms_calculate_structure(v_structure, @hrms_calc_date, v_changed, v_errs, v_text);   
+    IF v_errs > 0 THEN
+        ROLLBACK;
+        SELECT 'N' AS status, LEFT(CONCAT('This would not calculate: ', COALESCE(v_text, 'unknown error')), 500) AS remarks;
+        LEAVE pv;
+    END IF;
+
+    SELECT 'Y' AS status, 'Preview from the salary engine (not saved)' AS remarks,
+           x.component_code, x.component_type, x.calculation_scope, x.monthly_amount, x.is_overridden, x.calculation_order
+      FROM (
+            SELECT m.component_code, m.component_type, m.calculation_scope, e.monthly_amount, e.is_overridden, m.calculation_order
+              FROM employee_salary_structure e
+              JOIN salary_component_master m ON m.component_id = e.component_id AND m.is_active = 1
+             WHERE e.structure_id = v_structure
+            UNION ALL
+            SELECT m.component_code, m.component_type, m.calculation_scope, t.monthly_amount, 0, m.calculation_order
+              FROM employee_salary_structure_totals t
+              JOIN salary_component_master m ON m.component_id = t.component_id AND m.is_active = 1
+             WHERE t.structure_id = v_structure
+           ) x
+     ORDER BY x.calculation_order;
+
+    ROLLBACK;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_preview_new_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_preview_new_salary`(
+    IN p_emp_id        VARCHAR(20),
+    IN p_target_emp_id VARCHAR(20),
+    IN p_monthly_ctc   DECIMAL(12,2),
+    IN p_esi           VARCHAR(1)
+)
+pn: BEGIN
+    DECLARE v_ok        TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_structure BIGINT;
+    DECLARE v_attached  INT DEFAULT 0;
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_errs      INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_err       VARCHAR(500);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Preview failed.') AS remarks;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can preview salaries.' AS remarks;
+        LEAVE pn;
+    ELSEIF p_monthly_ctc IS NULL OR p_monthly_ctc <= 0 THEN
+        SELECT 'N' AS status, 'Enter the monthly CTC.' AS remarks;
+        LEAVE pn;
+    END IF;
+
+    START TRANSACTION;
+    INSERT INTO salary_structure (emp_id, monthly_ctc, annual_ctc, effective_from, effective_to, structure_status, esi_applicable, created_by)
+    VALUES (COALESCE(NULLIF(TRIM(p_target_emp_id), ''), 'PREVIEW'), p_monthly_ctc, p_monthly_ctc * 12, CURDATE(), CURDATE(),
+            'DRAFT', IF(UPPER(p_esi) = 'Y', 'Y', 'N'), p_emp_id);
+    SET v_structure = LAST_INSERT_ID();
+    CALL hrms_salary_attach_all(v_structure, v_attached);
+    SET @hrms_calc_date = hrms_structure_calc_date(v_structure);
+    CALL hrms_calculate_structure(v_structure, @hrms_calc_date, v_changed, v_errs, v_text);   
+    IF v_errs > 0 THEN
+        ROLLBACK;
+        SELECT 'N' AS status, LEFT(CONCAT('This salary would not calculate: ', COALESCE(v_text, 'unknown error')), 500) AS remarks;
+        LEAVE pn;
+    END IF;
+
+    SELECT 'Y' AS status, 'Preview from the salary engine (not saved)' AS remarks,
+           x.component_code, x.component_type, x.calculation_scope, x.monthly_amount, 0 AS is_overridden, x.calculation_order
+      FROM (
+            SELECT m.component_code, m.component_type, m.calculation_scope, e.monthly_amount, m.calculation_order
+              FROM employee_salary_structure e
+              JOIN salary_component_master m ON m.component_id = e.component_id AND m.is_active = 1
+             WHERE e.structure_id = v_structure
+            UNION ALL
+            SELECT m.component_code, m.component_type, m.calculation_scope, t.monthly_amount, m.calculation_order
+              FROM employee_salary_structure_totals t
+              JOIN salary_component_master m ON m.component_id = t.component_id AND m.is_active = 1
+             WHERE t.structure_id = v_structure
+           ) x
+     ORDER BY x.calculation_order;
+    ROLLBACK;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_profile_updation` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_profile_updation`(
+    IN p_emp_id VARCHAR(20),
+    IN p_json_data JSON
+)
+BEGIN
+    DECLARE v_exists INT DEFAULT 0;
+    DECLARE v_ref_id VARCHAR(20) DEFAULT NULL;
+    DECLARE v_at_blooms VARCHAR(100) DEFAULT NULL;
+    DECLARE v_prof_status VARCHAR(100) DEFAULT NULL;
+    
+    
+    DECLARE v_status VARCHAR(5) DEFAULT 'N';
+    DECLARE v_remarks VARCHAR(255) DEFAULT 'No action taken';
+    
+    
+    SET v_at_blooms = NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.at_blooms')), 'null');
+    
+    
+    IF v_at_blooms = '1' OR LOWER(v_at_blooms) = 'true' THEN
+        SET v_prof_status = 'true';
+    ELSE
+        SET v_prof_status = 'false';
+    END IF;
+
+    
+    SET v_ref_id = NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ref_id')), 'null');
+
+    IF (v_ref_id IS NULL OR TRIM(v_ref_id) = '') AND (p_emp_id IS NOT NULL AND TRIM(p_emp_id) != '') THEN
+        SELECT ref_id INTO v_ref_id 
+        FROM user_details 
+        WHERE emp_id = p_emp_id 
+        LIMIT 1;
+    END IF;
+    
+    
+    IF v_ref_id IS NULL OR TRIM(v_ref_id) = '' THEN
+        SET v_ref_id = CONCAT('REF', FLOOR(100000 + RAND() * 900000));
+    END IF;
+
+    
+    SELECT COUNT(1) INTO v_exists 
+    FROM user_details 
+    WHERE ref_id = v_ref_id OR (p_emp_id IS NOT NULL AND emp_id = p_emp_id);
+
+    IF v_exists > 0 THEN
+        
+        UPDATE user_details
+        SET 
+            emp_id            = COALESCE(p_emp_id, emp_id),
+            emp_name          = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_name')), 'null'), emp_name),
+            email             = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.email')), 'null'), email),
+            mobile            = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mobile')), 'null'), mobile),
+            dob               = COALESCE(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.dob')), 'null') AS DATE), dob),
+            gender            = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.gender')), 'null'), gender),
+            marital_status    = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.marital_status')), 'null'), marital_status),
+            father_name       = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.father_name')), 'null'), father_name),
+            mother_name       = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mother_name')), 'null'), mother_name),
+            current_address   = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.current_address')), 'null'), current_address),
+            perminent_address = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.perminent_address')), 'null'), perminent_address),
+            bank_holder_name  = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_holder_name')), 'null'), bank_holder_name),
+            bank_name         = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_name')), 'null'), bank_name),
+            bank_branch       = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_branch')), 'null'), bank_branch),
+            bank_account_no   = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_no')), 'null'), bank_account_no),
+            ifsc              = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ifsc')), 'null'), ifsc),
+            upi_id            = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.upi_id')), 'null'), upi_id),
+            bank_account_type = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_type')), 'null'), bank_account_type),
+            pan               = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pan')), 'null'), pan),
+            aadhaar           = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.aadhaar')), 'null'), aadhaar),
+            uan               = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.uan')), 'null'), uan),
+            skills            = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.skills')), 'null'), skills),
+            qualification     = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.qualification')), 'null'), qualification),
+            experience        = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.experience')), 'null'), experience),
+            documents         = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.documents')), 'null'), documents),
+            department        = COALESCE(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.department')), 'null') AS SIGNED), department),
+            designation       = COALESCE(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.designation')), 'null') AS SIGNED), designation),
+            reporting         = COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.reporting')), 'null'), reporting),
+            joining_date      = COALESCE(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.joining_date')), 'null') AS DATE), joining_date),
+            at_blooms         = COALESCE(v_at_blooms, at_blooms),
+            updated_on = NOW(),
+            profisional_details_status = v_prof_status
+        WHERE ref_id = v_ref_id OR (p_emp_id IS NOT NULL AND emp_id = p_emp_id);
+        
+        SET v_status = 'Y';
+        SET v_remarks = 'successfully updated';
+    ELSE
+        
+        INSERT INTO user_details (
+            emp_id, ref_id, emp_name, email, mobile, dob, gender, marital_status,
+            father_name, mother_name, current_address, perminent_address,
+            bank_holder_name, bank_name, bank_branch, bank_account_no, ifsc, upi_id,
+            bank_account_type, pan, aadhaar, uan, skills, qualification, experience,
+            documents, department, designation, reporting, joining_date,
+            received_on, updated_on, at_blooms, profisional_details_status
+        ) VALUES (
+            p_emp_id, v_ref_id,
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_name')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.email')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mobile')), 'null'),
+            CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.dob')), 'null') AS DATE),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.gender')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.marital_status')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.father_name')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mother_name')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.current_address')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.perminent_address')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_holder_name')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_name')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_branch')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_no')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ifsc')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.upi_id')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_type')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pan')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.aadhaar')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.uan')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.skills')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.qualification')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.experience')), 'null'),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.documents')), 'null'),
+            CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.department')), 'null') AS SIGNED),
+            CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.designation')), 'null') AS SIGNED),
+            NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.reporting')), 'null'),
+            CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.joining_date')), 'null') AS DATE),
+            NOW(), NOW(),
+            v_at_blooms,
+            v_prof_status
+        );
+        
+        SET v_status = 'Y';
+        SET v_remarks = 'successfully inserted new user profile';
+    END IF;
+
+    
+    SELECT COUNT(1) INTO v_exists FROM candidate_details WHERE ref_id = v_ref_id;
+
+    IF v_exists > 0 THEN
+        UPDATE candidate_details C, user_details U
+        SET 
+            C.emp_name          = U.emp_name,
+            C.email             = U.email,
+            C.mobile            = U.mobile,
+            C.dob               = U.dob,
+            C.gender            = U.gender,
+            C.marital_status    = U.marital_status,
+            C.father_name       = U.father_name,
+            C.mother_name       = U.mother_name,
+            C.current_address   = U.current_address,
+            C.perminent_address = U.perminent_address,
+            C.bank_holder_name  = U.bank_holder_name,
+            C.bank_name         = U.bank_name,
+            C.bank_branch       = U.bank_branch,
+            C.bank_account_no   = U.bank_account_no,
+            C.ifsc              = U.ifsc,
+            C.upi_id            = U.upi_id,
+            C.bank_account_type = U.bank_account_type,
+            C.pan               = U.pan,
+            C.aadhaar           = U.aadhaar,
+            C.uan               = U.uan,
+            C.skills            = U.skills,
+            
+            C.qualification     = IF(JSON_VALID(U.qualification), U.qualification, IF(JSON_VALID(JSON_UNQUOTE(U.qualification)), JSON_UNQUOTE(U.qualification), NULL)),
+            C.experience        = IF(JSON_VALID(U.experience), U.experience, IF(JSON_VALID(JSON_UNQUOTE(U.experience)), JSON_UNQUOTE(U.experience), NULL)),
+            C.documents         = IF(JSON_VALID(U.documents), U.documents, IF(JSON_VALID(JSON_UNQUOTE(U.documents)), JSON_UNQUOTE(U.documents), NULL)),
+            
+            C.department        = U.department,
+            C.designation       = U.designation,
+            C.reporting         = U.reporting,
+            C.joining_date      = U.joining_date,
+            C.onboarding_status = 'COMPLETED',
+            C.updated_on = NOW()
+        WHERE C.ref_id = v_ref_id AND U.ref_id = v_ref_id;
+    ELSE
+        INSERT INTO candidate_details (
+            ref_id, emp_name, email, mobile, dob, gender, marital_status,
+            father_name, mother_name, current_address, perminent_address,
+            bank_holder_name, bank_name, bank_branch, bank_account_no, ifsc, upi_id,
+            bank_account_type, pan, aadhaar, uan, skills, qualification, experience,
+            documents, department, designation, reporting, joining_date,
+            onboarding_status, received_on, updated_on
+        )
+        SELECT 
+            ref_id, emp_name, email, mobile, dob, gender, marital_status,
+            father_name, mother_name, current_address, perminent_address,
+            bank_holder_name, bank_name, bank_branch, bank_account_no, ifsc, upi_id,
+            bank_account_type, pan, aadhaar, uan, skills, 
+            
+            IF(JSON_VALID(qualification), qualification, IF(JSON_VALID(JSON_UNQUOTE(qualification)), JSON_UNQUOTE(qualification), NULL)),
+            IF(JSON_VALID(experience), experience, IF(JSON_VALID(JSON_UNQUOTE(experience)), JSON_UNQUOTE(experience), NULL)),
+            IF(JSON_VALID(documents), documents, IF(JSON_VALID(JSON_UNQUOTE(documents)), JSON_UNQUOTE(documents), NULL)),
+            
+            department, designation, reporting, joining_date,
+            'COMPLETED', NOW(), NOW()
+        FROM user_details
+        WHERE ref_id = v_ref_id;
+    END IF;
+
+    
+    SELECT v_status AS `status`, v_remarks AS `remarks`;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_profile_updation_v4` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_profile_updation_v4`(
+    IN p_emp_id VARCHAR(20),
+    IN p_json_data JSON
+)
+BEGIN
+    DECLARE v_exists INT DEFAULT 0;
+    DECLARE v_ref_id VARCHAR(20) DEFAULT NULL;
+    DECLARE v_at_blooms VARCHAR(100) DEFAULT NULL;
+    DECLARE v_prof_status VARCHAR(100) DEFAULT NULL;
+    
+    
+    SET v_at_blooms = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.at_blooms'));
+    
+    
+    IF v_at_blooms = '1' OR LOWER(v_at_blooms) = 'true' THEN
+        SET v_prof_status = 'true';
+    ELSE
+        SET v_prof_status = 'false';
+    END IF;
+
+    
+    SET v_ref_id = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ref_id'));
+
+    IF (v_ref_id IS NULL OR v_ref_id = 'null' OR TRIM(v_ref_id) = '') AND (p_emp_id IS NOT NULL AND TRIM(p_emp_id) != '') THEN
+        SELECT ref_id INTO v_ref_id 
+        FROM user_details 
+        WHERE emp_id = p_emp_id 
+        LIMIT 1;
+    END IF;
+    
+    
+    IF v_ref_id IS NULL OR v_ref_id = 'null' OR TRIM(v_ref_id) = '' THEN
+        SET v_ref_id = CONCAT('REF', FLOOR(100000 + RAND() * 900000));
+    END IF;
+
+    
+    SELECT COUNT(1) INTO v_exists 
+    FROM user_details 
+    WHERE ref_id = v_ref_id OR (p_emp_id IS NOT NULL AND emp_id = p_emp_id);
+
+    IF v_exists > 0 THEN
+        
+        UPDATE user_details
+        SET 
+            emp_id            = COALESCE(p_emp_id, emp_id),
+            emp_name          = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_name')), emp_name),
+            email             = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.email')), email),
+            mobile            = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mobile')), mobile),
+            dob               = COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.dob')) AS DATE), dob),
+            gender            = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.gender')), gender),
+            marital_status    = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.marital_status')), marital_status),
+            father_name       = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.father_name')), father_name),
+            mother_name       = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mother_name')), mother_name),
+            current_address   = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.current_address')), current_address),
+            perminent_address = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.perminent_address')), perminent_address),
+            bank_holder_name  = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_holder_name')), bank_holder_name),
+            bank_name         = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_name')), bank_name),
+            bank_branch       = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_branch')), bank_branch),
+            bank_account_no   = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_no')), bank_account_no),
+            ifsc              = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ifsc')), ifsc),
+            upi_id            = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.upi_id')), upi_id),
+            bank_account_type = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_type')), bank_account_type),
+            pan               = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pan')), pan),
+            aadhaar           = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.aadhaar')), aadhaar),
+            uan               = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.uan')), uan),
+            skills            = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.skills')), skills),
+            qualification     = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.qualification')), qualification),
+            experience        = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.experience')), experience),
+            documents         = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.documents')), documents),
+            department        = COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.department')) AS SIGNED), department),
+            designation       = COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.designation')) AS SIGNED), designation),
+            reporting         = COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.reporting')), reporting),
+            joining_date      = COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.joining_date')) AS DATE), joining_date),
+            at_blooms         = COALESCE(v_at_blooms, at_blooms),
+            updated_ondatetime = NOW(),
+            profisional_details_status = v_prof_status
+        WHERE ref_id = v_ref_id OR (p_emp_id IS NOT NULL AND emp_id = p_emp_id);
+    ELSE
+        
+        INSERT INTO user_details (
+            emp_id, ref_id, emp_name, email, mobile, dob, gender, marital_status,
+            father_name, mother_name, current_address, perminent_address,
+            bank_holder_name, bank_name, bank_branch, bank_account_no, ifsc, upi_id,
+            bank_account_type, pan, aadhaar, uan, skills, qualification, experience,
+            documents, department, designation, reporting, joining_date,
+            received_ondatetime, updated_ondatetime, at_blooms, profisional_details_status
+        ) VALUES (
+            p_emp_id, v_ref_id,
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_name')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.email')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mobile')),
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.dob')) AS DATE),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.gender')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.marital_status')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.father_name')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mother_name')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.current_address')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.perminent_address')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_holder_name')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_name')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_branch')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_no')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ifsc')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.upi_id')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_type')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pan')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.aadhaar')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.uan')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.skills')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.qualification')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.experience')),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.documents')),
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.department')) AS SIGNED),
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.designation')) AS SIGNED),
+            JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.reporting')),
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.joining_date')) AS DATE),
+            NOW(), NOW(),
+            v_at_blooms,
+            v_prof_status
+        );
+    END IF;
+
+    
+    SELECT COUNT(1) INTO v_exists FROM candidate_details WHERE ref_id = v_ref_id;
+
+    IF v_exists > 0 THEN
+        UPDATE candidate_details C, user_details U
+        SET 
+            C.emp_name          = U.emp_name,
+            C.email             = U.email,
+            C.mobile            = U.mobile,
+            C.dob               = U.dob,
+            C.gender            = U.gender,
+            C.marital_status    = U.marital_status,
+            C.father_name       = U.father_name,
+            C.mother_name       = U.mother_name,
+            C.current_address   = U.current_address,
+            C.perminent_address = U.perminent_address,
+            C.bank_holder_name  = U.bank_holder_name,
+            C.bank_name         = U.bank_name,
+            C.bank_branch       = U.bank_branch,
+            C.bank_account_no   = U.bank_account_no,
+            C.ifsc              = U.ifsc,
+            C.upi_id            = U.upi_id,
+            C.bank_account_type = U.bank_account_type,
+            C.pan               = U.pan,
+            C.aadhaar           = U.aadhaar,
+            C.uan               = U.uan,
+            C.skills            = U.skills,
+            C.qualification     = U.qualification,
+            C.experience        = U.experience,
+            C.documents         = U.documents,
+            C.department        = U.department,
+            C.designation       = U.designation,
+            C.reporting         = U.reporting,
+            C.joining_date      = U.joining_date,
+            C.onboarding_status = 'COMPLETED',
+            C.updated_ondatetime = NOW()
+        WHERE C.ref_id = v_ref_id AND U.ref_id = v_ref_id;
+    ELSE
+        INSERT INTO candidate_details (
+            ref_id, emp_name, email, mobile, dob, gender, marital_status,
+            father_name, mother_name, current_address, perminent_address,
+            bank_holder_name, bank_name, bank_branch, bank_account_no, ifsc, upi_id,
+            bank_account_type, pan, aadhaar, uan, skills, qualification, experience,
+            documents, department, designation, reporting, joining_date,
+            onboarding_status, received_ondatetime, updated_ondatetime
+        )
+        SELECT 
+            ref_id, emp_name, email, mobile, dob, gender, marital_status,
+            father_name, mother_name, current_address, perminent_address,
+            bank_holder_name, bank_name, bank_branch, bank_account_no, ifsc, upi_id,
+            bank_account_type, pan, aadhaar, uan, skills, qualification, experience,
+            documents, department, designation, reporting, joining_date,
+            'COMPLETED', NOW(), NOW()
+        FROM user_details
+        WHERE ref_id = v_ref_id;
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_recalculate_all_structures` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_recalculate_all_structures`(
+    OUT p_structures   INT,
+    OUT p_rows_changed INT,
+    OUT p_errors       INT,
+    OUT p_error_text   VARCHAR(500)
+)
+BEGIN
+    DECLARE v_done      INT DEFAULT 0;
+    DECLARE v_structure BIGINT;
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_err       INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_emp       VARCHAR(20);
+    DECLARE cur CURSOR FOR SELECT structure_id FROM tmp_hrms_struct_list ORDER BY structure_id;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = 1;
+
+    SET p_structures = 0;
+    SET p_rows_changed = 0;
+    SET p_errors = 0;
+    SET p_error_text = NULL;
+
+    CALL hrms_engine_prepare();
+    DELETE FROM tmp_hrms_struct_list;
+    DELETE FROM tmp_hrms_gap_list;
+    INSERT INTO tmp_hrms_struct_list (structure_id)
+    SELECT structure_id FROM salary_structure WHERE structure_status = 'ACTIVE';
+
+    OPEN cur;
+    st: LOOP
+        SET v_done = 0;
+        FETCH cur INTO v_structure;
+        IF v_done = 1 THEN
+            LEAVE st;
+        END IF;
+        SET @hrms_calc_date = hrms_structure_calc_date(v_structure);   
+        CALL hrms_calculate_structure(v_structure, @hrms_calc_date, v_changed, v_err, v_text);
+        INSERT IGNORE INTO tmp_hrms_gap_list (structure_id, cid)
+        SELECT v_structure, cid FROM tmp_hrms_slab_gap WHERE is_gap = 1;
+        IF v_err > 0 THEN
+            SELECT COALESCE(MAX(emp_id), '?') INTO v_emp FROM salary_structure WHERE structure_id = v_structure;
+            SET p_errors = v_err;
+            SET p_error_text = LEFT(CONCAT('Employee ', v_emp, ' - ', COALESCE(v_text, 'calculation failed')), 500);
+            LEAVE st;
+        END IF;
+        SET p_structures   = p_structures + 1;
+        SET p_rows_changed = p_rows_changed + COALESCE(v_changed, 0);
+    END LOOP st;
+    CLOSE cur;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_revise_employee_ctc` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_revise_employee_ctc`(
+    IN p_emp_id         VARCHAR(20),
+    IN p_target_emp_id  VARCHAR(20),
+    IN p_structure_id   BIGINT,
+    IN p_monthly_ctc    DECIMAL(12,2),
+    IN p_effective_from DATE
+)
+rv: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_from DATE;
+    DECLARE v_to   DATE;
+    DECLARE v_ctc  DECIMAL(12,2);
+    DECLARE v_msg  VARCHAR(500) DEFAULT NULL;
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SELECT MAX(effective_from), MAX(effective_to), MAX(monthly_ctc) INTO v_from, v_to, v_ctc
+      FROM salary_structure
+     WHERE structure_id = p_structure_id AND emp_id = p_target_emp_id AND structure_status = 'ACTIVE';
+
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can change salaries.';
+    ELSEIF v_from IS NULL THEN
+        SET v_msg = 'Salary period not found for this employee.';
+    ELSEIF p_monthly_ctc IS NULL OR p_monthly_ctc <= 0 THEN
+        SET v_msg = 'The new monthly CTC must be more than 0.';
+    ELSEIF p_effective_from IS NULL THEN
+        SET v_msg = 'Choose the date the new CTC applies from.';
+    ELSEIF p_effective_from <= v_from THEN
+        SET v_msg = CONCAT('The new CTC must start after ', DATE_FORMAT(v_from, '%d %b %Y'),
+                           ', the first day of this salary period.');
+    ELSEIF v_to IS NOT NULL AND p_effective_from > v_to THEN
+        SET v_msg = CONCAT('This salary period ends on ', DATE_FORMAT(v_to, '%d %b %Y'),
+                           '. To revise a later date, open the salary period that covers it.');
+    ELSEIF p_monthly_ctc = v_ctc THEN
+        SET v_msg = CONCAT('The monthly CTC is already ', v_ctc, '. Enter the new CTC.');
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, p_structure_id AS structure_id, 0 AS new_period;
+        LEAVE rv;
+    END IF;
+
+    
+    CALL hrms_save_employee_salary(p_emp_id, p_target_emp_id, p_structure_id, p_monthly_ctc, p_effective_from, NULL);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_salary_attach_all` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_salary_attach_all`(IN p_structure_id BIGINT, OUT p_attached INT)
+BEGIN
+    INSERT INTO employee_salary_structure
+        (structure_id, component_id, calculation_type, component_value, percentage_base,
+         formula_expression, monthly_amount, is_overridden)
+    SELECT p_structure_id, m.component_id,
+           CASE WHEN m.calculation_type = 'STATUTORY' THEN 'MANUAL' ELSE m.calculation_type END,
+           COALESCE(m.percentage_value, 0), COALESCE(m.percentage_base, 'NONE'), m.formula_expression, 0.00, 0
+      FROM salary_component_master m
+     WHERE m.is_active = 1 AND m.calculation_scope = 'COMPONENT'
+       AND NOT EXISTS (SELECT 1 FROM employee_salary_structure e
+                        WHERE e.structure_id = p_structure_id AND e.component_id = m.component_id);
+    SET p_attached = ROW_COUNT();
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_salary_components_for_structure` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_salary_components_for_structure`(IN p_emp_id VARCHAR(20), IN p_structure_id BIGINT)
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SET SESSION group_concat_max_len = 100000;
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salaries.' AS remarks, NULL AS component_id;
+    ELSEIF p_structure_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM salary_structure WHERE structure_id = p_structure_id) THEN
+        SELECT 'N' AS status, 'Salary period not found.' AS remarks, NULL AS component_id;
+    ELSE
+        SELECT 'Y' AS status, '' AS remarks,
+               m.component_id, m.component_code, m.component_name, m.component_type, m.calculation_scope,
+               m.calculation_order, m.calculation_type AS rule_calculation_type, m.percentage_base AS rule_base,
+               m.percentage_value AS rule_value, m.formula_expression AS rule_formula,
+               m.minimum_amount, m.maximum_amount, m.eligibility_parameter, m.eligibility_required_value,
+               m.is_slab, m.is_manual, m.is_taxable,
+               (SELECT GROUP_CONCAT(CONCAT(s.slab_based_on, ' ', FORMAT(s.slab_min_value, 2),
+                                           IF(s.slab_max_value IS NULL, ' and above', CONCAT(' to ', FORMAT(s.slab_max_value, 2))),
+                                           ': ', IF(s.result_type = 'FIXED', CONCAT('Rs ', FORMAT(s.result_value, 2)),
+                                                    CONCAT(s.result_value + 0, '% of ', s.percentage_base)))
+                                    ORDER BY s.priority SEPARATOR '; ')
+                  FROM salary_component_slab s WHERE s.component_id = m.component_id AND s.is_active = 1) AS slab_text,
+               e.employee_component_id, e.is_overridden,
+               e.calculation_type AS own_calculation_type, e.component_value AS own_value,
+               e.percentage_base AS own_base, e.formula_expression AS own_formula,
+               COALESCE(e.monthly_amount, t.monthly_amount, 0) AS monthly_amount
+          FROM salary_component_master m
+          LEFT JOIN employee_salary_structure e ON e.component_id = m.component_id AND e.structure_id = p_structure_id
+          LEFT JOIN employee_salary_structure_totals t ON t.component_id = m.component_id AND t.structure_id = p_structure_id
+         WHERE m.is_active = 1
+           AND (p_structure_id IS NULL OR e.employee_component_id IS NOT NULL OR m.calculation_scope = 'AGGREGATE')
+         ORDER BY m.calculation_order, m.component_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_salary_esi_review` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_salary_esi_review`(IN p_emp_id VARCHAR(20))
+er: BEGIN
+    DECLARE v_ok    TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_limit DECIMAL(12,2);
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can review salaries.' AS remarks;
+        LEAVE er;
+    END IF;
+
+    SET v_limit = hrms_esi_wage_limit();
+
+    SELECT 'Y' AS status,
+           'ESI is off but GROSS is within the ESI wage limit' AS remarks,
+           ss.emp_id,
+           ss.structure_id,
+           t.monthly_amount AS gross,
+           v_limit AS esi_limit
+      FROM salary_structure ss
+      JOIN employee_salary_structure_totals t ON t.structure_id = ss.structure_id
+      JOIN salary_component_master m ON m.component_id = t.component_id AND m.component_code = 'GROSS'
+      
+      JOIN user_login_details ul ON ul.emp_id = ss.emp_id AND LOWER(COALESCE(ul.status, '')) = 'active'
+     WHERE ss.structure_status = 'ACTIVE'
+       AND ss.effective_to IS NULL
+       AND COALESCE(ss.esi_applicable, 'N') = 'N'
+       AND t.monthly_amount > 0
+       AND t.monthly_amount <= v_limit
+     ORDER BY ss.emp_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_salary_periods` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_salary_periods`(IN p_emp_id VARCHAR(20), IN p_target_emp_id VARCHAR(20))
+BEGIN
+    DECLARE v_ok TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SET SESSION group_concat_max_len = 100000;
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salaries.' AS remarks, NULL AS emp_id;
+    ELSEIF NOT EXISTS (SELECT 1 FROM user_details WHERE emp_id = p_target_emp_id)
+       AND NOT EXISTS (SELECT 1 FROM salary_structure WHERE emp_id = p_target_emp_id) THEN
+        SELECT 'N' AS status, CONCAT('Employee ', COALESCE(p_target_emp_id, ''), ' not found.') AS remarks, NULL AS emp_id;
+    ELSE
+        SELECT 'Y' AS status, '' AS remarks,
+               p_target_emp_id AS emp_id,
+               (SELECT MAX(d.emp_name) FROM user_details d WHERE d.emp_id = p_target_emp_id) AS emp_name,
+               (SELECT MAX(dm.department_name) FROM user_details d JOIN department_master dm ON dm.department_id = d.department
+                 WHERE d.emp_id = p_target_emp_id) AS department,
+               (SELECT MAX(dg.designation_name) FROM user_details d JOIN designation_master dg ON dg.designation_id = d.designation
+                 WHERE d.emp_id = p_target_emp_id) AS designation,
+               (SELECT MAX(u.status) FROM user_login_details u WHERE u.emp_id = p_target_emp_id) AS login_status,
+               (SELECT MAX(d.joining_date) FROM user_details d WHERE d.emp_id = p_target_emp_id) AS joining_date,
+               ss.structure_id, ss.monthly_ctc, ss.annual_ctc, ss.effective_from, ss.effective_to,
+               ss.structure_status, ss.esi_applicable,
+               IF(ss.structure_id IS NOT NULL AND ss.effective_from <= CURDATE()
+                  AND (ss.effective_to IS NULL OR ss.effective_to >= CURDATE()), 1, 0) AS is_current,
+               (SELECT GROUP_CONCAT(CONCAT(c.payroll_cycle_id, '|',
+                                           ELT(c.payroll_month, 'January','February','March','April','May','June','July',
+                                               'August','September','October','November','December'), ' ', c.payroll_year, '|',
+                                           c.cycle_status)
+                                    ORDER BY c.payroll_year, c.payroll_month SEPARATOR ';')
+                  FROM payroll_cycles c
+                 WHERE ss.structure_id IS NOT NULL
+                   AND c.period_start <= COALESCE(ss.effective_to, '9999-12-31')
+                   AND c.period_end >= ss.effective_from) AS cycles
+          FROM (SELECT 1 AS one) d
+          LEFT JOIN salary_structure ss ON ss.emp_id = p_target_emp_id AND ss.structure_status = 'ACTIVE'
+         ORDER BY ss.effective_from DESC, ss.structure_id DESC;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_salary_timeline` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_salary_timeline`(IN p_emp_id VARCHAR(20), IN p_target_emp_id VARCHAR(20))
+tl: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_active        INT DEFAULT 0;
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view salaries.' AS remarks, NULL AS row_type;
+        LEAVE tl;
+    END IF;
+
+    SET SESSION group_concat_max_len = 100000;
+
+    SELECT COUNT(*) INTO v_active
+      FROM user_login_details
+     WHERE emp_id = p_target_emp_id AND LOWER(TRIM(status)) = 'active';
+
+    SELECT 'Y' AS status, '' AS remarks,
+           t.row_type, t.structure_id, t.date_from, t.date_to, t.monthly_ctc,
+           t.is_current, t.locked, t.locked_cycles, t.locked_until
+      FROM (
+            
+            SELECT 'PERIOD' AS row_type,
+                   ss.structure_id,
+                   ss.effective_from AS date_from,
+                   ss.effective_to   AS date_to,
+                   ss.monthly_ctc,
+                   IF(ss.effective_from <= CURDATE()
+                      AND (ss.effective_to IS NULL OR ss.effective_to >= CURDATE()), 1, 0) AS is_current,
+                   IF(EXISTS (SELECT 1 FROM payroll_cycles c
+                               WHERE c.period_start <= COALESCE(ss.effective_to, '9999-12-31')
+                                 AND c.period_end >= ss.effective_from
+                                 AND c.cycle_status IN ('FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED')), 1, 0) AS locked,
+                   (SELECT GROUP_CONCAT(CONCAT(ELT(c.payroll_month, 'January','February','March','April','May','June','July',
+                                                   'August','September','October','November','December'), ' ', c.payroll_year)
+                                        ORDER BY c.payroll_year, c.payroll_month SEPARATOR ', ')
+                      FROM payroll_cycles c
+                     WHERE c.period_start <= COALESCE(ss.effective_to, '9999-12-31')
+                       AND c.period_end >= ss.effective_from
+                       AND c.cycle_status IN ('FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED')) AS locked_cycles,
+                   (SELECT MAX(c.period_end)
+                      FROM payroll_cycles c
+                     WHERE c.period_start <= COALESCE(ss.effective_to, '9999-12-31')
+                       AND c.period_end >= ss.effective_from
+                       AND c.cycle_status IN ('FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED')) AS locked_until
+              FROM salary_structure ss
+             WHERE ss.emp_id = p_target_emp_id AND ss.structure_status = 'ACTIVE'
+
+            UNION ALL
+
+            
+            SELECT 'GAP' AS row_type,
+                   NULL AS structure_id,
+                   DATE_ADD(g.effective_to, INTERVAL 1 DAY) AS date_from,
+                   DATE_SUB(g.next_from, INTERVAL 1 DAY)    AS date_to,
+                   NULL AS monthly_ctc,
+                   IF(DATE_ADD(g.effective_to, INTERVAL 1 DAY) <= CURDATE()
+                      AND (g.next_from IS NULL OR g.next_from > CURDATE()), 1, 0) AS is_current,
+                   0 AS locked,
+                   NULL AS locked_cycles,
+                   NULL AS locked_until
+              FROM (SELECT p.effective_to,
+                           (SELECT MIN(n.effective_from)
+                              FROM salary_structure n
+                             WHERE n.emp_id = p.emp_id AND n.structure_status = 'ACTIVE'
+                               AND n.effective_from > p.effective_from) AS next_from
+                      FROM salary_structure p
+                     WHERE p.emp_id = p_target_emp_id AND p.structure_status = 'ACTIVE'
+                       AND p.effective_to IS NOT NULL) g
+             WHERE (g.next_from IS NULL AND v_active > 0)
+                OR g.next_from > DATE_ADD(g.effective_to, INTERVAL 1 DAY)
+           ) t
+     ORDER BY t.date_from, t.structure_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_save_employee_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_save_employee_salary`(
+    IN p_emp_id         VARCHAR(20),
+    IN p_target_emp_id  VARCHAR(20),
+    IN p_structure_id   BIGINT,
+    IN p_monthly_ctc    DECIMAL(12,2),
+    IN p_effective_from DATE,
+    IN p_changes        LONGTEXT
+)
+sv: BEGIN
+    DECLARE v_ok        TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_from      DATE;
+    DECLARE v_to        DATE;
+    DECLARE v_esi       VARCHAR(5);
+    DECLARE v_target    BIGINT;
+    DECLARE v_new       TINYINT DEFAULT 0;
+    DECLARE v_msg       VARCHAR(500) DEFAULT NULL;
+    DECLARE v_count     INT DEFAULT 0;
+    DECLARE v_i         INT DEFAULT 0;
+    DECLARE v_path      VARCHAR(30);
+    DECLARE v_cid       BIGINT;
+    DECLARE v_calc      VARCHAR(20);
+    DECLARE v_value     VARCHAR(40);
+    DECLARE v_base      VARCHAR(40);
+    DECLARE v_formula   TEXT;
+    DECLARE v_code      VARCHAR(40);
+    DECLARE v_order     INT;
+    DECLARE v_scope     VARCHAR(20);
+    DECLARE v_n         INT DEFAULT 0;
+    DECLARE v_st        CHAR(1);
+    DECLARE v_rm        VARCHAR(500);
+    DECLARE v_sample    DECIMAL(18,4);
+    DECLARE v_attached  INT DEFAULT 0;
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_errs      INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_calc_date DATE;
+    DECLARE v_err       VARCHAR(500);
+    DECLARE v_audit_old JSON DEFAULT NULL;    
+    DECLARE v_audit_new JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'The salary could not be saved. Nothing was changed.') AS remarks,
+               p_structure_id AS structure_id, 0 AS new_period;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT MAX(effective_from), MAX(effective_to), MAX(esi_applicable) INTO v_from, v_to, v_esi
+      FROM salary_structure
+     WHERE structure_id = p_structure_id AND emp_id = p_target_emp_id AND structure_status = 'ACTIVE';
+
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can change salaries.';
+    ELSEIF v_from IS NULL THEN
+        SET v_msg = 'Salary period not found for this employee.';
+    ELSEIF p_monthly_ctc IS NULL OR p_monthly_ctc <= 0 THEN
+        SET v_msg = 'Monthly CTC must be more than 0.';
+    ELSEIF p_effective_from IS NULL THEN
+        SET v_msg = 'The date the salary applies from is required.';
+    ELSEIF p_effective_from < v_from THEN
+        SET v_msg = CONCAT('This salary period starts on ', DATE_FORMAT(v_from, '%d %b %Y'),
+                           '. To change an earlier date, open the salary period that covers it.');
+    ELSEIF v_to IS NOT NULL AND p_effective_from > v_to THEN
+        SET v_msg = CONCAT('This salary period ends on ', DATE_FORMAT(v_to, '%d %b %Y'),
+                           '. To change a later date, open the salary period that covers it.');
+    ELSEIF NULLIF(TRIM(COALESCE(p_changes, '')), '') IS NOT NULL
+       AND (JSON_VALID(p_changes) = 0 OR LEFT(TRIM(p_changes), 1) <> '[') THEN
+        SET v_msg = 'Changes must be a JSON array.';
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, p_structure_id AS structure_id, 0 AS new_period;
+        LEAVE sv;
+    END IF;
+
+    SET v_audit_old = hrms_audit_salary_json(p_structure_id);    
+    START TRANSACTION;
+    SET v_target = p_structure_id;
+
+    
+    IF p_effective_from > v_from THEN
+        INSERT INTO salary_structure
+            (emp_id, monthly_ctc, annual_ctc, effective_from, effective_to, structure_status, esi_applicable, created_by)
+        VALUES (p_target_emp_id, p_monthly_ctc, p_monthly_ctc * 12, p_effective_from, v_to, 'ACTIVE', v_esi, p_emp_id);
+        SET v_target = LAST_INSERT_ID();
+        INSERT INTO employee_salary_structure
+            (structure_id, component_id, calculation_type, component_value, percentage_base, formula_expression,
+             monthly_amount, is_overridden)
+        SELECT v_target, component_id, calculation_type, component_value, percentage_base, formula_expression,
+               monthly_amount, is_overridden
+          FROM employee_salary_structure WHERE structure_id = p_structure_id;
+        UPDATE salary_structure SET effective_to = DATE_SUB(p_effective_from, INTERVAL 1 DAY)
+         WHERE structure_id = p_structure_id;
+        SET v_new = 1;
+    ELSE
+        UPDATE salary_structure SET monthly_ctc = p_monthly_ctc, annual_ctc = p_monthly_ctc * 12
+         WHERE structure_id = v_target;
+    END IF;
+
+    
+    SET v_count = COALESCE(JSON_LENGTH(NULLIF(TRIM(COALESCE(p_changes, '')), '')), 0);
+    WHILE v_msg IS NULL AND v_i < v_count DO
+        SET v_path    = CONCAT('$[', v_i, ']');
+        SET v_cid     = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.component_id'))), 'null') AS UNSIGNED);
+        SET v_calc    = UPPER(TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.calculation_type'))), 'null'), '')));
+        SET v_value   = NULLIF(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.component_value'))), '')), 'null');
+        SET v_base    = UPPER(TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.percentage_base'))), 'null'), 'NONE')));
+        SET v_formula = NULLIF(UPPER(TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_changes, CONCAT(v_path, '.formula_expression'))), 'null'), ''))), '');
+        SET v_code = NULL;
+        SELECT MAX(UPPER(m.component_code)), MAX(m.calculation_order), MAX(m.calculation_scope), COUNT(e.employee_component_id)
+          INTO v_code, v_order, v_scope, v_n
+          FROM salary_component_master m
+          LEFT JOIN employee_salary_structure e ON e.component_id = m.component_id AND e.structure_id = v_target
+         WHERE m.component_id = v_cid AND m.is_active = 1;
+
+        IF v_code IS NULL THEN
+            SET v_msg = CONCAT('Change ', v_i + 1, ': component not found or inactive.');
+        ELSEIF v_scope = 'AGGREGATE' THEN
+            SET v_msg = CONCAT(v_code, ' is a total and is calculated from the other components.');
+        ELSEIF v_n = 0 THEN
+            SET v_msg = CONCAT(v_code, ' is not part of this salary.');
+        ELSEIF v_calc NOT IN ('DEFAULT', 'FIXED', 'PERCENTAGE', 'FORMULA', 'MANUAL') THEN
+            SET v_msg = CONCAT(v_code, ': choose Default, Fixed, Percentage, Formula or Manual.');
+        ELSEIF v_calc IN ('FIXED', 'PERCENTAGE', 'MANUAL')
+           AND (v_value IS NULL OR v_value NOT REGEXP '^[0-9]+(\\.[0-9]+)?$') THEN
+            SET v_msg = CONCAT(v_code, ': enter a number of 0 or more.');
+        ELSEIF v_calc = 'PERCENTAGE' AND (v_base = 'NONE' OR v_base = v_code) THEN
+            SET v_msg = CONCAT(v_code, ': choose what the percentage is taken of (not the component itself).');
+        ELSEIF v_calc = 'PERCENTAGE'
+           AND v_base NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION','ESI_WAGE','STANDARD_ESI_WAGE')
+           AND NOT EXISTS (SELECT 1 FROM salary_component_master WHERE UPPER(component_code) = v_base) THEN
+            SET v_msg = CONCAT(v_code, ': "', v_base, '" is not CTC, CTC1, GROSS or a component code.');
+        ELSEIF v_calc = 'FORMULA' AND v_formula IS NULL THEN
+            SET v_msg = CONCAT(v_code, ': a formula is required.');
+        END IF;
+        IF v_msg IS NULL AND v_calc = 'FORMULA' THEN
+            CALL hrms_formula_check(v_cid, v_code, v_order, v_formula, v_st, v_rm, v_sample);
+            IF v_st <> 'Y' THEN
+                SET v_msg = LEFT(CONCAT(v_code, ': ', v_rm), 500);
+            END IF;
+        END IF;
+
+        IF v_msg IS NULL THEN
+            IF v_calc = 'DEFAULT' THEN
+                UPDATE employee_salary_structure e
+                  JOIN salary_component_master m ON m.component_id = e.component_id
+                   SET e.calculation_type = CASE WHEN m.calculation_type = 'STATUTORY' THEN 'MANUAL' ELSE m.calculation_type END,
+                       e.component_value = COALESCE(m.percentage_value, 0), e.percentage_base = COALESCE(m.percentage_base, 'NONE'),
+                       e.formula_expression = m.formula_expression, e.is_overridden = 0
+                 WHERE e.structure_id = v_target AND e.component_id = v_cid;
+            ELSE
+                UPDATE employee_salary_structure
+                   SET calculation_type = v_calc,
+                       component_value = IF(v_calc = 'FORMULA', 0, CAST(v_value AS DECIMAL(12,2))),
+                       percentage_base = IF(v_calc = 'PERCENTAGE', v_base, 'NONE'),
+                       formula_expression = IF(v_calc = 'FORMULA', v_formula, NULL),
+                       monthly_amount = IF(v_calc = 'MANUAL', CAST(v_value AS DECIMAL(12,2)), monthly_amount),
+                       is_overridden = 1
+                 WHERE structure_id = v_target AND component_id = v_cid;
+            END IF;
+        END IF;
+        SET v_i = v_i + 1;
+    END WHILE;
+
+    IF v_msg IS NULL THEN
+        CALL hrms_attach_component(NULL, v_attached);
+        SET v_calc_date = GREATEST(p_effective_from, LEAST(CURDATE(), COALESCE(v_to, CURDATE())));
+        CALL hrms_calculate_structure(v_target, v_calc_date, v_changed, v_errs, v_text);
+        IF v_errs > 0 THEN
+            SET v_msg = LEFT(CONCAT('Not saved: ', COALESCE(v_text, 'the salary could not be calculated.')), 500);
+        END IF;
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, v_msg AS remarks, p_structure_id AS structure_id, 0 AS new_period;
+        LEAVE sv;
+    END IF;
+    
+    SET v_audit_new = hrms_audit_salary_json(v_target);
+    CALL hrms_payroll_audit_add('SALARY', IF(v_new = 1, 'NEW_PERIOD', 'UPDATE'), 'salary_structure', v_target,
+         p_target_emp_id, NULL, NULL, NULL, v_audit_old, v_audit_new,
+         CONCAT('Monthly CTC ', JSON_UNQUOTE(JSON_EXTRACT(v_audit_old, '$.monthly_ctc')), ' -> ', p_monthly_ctc,
+                IF(v_count > 0, CONCAT('; ', v_count, ' component change(s)'), ''),
+                IF(v_new = 1, CONCAT('; new salary from ', DATE_FORMAT(p_effective_from, '%d %b %Y'),
+                                     ', previous salary row ', p_structure_id), ''), '.'), p_emp_id);
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           IF(v_new = 1,
+              CONCAT('Saved as a new salary from ', DATE_FORMAT(p_effective_from, '%d %b %Y'),
+                     '. The previous salary now ends on ', DATE_FORMAT(DATE_SUB(p_effective_from, INTERVAL 1 DAY), '%d %b %Y'), '.'),
+              CONCAT('Salary saved and recalculated', IF(v_count > 0, CONCAT(' (', v_count, ' component change(s))'), ''), '.')) AS remarks,
+           v_target AS structure_id, v_new AS new_period;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_save_payroll_manual_input` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_save_payroll_manual_input`(
+    IN p_emp_id        VARCHAR(20),
+    IN p_target_emp_id VARCHAR(20),
+    IN p_month         INT,
+    IN p_year          INT,
+    IN p_component_id  BIGINT,
+    IN p_amount        DECIMAL(12,2),
+    IN p_remarks       VARCHAR(255)
+)
+BEGIN
+    DECLARE v_ok     TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_manual INT DEFAULT 0;
+    DECLARE v_cstat  VARCHAR(30);
+    DECLARE v_detail BIGINT;
+    DECLARE v_old_amount  DECIMAL(12,2) DEFAULT NULL;    
+    DECLARE v_old_remarks VARCHAR(255)  DEFAULT NULL;    
+    DECLARE v_code        VARCHAR(40)   DEFAULT NULL;    
+    DECLARE v_cycle       BIGINT        DEFAULT NULL;    
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SELECT COUNT(*) INTO v_manual FROM salary_component_master
+     WHERE component_id = p_component_id AND is_active = 1 AND (is_manual = 1 OR calculation_type = 'MANUAL');
+    SELECT MAX(cycle_status) INTO v_cstat FROM payroll_cycles WHERE payroll_month = p_month AND payroll_year = p_year;
+    SELECT MAX(d.payroll_detail_id) INTO v_detail
+      FROM employee_payroll_details d
+      JOIN payroll_runs pr ON pr.payroll_run_id = d.payroll_run_id
+      JOIN payroll_cycles pc ON pc.payroll_cycle_id = pr.payroll_cycle_id
+     WHERE pc.payroll_month = p_month AND pc.payroll_year = p_year AND d.emp_id = p_target_emp_id;
+    
+    SELECT MAX(amount), MAX(remarks) INTO v_old_amount, v_old_remarks
+      FROM payroll_manual_inputs
+     WHERE emp_id = p_target_emp_id AND payroll_month = p_month AND payroll_year = p_year AND component_id = p_component_id;
+    SELECT MAX(UPPER(component_code)) INTO v_code FROM salary_component_master WHERE component_id = p_component_id;
+    SELECT MAX(payroll_cycle_id) INTO v_cycle FROM payroll_cycles WHERE payroll_month = p_month AND payroll_year = p_year;
+
+    IF v_ok = 0 THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can enter manual amounts.' AS remarks, NULL AS payroll_detail_id;
+    ELSEIF v_manual = 0 THEN
+        SELECT 'N' AS status, 'This is not an active manual component.' AS remarks, NULL AS payroll_detail_id;
+    ELSEIF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12 OR p_year IS NULL OR p_year NOT BETWEEN 2000 AND 2100 THEN
+        SELECT 'N' AS status, 'Invalid payroll month or year.' AS remarks, NULL AS payroll_detail_id;
+    ELSEIF v_cstat IN ('APPROVED', 'FINALIZED', 'PARTIALLY_PAID', 'PAID', 'CLOSED') THEN
+        SELECT 'N' AS status, CONCAT('The payroll of this month is ', v_cstat, '. Manual amounts can no longer change.') AS remarks,
+               NULL AS payroll_detail_id;
+    ELSEIF p_amount IS NULL OR p_amount < 0 THEN
+        SELECT 'N' AS status, 'Amount must be 0 or more.' AS remarks, NULL AS payroll_detail_id;
+    ELSEIF p_amount = 0 THEN
+        DELETE FROM payroll_manual_inputs
+         WHERE emp_id = p_target_emp_id AND payroll_month = p_month AND payroll_year = p_year AND component_id = p_component_id;
+        IF v_old_amount IS NOT NULL THEN    
+            CALL hrms_payroll_audit_add('MANUAL_INPUT', 'REMOVE', 'payroll_manual_inputs', v_code, p_target_emp_id,
+                 v_cycle, p_month, p_year, JSON_OBJECT('component', v_code, 'amount', v_old_amount, 'remarks', v_old_remarks),
+                 NULL, CONCAT(v_code, ' manual amount ', v_old_amount, ' removed.'), p_emp_id);
+        END IF;
+        SELECT 'Y' AS status, 'Manual amount removed.' AS remarks, v_detail AS payroll_detail_id;
+    ELSE
+        INSERT INTO payroll_manual_inputs (emp_id, payroll_month, payroll_year, component_id, amount, remarks, created_by)
+        VALUES (p_target_emp_id, p_month, p_year, p_component_id, p_amount, NULLIF(TRIM(p_remarks), ''), p_emp_id)
+        ON DUPLICATE KEY UPDATE amount = VALUES(amount), remarks = VALUES(remarks), created_by = VALUES(created_by);
+        CALL hrms_payroll_audit_add('MANUAL_INPUT', IF(v_old_amount IS NULL, 'CREATE', 'UPDATE'), 'payroll_manual_inputs',    
+             v_code, p_target_emp_id, v_cycle, p_month, p_year,
+             IF(v_old_amount IS NULL, NULL, JSON_OBJECT('component', v_code, 'amount', v_old_amount, 'remarks', v_old_remarks)),
+             JSON_OBJECT('component', v_code, 'amount', p_amount, 'remarks', NULLIF(TRIM(p_remarks), '')),
+             CONCAT(v_code, ' manual amount ', COALESCE(CONCAT(v_old_amount, ' -> '), ''), p_amount, '.'), p_emp_id);
+        SELECT 'Y' AS status, 'Manual amount saved.' AS remarks, v_detail AS payroll_detail_id;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_save_salary_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_save_salary_component`(
+    IN p_action VARCHAR(10),
+    IN p_component_id INT,
+    IN p_name VARCHAR(100),
+    IN p_type VARCHAR(20),
+    IN p_calculation_type VARCHAR(30),
+    IN p_is_taxable BOOLEAN,
+    IN p_is_recurring BOOLEAN,
+    IN p_status VARCHAR(20),
+    IN p_amount DECIMAL(12,2),
+    IN p_effective_from DATE
+)
+BEGIN
+    DECLARE v_component_id INT DEFAULT 0;
+    DECLARE v_exists INT DEFAULT 0;
+    DECLARE v_added INT DEFAULT 0;
+    DECLARE v_message VARCHAR(255);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'Database error occurred. Changes rolled back.' AS remarks,
+            NULL AS component_id,
+            0 AS salary_structures_added;
+    END;
+
+    
+    IF p_action IS NULL
+       OR UPPER(TRIM(p_action)) NOT IN ('INSERT', 'UPDATE') THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid action. Use INSERT or UPDATE.' AS remarks,
+            NULL AS component_id,
+            0 AS salary_structures_added;
+
+    
+    ELSEIF p_name IS NULL OR TRIM(p_name) = ''
+       OR p_type IS NULL
+       OR p_type NOT IN ('EARNING', 'DEDUCTION')
+       OR p_calculation_type IS NULL
+       OR p_calculation_type NOT IN (
+           'FIXED', 'PERCENTAGE_OF_BASIC', 'HOURLY'
+       )
+       OR p_status IS NULL
+       OR p_status NOT IN ('ACTIVE', 'INACTIVE')
+       OR p_amount IS NULL
+       OR p_amount < 0
+       OR p_effective_from IS NULL THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid or missing input values.' AS remarks,
+            NULL AS component_id,
+            0 AS salary_structures_added;
+
+    ELSE
+
+        START TRANSACTION;
+
+        IF UPPER(TRIM(p_action)) = 'INSERT' THEN
+
+            
+            INSERT INTO salary_components (
+                name,
+                type,
+                calculation_type,
+                is_taxable,
+                is_recurring,
+                status
+            )
+            VALUES (
+                TRIM(p_name),
+                p_type,
+                p_calculation_type,
+                COALESCE(p_is_taxable, TRUE),
+                COALESCE(p_is_recurring, TRUE),
+                p_status
+            );
+
+            SET v_component_id = LAST_INSERT_ID();
+
+            
+            INSERT INTO employee_salary_structures (
+                emp_id,
+                component_id,
+                amount,
+                effective_from,
+                effective_to
+            )
+            SELECT
+                u.emp_id,
+                v_component_id,
+                p_amount,
+                p_effective_from,
+                NULL
+            FROM user_login_details u
+            WHERE LOWER(TRIM(u.status)) = 'active'
+              AND u.emp_id IS NOT NULL
+              AND TRIM(u.emp_id) <> ''
+            GROUP BY u.emp_id;
+
+            SET v_added = ROW_COUNT();
+
+            SET v_message = CONCAT(
+                'Component inserted successfully. Active members assigned: ',
+                v_added
+            );
+
+            COMMIT;
+
+            SELECT
+                'Y' AS status,
+                v_message AS remarks,
+                v_component_id AS component_id,
+                v_added AS salary_structures_added;
+
+        ELSEIF UPPER(TRIM(p_action)) = 'UPDATE' THEN
+
+            
+            IF p_component_id IS NULL OR p_component_id <= 0 THEN
+
+                ROLLBACK;
+
+                SELECT
+                    'N' AS status,
+                    'Valid component ID is required for UPDATE.' AS remarks,
+                    NULL AS component_id,
+                    0 AS salary_structures_added;
+
+            ELSE
+
+                SELECT COUNT(*)
+                INTO v_exists
+                FROM salary_components
+                WHERE component_id = p_component_id;
+
+                IF v_exists = 0 THEN
+
+                    ROLLBACK;
+
+                    SELECT
+                        'N' AS status,
+                        'Salary component not found.' AS remarks,
+                        p_component_id AS component_id,
+                        0 AS salary_structures_added;
+
+                ELSE
+
+                    UPDATE salary_components
+                    SET
+                        name = TRIM(p_name),
+                        type = p_type,
+                        calculation_type = p_calculation_type,
+                        is_taxable = COALESCE(p_is_taxable, TRUE),
+                        is_recurring = COALESCE(p_is_recurring, TRUE),
+                        status = p_status
+                    WHERE component_id = p_component_id;
+
+                    COMMIT;
+
+                    SELECT
+                        'Y' AS status,
+                        CONCAT(
+                            'Component updated successfully. Status: ',
+                            p_status
+                        ) AS remarks,
+                        p_component_id AS component_id,
+                        0 AS salary_structures_added;
+
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_slab_resolve` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_slab_resolve`(
+    IN  p_component_id BIGINT,
+    IN  p_on_date      DATE,
+    OUT p_amount       DECIMAL(18,4),
+    OUT p_matched      TINYINT
+)
+BEGIN
+    DECLARE v_slab_id BIGINT DEFAULT NULL;
+    DECLARE v_type    VARCHAR(20);
+    DECLARE v_value   DECIMAL(18,4);
+    DECLARE v_pbase   VARCHAR(40);
+    DECLARE v_base    DECIMAL(18,4);
+
+    SET p_amount = 0;
+    SET p_matched = 0;
+
+    SELECT CAST(SUBSTRING_INDEX(GROUP_CONCAT(s.slab_id ORDER BY s.priority, s.slab_id), ',', 1) AS UNSIGNED)
+      INTO v_slab_id
+      FROM salary_component_slab s
+      JOIN tmp_hrms_formula_vars v ON v.var_code = UPPER(s.slab_based_on)
+     WHERE s.component_id = p_component_id
+       AND s.is_active = 1
+       AND s.effective_from <= p_on_date
+       AND (s.effective_to IS NULL OR s.effective_to >= p_on_date)
+       AND v.var_value >= s.slab_min_value
+       AND (s.slab_max_value IS NULL OR v.var_value <= s.slab_max_value);
+
+    IF v_slab_id IS NOT NULL THEN
+        SELECT MAX(result_type), MAX(result_value), MAX(UPPER(percentage_base))
+          INTO v_type, v_value, v_pbase
+          FROM salary_component_slab WHERE slab_id = v_slab_id;
+        SET p_matched = 1;
+        IF v_type = 'PERCENTAGE' THEN
+            SELECT COALESCE(MAX(var_value), 0) INTO v_base FROM tmp_hrms_formula_vars WHERE var_code = v_pbase;
+            SET p_amount = v_base * v_value / 100;
+        ELSE
+            SET p_amount = v_value;
+        END IF;
+    ELSEIF EXISTS (SELECT 1 FROM salary_component_slab s
+                    WHERE s.component_id = p_component_id AND s.is_active = 1
+                      AND s.effective_from <= p_on_date
+                      AND (s.effective_to IS NULL OR s.effective_to >= p_on_date)) THEN
+        SET p_matched = 2;   
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_update_attendance_punch` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_update_attendance_punch`(
+    IN p_emp_id VARCHAR(20),
+    IN p_attendance_date DATE,
+    IN p_first_in DATETIME,
+    IN p_last_out DATETIME,
+    IN p_request_id BIGINT,
+    IN p_actor_emp_id VARCHAR(20)
+)
+main_block:BEGIN
+    DECLARE v_work_mins INT DEFAULT 0;
+    DECLARE v_status VARCHAR(20) DEFAULT 'PRESENT';
+    DECLARE v_actor_category VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    SELECT user_category INTO v_actor_category
+    FROM user_login_details
+    WHERE emp_id = p_actor_emp_id AND status = 'ACTIVE';
+
+    IF v_actor_category NOT IN ('HR', 'ADMIN') THEN
+        SELECT 'N' AS status, 'Unauthorized actor' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    IF p_first_in IS NOT NULL AND p_last_out IS NOT NULL THEN
+        SET v_work_mins = TIMESTAMPDIFF(MINUTE, p_first_in, p_last_out);
+        IF v_work_mins < 0 THEN SET v_work_mins = 0; END IF;
+        SET v_status = 'PRESENT';
+    END IF;
+
+    
+    IF EXISTS (SELECT 1 FROM attendance WHERE emp_id = p_emp_id AND attendance_date = p_attendance_date) THEN
+        UPDATE attendance
+        SET punch_in = p_first_in,
+            punch_out = p_last_out,
+            status = v_status,
+            updated_at = NOW()
+        WHERE emp_id = p_emp_id AND attendance_date = p_attendance_date;
+    ELSE
+        INSERT INTO attendance (
+            emp_id, attendance_date, punch_in, punch_out, status, created_at, updated_at
+        ) VALUES (
+            p_emp_id, p_attendance_date, p_first_in, p_last_out, v_status, NOW(), NOW()
+        );
+    END IF;
+
+    
+    IF EXISTS (SELECT 1 FROM attendance_daily WHERE emp_id = p_emp_id AND attendance_date = p_attendance_date) THEN
+        UPDATE attendance_daily
+        SET first_in = p_first_in,
+            last_out = p_last_out,
+            work_minutes = v_work_mins,
+            late_minutes = 0,
+            early_exit_minutes = 0,
+            attendance_status = v_status,
+            remarks = 'Punch timing updated by Admin',
+            updated_at = NOW()
+        WHERE emp_id = p_emp_id AND attendance_date = p_attendance_date;
+    ELSE
+        INSERT INTO attendance_daily (
+            emp_id, attendance_date, first_in, last_out, work_minutes,
+            overtime_minutes, late_minutes, early_exit_minutes,
+            attendance_status, remarks, generated_flag, received_on, updated_at
+        ) VALUES (
+            p_emp_id, p_attendance_date, p_first_in, p_last_out, v_work_mins,
+            0, 0, 0,
+            v_status, 'Punch timing created by Admin', 'Y', NOW(), NOW()
+        );
+    END IF;
+
+    
+    IF p_request_id IS NOT NULL AND p_request_id > 0 THEN
+        UPDATE general_requests
+        SET status = 'RESOLVED',
+            progress = 'Punch updated and resolved by Admin',
+            resolved_id = p_actor_emp_id,
+            updated_at = NOW()
+        WHERE request_id = p_request_id;
+    END IF;
+
+    SELECT 'Y' AS status, 'Attendance punch updated in both tables successfully' AS remarks;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_update_component_master` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_update_component_master`(
+    IN p_emp_id                     VARCHAR(20),
+    IN p_action                     VARCHAR(20),
+    IN p_component_id               BIGINT,
+    IN p_component_code             VARCHAR(30),
+    IN p_component_name             VARCHAR(100),
+    IN p_component_type             VARCHAR(30),
+    IN p_calculation_type           VARCHAR(30),
+    IN p_percentage_base            VARCHAR(30),
+    IN p_percentage_value           DECIMAL(12,2),
+    IN p_is_taxable                 TINYINT,
+    IN p_is_active                  TINYINT,
+    IN p_formula_expression         TEXT,
+    IN p_minimum_amount             DECIMAL(12,2),
+    IN p_maximum_amount             DECIMAL(12,2),
+    IN p_calculation_scope          VARCHAR(20),
+    IN p_calculation_order          INT,
+    IN p_eligibility_parameter      VARCHAR(50),
+    IN p_eligibility_required_value VARCHAR(10),
+    IN p_is_slab                    TINYINT,
+    IN p_rounding_precision         INT,
+    IN p_is_manual                  TINYINT,
+    IN p_slab_json                  LONGTEXT,
+    IN p_dry_run                    TINYINT,
+    IN p_add_to_total               TINYINT
+)
+main: BEGIN
+    DECLARE v_role       VARCHAR(30);
+    DECLARE v_ustat      VARCHAR(20);
+    DECLARE v_action     VARCHAR(20);
+    DECLARE v_id         BIGINT;
+    DECLARE v_code       VARCHAR(40);
+    DECLARE v_old_code   VARCHAR(40);
+    DECLARE v_name       VARCHAR(100);
+    DECLARE v_type       VARCHAR(30);
+    DECLARE v_calc       VARCHAR(30);
+    DECLARE v_base       VARCHAR(40);
+    DECLARE v_value      DECIMAL(12,2);
+    DECLARE v_formula    TEXT;
+    DECLARE v_scope      VARCHAR(20);
+    DECLARE v_order      INT;
+    DECLARE v_old_order  INT;
+    DECLARE v_eparam     VARCHAR(50);
+    DECLARE v_evalue     VARCHAR(10);
+    DECLARE v_rounding   INT;
+    DECLARE v_taxable    TINYINT;
+    DECLARE v_active     TINYINT;
+    DECLARE v_manual     TINYINT;
+    DECLARE v_dry        TINYINT;
+    DECLARE v_exists     INT DEFAULT 0;
+    DECLARE v_n          INT DEFAULT 0;
+    DECLARE v_msg        VARCHAR(500) DEFAULT NULL;
+    DECLARE v_list       VARCHAR(500);
+    DECLARE v_st         CHAR(1);
+    DECLARE v_rm         VARCHAR(500);
+    DECLARE v_sample     DECIMAL(18,4);
+    DECLARE v_slab_count INT DEFAULT 0;
+    DECLARE v_attached   INT DEFAULT 0;
+    DECLARE v_structures INT DEFAULT 0;
+    DECLARE v_changed    INT DEFAULT 0;
+    DECLARE v_errors     INT DEFAULT 0;
+    DECLARE v_err        VARCHAR(500);
+    DECLARE v_findings   LONGTEXT DEFAULT NULL;
+    DECLARE v_impact     LONGTEXT DEFAULT NULL;
+    DECLARE v_notice     VARCHAR(500) DEFAULT NULL;
+    DECLARE v_total      VARCHAR(40) DEFAULT NULL;
+    DECLARE v_tformula   TEXT DEFAULT NULL;
+    DECLARE v_total_note VARCHAR(300) DEFAULT NULL;
+    DECLARE v_dep_max    INT DEFAULT NULL;
+    DECLARE v_after      INT DEFAULT 0;
+    DECLARE v_before     INT DEFAULT NULL;
+    DECLARE v_t_order    INT DEFAULT NULL;
+    DECLARE v_prev       INT DEFAULT NULL;
+    DECLARE v_auto       INT DEFAULT NULL;
+    DECLARE v_order_note VARCHAR(120) DEFAULT NULL;
+    DECLARE v_audit_old  JSON DEFAULT NULL;    
+    DECLARE v_audit_new  JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status,
+               COALESCE(v_err, 'Component could not be saved. Nothing was changed.') AS remarks,
+               p_component_id AS component_id, 0 AS attached_structures, 0 AS employee_rows_changed,
+               NULL AS findings, NULL AS impact;
+    END;
+
+    SET v_action = UPPER(TRIM(COALESCE(p_action, '')));
+    SET v_id     = IF(p_component_id IS NULL OR p_component_id <= 0, NULL, p_component_id);
+    SET v_dry    = IF(COALESCE(p_dry_run, 0) = 1, 1, 0);
+
+    SELECT MAX(user_category), MAX(status) INTO v_role, v_ustat
+      FROM user_login_details WHERE emp_id = p_emp_id;
+    IF v_role IS NULL OR LOWER(COALESCE(v_ustat, '')) <> 'active' OR UPPER(v_role) NOT IN ('ADMIN', 'HR') THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can manage components.';
+    ELSEIF v_action NOT IN ('INSERT', 'UPDATE', 'ACTIVE') THEN
+        SET v_msg = 'Invalid action. Use INSERT, UPDATE, or ACTIVE.';
+    END IF;
+
+    IF v_msg IS NULL AND v_action IN ('UPDATE', 'ACTIVE') THEN
+        SELECT COUNT(*), MAX(UPPER(component_code)), MAX(calculation_order)
+          INTO v_exists, v_old_code, v_old_order
+          FROM salary_component_master WHERE component_id = v_id;
+        IF v_id IS NULL OR v_exists = 0 THEN
+            SET v_msg = 'Component not found.';
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'ACTIVE' THEN
+        IF p_is_active IS NULL OR p_is_active NOT IN (0, 1) THEN
+            SET v_msg = 'For ACTIVE, provide component_id and is_active (0 or 1).';
+        ELSEIF p_is_active = 0 THEN
+            CALL hrms_component_dependents(v_old_code, v_id, NULL, 1, v_list);
+            IF v_list IS NOT NULL THEN
+                SET v_msg = LEFT(CONCAT('Cannot deactivate ', v_old_code, ': it is used by ', v_list, '.'), 500);
+            END IF;
+        END IF;
+
+        IF v_msg IS NULL THEN
+            SET v_audit_old = hrms_audit_component_json(v_id);    
+            START TRANSACTION;
+            UPDATE salary_component_master
+               SET is_active = p_is_active, updated_at = CURRENT_TIMESTAMP
+             WHERE component_id = v_id;
+            IF p_is_active = 1 THEN
+                CALL hrms_attach_component(v_id, v_attached);
+            END IF;
+            CALL hrms_component_change_finish(v_id, v_msg, v_findings, v_impact, v_structures, v_changed);
+            IF v_msg IS NULL THEN
+                
+                SET v_audit_new = hrms_audit_component_json(v_id);
+                CALL hrms_payroll_audit_add('COMPONENT', IF(p_is_active = 1, 'ACTIVATE', 'DEACTIVATE'),
+                     'salary_component_master', v_id, NULL, NULL, NULL, NULL, v_audit_old, v_audit_new,
+                     CONCAT(v_old_code, IF(p_is_active = 1, ' activated', ' deactivated'),
+                            '. Employee amounts changed: ', v_changed, '.'), p_emp_id);
+                CALL hrms_component_cycle_guard(p_emp_id,
+                     CONCAT('Component ', v_old_code, IF(p_is_active = 1, ' activated', ' deactivated')), v_notice);
+                COMMIT;
+                SELECT 'Y' AS status,
+                       CONCAT('Component ', IF(p_is_active = 1, 'activated', 'deactivated'),
+                              '. Employee amounts changed: ', v_changed, '.',
+                              IF(v_notice IS NULL, '', CONCAT(' ', v_notice))) AS remarks,
+                       v_id AS component_id, v_attached AS attached_structures, v_changed AS employee_rows_changed,
+                       v_findings AS findings, v_impact AS impact;
+                LEAVE main;
+            END IF;
+            ROLLBACK;
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL THEN
+        SET v_code    = UPPER(TRIM(COALESCE(p_component_code, '')));
+        SET v_name    = TRIM(COALESCE(p_component_name, ''));
+        SET v_type    = UPPER(TRIM(COALESCE(p_component_type, '')));
+        SET v_calc    = UPPER(TRIM(COALESCE(p_calculation_type, '')));
+        SET v_base    = UPPER(TRIM(COALESCE(NULLIF(TRIM(p_percentage_base), ''), 'NONE')));
+        SET v_value   = COALESCE(p_percentage_value, 0);
+        SET v_formula = NULLIF(UPPER(TRIM(COALESCE(p_formula_expression, ''))), '');
+        SET v_scope   = UPPER(TRIM(COALESCE(NULLIF(TRIM(p_calculation_scope), ''), 'COMPONENT')));
+        SET v_eparam  = NULLIF(UPPER(TRIM(COALESCE(p_eligibility_parameter, ''))), '');
+        SET v_evalue  = NULLIF(UPPER(TRIM(COALESCE(p_eligibility_required_value, ''))), '');
+        SET v_taxable = COALESCE(p_is_taxable, 1);
+        SET v_active  = COALESCE(p_is_active, 1);
+
+        IF v_action = 'INSERT' THEN
+            SET v_id = NULL;
+            SET v_order = p_calculation_order;
+            IF v_order IS NULL THEN
+                SELECT COALESCE(MAX(calculation_order), 0) + 10 INTO v_order
+                  FROM salary_component_master WHERE calculation_order < 900;
+            END IF;
+            SET v_rounding = COALESCE(p_rounding_precision, 2);
+            SET v_manual   = COALESCE(p_is_manual, 0);
+        ELSE
+            SET v_order = COALESCE(p_calculation_order, v_old_order);
+            SELECT COALESCE(p_rounding_precision, MAX(rounding_precision)), COALESCE(p_is_manual, MAX(is_manual))
+              INTO v_rounding, v_manual
+              FROM salary_component_master WHERE component_id = v_id;
+        END IF;
+        IF v_calc = 'MANUAL' THEN
+            SET v_manual = 1;
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_code NOT REGEXP '^[A-Z][A-Z0-9_]{1,29}$' THEN
+        SET v_msg = 'Component code must start with a letter and use only letters, numbers and _ (2 to 30 characters).';
+    END IF;
+    IF v_msg IS NULL AND v_code IN ('CTC','CTC1','ANNUAL_CTC','ESI_APPLICABLE','PAY_DAYS','PAYABLE_DAYS','LOP_DAYS',
+                                   'MANUAL_AMOUNT','ESI_WAGE','STANDARD_ESI_WAGE',
+                                   'ROUND','LEAST','GREATEST','IF','CEIL','FLOOR','ABS','AND','OR','NOT','NONE') THEN
+        SET v_msg = CONCAT(v_code, ' is a reserved name and cannot be used as a component code.');
+    END IF;
+    IF v_msg IS NULL AND v_name = '' THEN
+        SET v_msg = 'Component name is required.';
+    END IF;
+    IF v_msg IS NULL AND v_type NOT IN ('EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION') THEN
+        SET v_msg = 'Type must be EARNING, DEDUCTION or EMPLOYER_CONTRIBUTION.';
+    END IF;
+    IF v_msg IS NULL AND v_calc NOT IN ('FIXED', 'PERCENTAGE', 'FORMULA', 'MANUAL', 'STATUTORY') THEN
+        SET v_msg = 'Calculation type must be FIXED, PERCENTAGE, FORMULA, MANUAL or STATUTORY.';
+    END IF;
+    IF v_msg IS NULL AND v_scope NOT IN ('COMPONENT', 'AGGREGATE') THEN
+        SET v_msg = 'Scope must be COMPONENT or AGGREGATE (total).';
+    END IF;
+    IF v_msg IS NULL AND v_scope = 'AGGREGATE' AND (v_calc <> 'FORMULA' OR v_formula IS NULL) THEN
+        SET v_msg = 'A total (AGGREGATE) component must be a FORMULA, for example BASIC + HRA.';
+    END IF;
+    IF v_msg IS NULL AND v_scope = 'AGGREGATE' AND (v_manual = 1 OR COALESCE(JSON_LENGTH(p_slab_json), 0) > 0) THEN
+        SET v_msg = 'A total (AGGREGATE) component cannot be manual or have slabs.';
+    END IF;
+    IF v_msg IS NULL AND v_action = 'UPDATE' THEN
+        SELECT COUNT(*) INTO v_n FROM salary_component_master
+         WHERE component_id = v_id AND calculation_scope <> v_scope;
+        IF v_n > 0 THEN
+            SET v_msg = 'The scope of an existing component cannot be changed. Create a new component instead.';
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND (v_taxable NOT IN (0, 1) OR v_active NOT IN (0, 1) OR v_manual NOT IN (0, 1)) THEN
+        SET v_msg = 'Statutory, Status and Manual must be 0 or 1.';
+    END IF;
+    IF v_msg IS NULL AND (v_order < 1 OR v_order > 9999) THEN
+        SET v_msg = 'Calculation order must be between 1 and 9999.';
+    END IF;
+    IF v_msg IS NULL AND (v_rounding < 0 OR v_rounding > 2) THEN
+        SET v_msg = 'Rounding must be 0, 1 or 2 decimal places.';
+    END IF;
+    IF v_msg IS NULL AND v_value < 0 THEN
+        SET v_msg = 'Default value cannot be negative.';
+    END IF;
+    IF v_msg IS NULL AND (COALESCE(p_minimum_amount, 0) < 0 OR COALESCE(p_maximum_amount, 0) < 0) THEN
+        SET v_msg = 'Minimum and maximum amount cannot be negative.';
+    END IF;
+    IF v_msg IS NULL AND p_minimum_amount IS NOT NULL AND p_maximum_amount IS NOT NULL
+       AND p_minimum_amount > p_maximum_amount THEN
+        SET v_msg = 'Minimum amount cannot be above maximum amount.';
+    END IF;
+    IF v_msg IS NULL AND v_eparam IS NOT NULL AND v_eparam NOT IN ('EMPLOYEE_ESI_ELIGIBLE') THEN
+        SET v_msg = 'Eligibility must be empty or EMPLOYEE_ESI_ELIGIBLE.';
+    END IF;
+    IF v_msg IS NULL AND v_eparam IS NOT NULL AND COALESCE(v_evalue, '') NOT IN ('Y', 'N') THEN
+        SET v_msg = 'Eligibility value must be Y or N.';
+    END IF;
+    IF v_eparam IS NULL THEN
+        SET v_evalue = NULL;
+    END IF;
+
+    IF v_msg IS NULL THEN
+        SELECT COUNT(*) INTO v_n FROM salary_component_master
+         WHERE UPPER(component_code) = v_code AND (v_id IS NULL OR component_id <> v_id);
+        IF v_n > 0 THEN
+            SET v_msg = CONCAT('Component code already exists: ', v_code);
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND v_action = 'UPDATE' AND v_code <> v_old_code THEN
+        CALL hrms_component_dependents(v_old_code, v_id, NULL, 0, v_list);
+        IF v_list IS NOT NULL THEN
+            SET v_msg = LEFT(CONCAT('The code ', v_old_code, ' cannot be changed: it is used by ', v_list, '.'), 500);
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_calc = 'PERCENTAGE' AND v_manual = 0 THEN
+        IF p_percentage_value IS NULL THEN
+            SET v_msg = 'A percentage value is required for PERCENTAGE.';
+        ELSEIF v_base = 'NONE' THEN
+            SET v_msg = 'Choose what the percentage is based on.';
+        ELSEIF v_base NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION','ESI_WAGE','STANDARD_ESI_WAGE') THEN
+            SELECT COUNT(*) INTO v_n FROM salary_component_master
+             WHERE UPPER(component_code) = v_base AND (v_id IS NULL OR component_id <> v_id);
+            IF v_n = 0 THEN
+                SET v_msg = CONCAT('Based On "', v_base, '" is not CTC, CTC1, GROSS or another component code.');
+            ELSE
+                
+                SELECT COUNT(*) INTO v_n FROM salary_component_master
+                 WHERE UPPER(component_code) = v_base AND is_active = 1 AND (v_id IS NULL OR component_id <> v_id);
+                IF v_n = 0 THEN
+                    SET v_msg = CONCAT('Based On "', v_base, '" is inactive, so it is always 0. Activate it or choose another base.');
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND v_calc = 'FIXED' AND p_percentage_value IS NULL THEN
+        SET v_msg = 'An amount is required for FIXED.';
+    END IF;
+    IF v_msg IS NULL AND v_calc = 'FORMULA' AND v_formula IS NULL THEN
+        SET v_msg = 'A formula is required for FORMULA.';
+    END IF;
+    IF v_msg IS NULL AND v_formula IS NOT NULL AND v_formula <> 'MANUAL_AMOUNT' THEN
+        CALL hrms_formula_check(v_id, v_code, v_order, v_formula, v_st, v_rm, v_sample);
+        IF v_st <> 'Y' THEN
+            SET v_msg = v_rm;
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND COALESCE(p_is_slab, 0) = 1 AND p_slab_json IS NOT NULL
+       AND COALESCE(JSON_LENGTH(p_slab_json), 0) = 0 THEN
+        SET v_msg = 'A slab component needs at least one slab.';
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks, v_id AS component_id,
+               0 AS attached_structures, 0 AS employee_rows_changed,
+               v_findings AS findings, v_impact AS impact;
+        LEAVE main;
+    END IF;
+
+    
+    SET v_audit_old = IF(v_action = 'INSERT', NULL, hrms_audit_component_json(v_id));    
+    START TRANSACTION;
+
+    IF v_action = 'INSERT' THEN
+        INSERT INTO salary_component_master
+            (component_code, component_name, component_type, calculation_type, percentage_base, percentage_value,
+             formula_expression, minimum_amount, maximum_amount, calculation_scope, calculation_order,
+             eligibility_parameter, eligibility_required_value, is_manual, is_slab, rounding_precision, is_taxable, is_active)
+        VALUES
+            (v_code, v_name, v_type, v_calc, v_base, v_value,
+             v_formula, p_minimum_amount, p_maximum_amount, v_scope, v_order,
+             v_eparam, v_evalue, v_manual, 0, v_rounding, v_taxable, v_active);
+        SET v_id = LAST_INSERT_ID();
+    ELSE
+        UPDATE salary_component_master
+           SET component_code = v_code,
+               component_name = v_name,
+               component_type = v_type,
+               calculation_type = v_calc,
+               percentage_base = v_base,
+               percentage_value = v_value,
+               formula_expression = v_formula,
+               minimum_amount = p_minimum_amount,
+               maximum_amount = p_maximum_amount,
+               calculation_order = v_order,
+               eligibility_parameter = v_eparam,
+               eligibility_required_value = v_evalue,
+               is_manual = v_manual,
+               rounding_precision = v_rounding,
+               is_taxable = v_taxable,
+               is_active = v_active,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE component_id = v_id;
+
+        UPDATE employee_salary_structure ess
+           SET ess.calculation_type   = CASE WHEN v_calc = 'STATUTORY' THEN 'MANUAL' ELSE v_calc END,
+               ess.component_value    = v_value,
+               ess.percentage_base    = v_base,
+               ess.formula_expression = v_formula,
+               ess.updated_at         = CURRENT_TIMESTAMP
+         WHERE ess.component_id = v_id
+           AND ess.is_overridden = 0;
+    END IF;
+
+    
+    IF p_slab_json IS NOT NULL THEN
+        CALL hrms_component_slab_apply(p_emp_id, v_id, p_slab_json, v_slab_count, v_msg);
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_active = 1 AND v_scope = 'COMPONENT' AND COALESCE(p_add_to_total, 0) = 1 THEN
+        SET v_total = CASE v_type WHEN 'EARNING' THEN 'GROSS' WHEN 'DEDUCTION' THEN 'TOTAL_DEDUCTIONS'
+                                  ELSE 'TOTAL_EMPLOYER_CONTRIBUTION' END;
+        SELECT MAX(formula_expression) INTO v_tformula FROM salary_component_master
+         WHERE UPPER(component_code) = v_total AND is_active = 1 AND calculation_scope = 'AGGREGATE';
+        IF v_tformula IS NOT NULL
+           AND LOCATE(CONCAT(' ', v_code, ' '),
+                      CONCAT(' ', REGEXP_REPLACE(UPPER(v_tformula), '[^A-Z0-9_]', ' '), ' ')) = 0 THEN
+            IF UPPER(TRIM(v_tformula)) REGEXP '^[A-Z0-9_ +]+$' THEN
+                UPDATE salary_component_master
+                   SET formula_expression = CONCAT(TRIM(v_tformula), ' + ', v_code), updated_at = CURRENT_TIMESTAMP
+                 WHERE UPPER(component_code) = v_total AND calculation_scope = 'AGGREGATE';
+                SET v_total_note = CONCAT('Added to ', v_total, '.');
+            ELSE
+                SET v_total_note = CONCAT(v_total, ' is not a plain sum, so ', v_code, ' was not added to it automatically.');
+            END IF;
+        END IF;
+    END IF;
+
+    
+    IF v_msg IS NULL AND v_action = 'INSERT' AND p_calculation_order IS NULL AND v_active = 1 THEN
+        CALL hrms_component_rules_check(NULL, 3);          
+        SELECT MAX(m.calculation_order) INTO v_dep_max
+          FROM tmp_hrms_dep d
+          JOIN salary_component_master m ON UPPER(m.component_code) = d.uses AND m.is_active = 1 AND m.component_id <> v_id
+         WHERE d.code = v_code;
+        SET v_after = COALESCE(v_dep_max, 0);
+        SET v_before = NULL;
+        IF v_scope = 'COMPONENT' AND v_total IS NOT NULL THEN
+            SELECT MAX(calculation_order) INTO v_t_order FROM salary_component_master
+             WHERE UPPER(component_code) = v_total AND is_active = 1 AND calculation_scope = 'AGGREGATE';
+            IF v_t_order IS NOT NULL AND v_after < v_t_order THEN
+                SELECT MAX(calculation_order) INTO v_prev FROM salary_component_master
+                 WHERE is_active = 1 AND calculation_order < v_t_order AND component_id <> v_id;
+                SET v_after = GREATEST(v_after, COALESCE(v_prev, 0));
+                SET v_before = v_t_order;
+            END IF;
+        END IF;
+        SET v_auto = hrms_free_order(v_after, v_before, v_id);
+        IF v_auto IS NULL THEN
+            SET v_msg = CONCAT('No free calculation order between ', v_after, ' and ', COALESCE(v_before, v_after + 1),
+                               '. Enter a calculation order.');
+        ELSE
+            UPDATE salary_component_master SET calculation_order = v_auto WHERE component_id = v_id;
+            SET v_order = v_auto;
+            SET v_order_note = CONCAT('Calculation order ', v_auto, ' (automatic).');
+        END IF;
+    END IF;
+
+    IF v_msg IS NULL THEN
+        IF v_active = 1 AND v_scope = 'COMPONENT' THEN
+            CALL hrms_attach_component(v_id, v_attached);
+        END IF;
+        CALL hrms_component_change_finish(v_id, v_msg, v_findings, v_impact, v_structures, v_changed);
+    END IF;
+
+    IF v_msg IS NOT NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, v_msg AS remarks, IF(v_action = 'INSERT', NULL, v_id) AS component_id,
+               0 AS attached_structures, 0 AS employee_rows_changed,
+               v_findings AS findings, v_impact AS impact;
+        LEAVE main;
+    END IF;
+
+    IF v_dry = 1 THEN
+        ROLLBACK;
+        SELECT 'Y' AS status,
+               CONCAT('Check passed. ', v_structures, ' employees calculated without errors. Saving will change ',
+                      v_changed, ' employee amounts',
+                      IF(v_attached > 0, CONCAT(' and add the component to ', v_attached, ' salary structures'), ''), '.',
+                      IF(v_total_note IS NULL, '', CONCAT(' ', v_total_note)),
+                      IF(v_order_note IS NULL, '', CONCAT(' ', v_order_note))) AS remarks,
+               IF(v_action = 'INSERT', NULL, v_id) AS component_id,
+               v_attached AS attached_structures, v_changed AS employee_rows_changed,
+               v_findings AS findings, v_impact AS impact;
+        LEAVE main;
+    END IF;
+
+    
+    SET v_audit_new = hrms_audit_component_json(v_id);
+    CALL hrms_payroll_audit_add('COMPONENT', IF(v_action = 'INSERT', 'CREATE', 'UPDATE'),
+         'salary_component_master', v_id, NULL, NULL, NULL, NULL, v_audit_old, v_audit_new,
+         CONCAT(v_code, IF(v_action = 'INSERT', ' created', ' changed'), '. Employee amounts changed: ', v_changed, '.',
+                IF(v_order_note IS NULL, '', CONCAT(' ', v_order_note))), p_emp_id);
+    IF v_total_note LIKE 'Added to %' THEN
+        CALL hrms_payroll_audit_add('COMPONENT', 'UPDATE', 'salary_component_master', v_total, NULL, NULL, NULL, NULL,
+             JSON_OBJECT('code', v_total, 'formula', v_tformula),
+             JSON_OBJECT('code', v_total, 'formula', CONCAT(TRIM(v_tformula), ' + ', v_code)),
+             CONCAT(v_code, ' added to ', v_total, '.'), p_emp_id);
+    END IF;
+    CALL hrms_component_cycle_guard(p_emp_id, CONCAT('Component ', v_code, IF(v_action = 'INSERT', ' added', ' changed')), v_notice);
+    COMMIT;
+
+    SELECT 'Y' AS status,
+           CONCAT(CASE
+               WHEN v_action = 'INSERT' AND v_scope = 'AGGREGATE'
+                   THEN CONCAT('Total ', v_code, ' created. Employee amounts changed: ', v_changed, '.')
+               WHEN v_action = 'INSERT' AND v_active = 1
+                   THEN CONCAT('Component ', v_code, ' created and added to ', v_attached,
+                               ' employee salary structures. Employee amounts changed: ', v_changed, '.')
+               WHEN v_action = 'INSERT'
+                   THEN CONCAT('Component ', v_code, ' created as inactive. It is added to employees when activated.')
+               ELSE CONCAT('Component ', v_code, ' updated. Employee amounts changed: ', v_changed,
+                           IF(v_attached > 0, CONCAT('. Added to ', v_attached, ' more salary structures.'), '.'))
+           END,
+           IF(v_total_note IS NULL, '', CONCAT(' ', v_total_note)),
+           IF(v_order_note IS NULL, '', CONCAT(' ', v_order_note)),
+           IF(v_notice IS NULL, '', CONCAT(' ', v_notice))) AS remarks,
+           v_id AS component_id, v_attached AS attached_structures, v_changed AS employee_rows_changed,
+           v_findings AS findings, v_impact AS impact;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_update_employee_salary_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_update_employee_salary_component`(
+    IN p_emp_id             VARCHAR(20),
+    IN p_target_emp_id      VARCHAR(20),
+    IN p_component_id       BIGINT,
+    IN p_calculation_type   VARCHAR(20),
+    IN p_component_value    DECIMAL(12,2),
+    IN p_percentage_base    VARCHAR(30),
+    IN p_formula_expression TEXT
+)
+uc: BEGIN
+    DECLARE v_ok        TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_structure BIGINT;
+    DECLARE v_calc      VARCHAR(20);
+    DECLARE v_base      VARCHAR(40);
+    DECLARE v_formula   TEXT;
+    DECLARE v_code      VARCHAR(40);
+    DECLARE v_order     INT;
+    DECLARE v_scope     VARCHAR(20);
+    DECLARE v_n         INT DEFAULT 0;
+    DECLARE v_msg       VARCHAR(500) DEFAULT NULL;
+    DECLARE v_st        CHAR(1);
+    DECLARE v_rm        VARCHAR(500);
+    DECLARE v_sample    DECIMAL(18,4);
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_errs      INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_amount    DECIMAL(14,2);
+    DECLARE v_err       VARCHAR(500);
+    DECLARE v_audit_old JSON DEFAULT NULL;    
+    DECLARE v_audit_new JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Employee component could not be saved.') AS remarks;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    SET v_calc    = UPPER(TRIM(COALESCE(p_calculation_type, '')));
+    SET v_base    = UPPER(TRIM(COALESCE(NULLIF(TRIM(p_percentage_base), ''), 'NONE')));
+    SET v_formula = NULLIF(UPPER(TRIM(COALESCE(p_formula_expression, ''))), '');
+    SELECT MAX(UPPER(component_code)), MAX(calculation_order), MAX(calculation_scope) INTO v_code, v_order, v_scope
+      FROM salary_component_master WHERE component_id = p_component_id AND is_active = 1;
+    SELECT ss.structure_id INTO v_structure
+      FROM salary_structure ss
+     WHERE ss.emp_id = p_target_emp_id AND ss.structure_status = 'ACTIVE'
+       AND ss.effective_from <= CURDATE() AND (ss.effective_to IS NULL OR ss.effective_to >= CURDATE())
+     ORDER BY ss.effective_from DESC, ss.structure_id DESC LIMIT 1;
+
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can update employee salary components.';
+    ELSEIF NOT EXISTS (SELECT 1 FROM user_login_details WHERE emp_id = p_target_emp_id AND LOWER(status) = 'active') THEN
+        SET v_msg = 'Target employee does not exist or is inactive.';
+    ELSEIF v_code IS NULL THEN
+        SET v_msg = 'Component not found or inactive.';
+    ELSEIF v_scope = 'AGGREGATE' THEN
+        SET v_msg = 'Totals are calculated from the other components and cannot be set per employee.';
+    ELSEIF v_structure IS NULL THEN
+        SET v_msg = 'Employee has no active salary structure.';
+    ELSEIF v_calc NOT IN ('DEFAULT', 'FIXED', 'PERCENTAGE', 'FORMULA', 'MANUAL') THEN
+        SET v_msg = 'Calculation type must be FIXED, PERCENTAGE, FORMULA, MANUAL or DEFAULT.';
+    ELSEIF v_calc IN ('FIXED', 'MANUAL', 'PERCENTAGE') AND (p_component_value IS NULL OR p_component_value < 0) THEN
+        SET v_msg = 'Enter a value of 0 or more.';
+    ELSEIF v_calc = 'PERCENTAGE' AND v_base = 'NONE' THEN
+        SET v_msg = 'Choose what the percentage is based on.';
+    ELSEIF v_calc = 'PERCENTAGE' AND v_base = v_code THEN
+        SET v_msg = 'A component cannot be a percentage of itself.';
+    ELSEIF v_calc = 'FORMULA' AND v_formula IS NULL THEN
+        SET v_msg = 'A formula is required for FORMULA.';
+    END IF;
+    IF v_msg IS NULL AND v_calc = 'PERCENTAGE'
+       AND v_base NOT IN ('CTC','CTC1','ANNUAL_CTC','GROSS','TOTAL_DEDUCTIONS','TOTAL_EMPLOYER_CONTRIBUTION','ESI_WAGE','STANDARD_ESI_WAGE') THEN
+        SELECT COUNT(*) INTO v_n FROM salary_component_master WHERE UPPER(component_code) = v_base;
+        IF v_n = 0 THEN
+            SET v_msg = CONCAT('Based On "', v_base, '" is not CTC, CTC1, GROSS or a component code.');
+        END IF;
+    END IF;
+    IF v_msg IS NULL AND v_calc = 'FORMULA' THEN
+        CALL hrms_formula_check(p_component_id, v_code, v_order, v_formula, v_st, v_rm, v_sample);
+        IF v_st <> 'Y' THEN
+            SET v_msg = v_rm;
+        END IF;
+    END IF;
+    IF v_msg IS NULL THEN
+        SELECT COUNT(*) INTO v_n FROM employee_salary_structure WHERE structure_id = v_structure AND component_id = p_component_id;
+        IF v_n = 0 THEN
+            SET v_msg = 'Component is not assigned to this employee structure.';
+        END IF;
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks;
+        LEAVE uc;
+    END IF;
+
+    SET v_audit_old = hrms_audit_salary_json(v_structure);    
+    START TRANSACTION;
+    IF v_calc = 'DEFAULT' THEN
+        UPDATE employee_salary_structure e
+          JOIN salary_component_master m ON m.component_id = e.component_id
+           SET e.calculation_type = CASE WHEN m.calculation_type = 'STATUTORY' THEN 'MANUAL' ELSE m.calculation_type END,
+               e.component_value = COALESCE(m.percentage_value, 0),
+               e.percentage_base = COALESCE(m.percentage_base, 'NONE'),
+               e.formula_expression = m.formula_expression,
+               e.is_overridden = 0
+         WHERE e.structure_id = v_structure AND e.component_id = p_component_id;
+    ELSE
+        UPDATE employee_salary_structure
+           SET calculation_type = v_calc,
+               component_value = COALESCE(p_component_value, 0),
+               percentage_base = IF(v_calc = 'PERCENTAGE', v_base, 'NONE'),
+               formula_expression = IF(v_calc = 'FORMULA', v_formula, NULL),
+               monthly_amount = IF(v_calc = 'MANUAL', COALESCE(p_component_value, 0), monthly_amount),
+               is_overridden = 1
+         WHERE structure_id = v_structure AND component_id = p_component_id;
+    END IF;
+
+    SET @hrms_calc_date = hrms_structure_calc_date(v_structure);
+    CALL hrms_calculate_structure(v_structure, @hrms_calc_date, v_changed, v_errs, v_text);   
+    IF v_errs > 0 THEN
+        ROLLBACK;
+        SELECT 'N' AS status, LEFT(CONCAT('Not saved: ', COALESCE(v_text, 'the salary could not be calculated.')), 500) AS remarks;
+        LEAVE uc;
+    END IF;
+    
+    SET v_audit_new = hrms_audit_salary_json(v_structure);
+    CALL hrms_payroll_audit_add('SALARY', IF(v_calc = 'DEFAULT', 'COMPONENT_DEFAULT', 'COMPONENT_OWN'), 'employee_salary_structure',
+         v_structure, p_target_emp_id, NULL, NULL, NULL, v_audit_old, v_audit_new,
+         CONCAT(v_code, IF(v_calc = 'DEFAULT', ' follows the component master again.',
+                           CONCAT(' set to ', v_calc, '.'))), p_emp_id);
+    COMMIT;
+
+    SELECT monthly_amount INTO v_amount FROM employee_salary_structure
+     WHERE structure_id = v_structure AND component_id = p_component_id;
+    SELECT 'Y' AS status,
+           IF(v_calc = 'DEFAULT', 'Component follows the component master again. Salary recalculated.',
+              'Employee component updated and salary recalculated.') AS remarks,
+           p_target_emp_id AS emp_id, v_structure AS structure_id, p_component_id AS component_id,
+           v_amount AS monthly_amount, IF(v_calc = 'DEFAULT', 0, 1) AS is_overridden, v_changed AS amounts_changed;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_update_requests` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_update_requests`(
+    IN p_action VARCHAR(20),          
+    IN p_request_id BIGINT,           
+    IN p_actor_emp_id VARCHAR(20),    
+    IN p_category VARCHAR(50),        
+    IN p_subject VARCHAR(255),        
+    IN p_description TEXT,            
+    IN p_attachment_path VARCHAR(255),
+    IN p_progress VARCHAR(100),       
+    IN p_reason VARCHAR(500)          
+)
+main_block:BEGIN
+    DECLARE v_emp_id VARCHAR(20);
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_actor_category VARCHAR(20);
+
+    SET time_zone = '+05:30';
+    START TRANSACTION;
+
+    
+    SELECT user_category INTO v_actor_category
+    FROM user_login_details
+    WHERE emp_id = p_actor_emp_id AND status = 'ACTIVE';
+
+    
+    IF p_action = 'INSERT' THEN
+        INSERT INTO general_requests (
+            emp_id, category, subject, description, attachment_path, progress, status
+        ) VALUES (
+            p_actor_emp_id, p_category, p_subject, p_description, p_attachment_path, 'Pending Assignment', 'PENDING'
+        );
+        
+        COMMIT;
+        SELECT 'Y' AS status, 'Request logged successfully' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT emp_id, status INTO v_emp_id, v_status
+    FROM general_requests WHERE request_id = p_request_id;
+
+    IF v_emp_id IS NULL THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Target request item record not found' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    
+    IF p_action = 'UPDATE_PROGRESS' THEN
+        IF v_actor_category NOT IN ('HR', 'ADMIN') THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Not authorized. Only HR or ADMIN can add updates.' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        UPDATE general_requests 
+        SET progress = p_progress 
+        WHERE request_id = p_request_id;
+        
+        COMMIT;
+        SELECT 'Y' AS status, 'Progress string trace updated successfully' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    
+    IF p_action = 'RESOLVE' THEN
+        IF v_actor_category NOT IN ('HR', 'ADMIN') THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Not authorized. Only HR or ADMIN can change status to RESOLVED.' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_status <> 'PENDING' THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Only PENDING requests can be transitioned to RESOLVED' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        UPDATE general_requests 
+        SET status = 'RESOLVED',
+            resolved_id = p_actor_emp_id
+        WHERE request_id = p_request_id;
+        
+        COMMIT;
+        SELECT 'Y' AS status, 'Request accepted and marked as RESOLVED' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    
+    IF p_action = 'COMPLETE' THEN
+        IF p_actor_emp_id <> v_emp_id THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Access Denied. Only the owning employee can mark this request complete' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_status <> 'RESOLVED' THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Requests must be in RESOLVED state before closing out as COMPLETED' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        UPDATE general_requests 
+        SET status = 'COMPLETED' 
+        WHERE request_id = p_request_id;
+        
+        COMMIT;
+        SELECT 'Y' AS status, 'Workflow state marked COMPLETED by employee' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    
+    IF p_action = 'CANCEL' THEN
+        IF p_actor_emp_id <> v_emp_id THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Only the original applicant can cancel this request' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_status IN ('RESOLVED', 'COMPLETED') THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Cannot cancel requests that have already been processed or completed' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        UPDATE general_requests 
+        SET status = 'CANCELLED',
+            reason = p_reason 
+        WHERE request_id = p_request_id;
+        
+        COMMIT;
+        SELECT 'Y' AS status, 'Request successfully CANCELLED' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    ROLLBACK;
+    SELECT 'N' AS status, 'Invalid context mutation parameter operation action execution' AS remarks;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_update_salary_structure` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_update_salary_structure`(
+    IN p_emp_id         VARCHAR(20),
+    IN p_target_emp_id  VARCHAR(20),
+    IN p_monthly_ctc    DECIMAL(12,2),
+    IN p_effective_from DATE
+)
+us: BEGIN
+    DECLARE v_ok        TINYINT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_structure BIGINT;
+    DECLARE v_msg       VARCHAR(500) DEFAULT NULL;
+    DECLARE v_changed   INT DEFAULT 0;
+    DECLARE v_errs      INT DEFAULT 0;
+    DECLARE v_text      VARCHAR(500);
+    DECLARE v_err       VARCHAR(500);
+    DECLARE v_audit_old JSON DEFAULT NULL;    
+    DECLARE v_audit_new JSON DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        ROLLBACK;
+        SELECT 'N' AS status, COALESCE(v_err, 'Salary structure could not be updated.') AS remarks;
+    END;
+
+    
+
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+
+      FROM user_login_details
+
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+
+    SET v_ok = IF(v_user_category IN ('ADMIN', 'HR'), 1, 0);
+    IF v_ok = 0 THEN
+        SET v_msg = 'Access denied: only active ADMIN or HR users can revise salary.';
+    ELSEIF p_target_emp_id IS NULL OR TRIM(p_target_emp_id) = '' OR p_monthly_ctc IS NULL OR p_monthly_ctc <= 0 THEN
+        SET v_msg = 'Provide a valid employee ID and positive monthly CTC.';
+    ELSEIF p_effective_from IS NULL THEN
+        SET v_msg = 'Effective from date is required.';
+    ELSEIF NOT EXISTS (SELECT 1 FROM user_login_details WHERE emp_id = p_target_emp_id AND LOWER(status) = 'active') THEN
+        SET v_msg = 'Target employee does not exist or is inactive.';
+    END IF;
+    IF v_msg IS NULL THEN
+        SELECT ss.structure_id INTO v_structure
+          FROM salary_structure ss
+         WHERE ss.emp_id = p_target_emp_id AND ss.structure_status = 'ACTIVE'
+           AND (ss.effective_to IS NULL OR ss.effective_to >= p_effective_from)
+         ORDER BY ss.effective_from DESC, ss.structure_id DESC LIMIT 1;
+        IF v_structure IS NULL THEN
+            SET v_msg = 'No active salary structure exists for the selected effective date.';
+        END IF;
+    END IF;
+    IF v_msg IS NOT NULL THEN
+        SELECT 'N' AS status, v_msg AS remarks;
+        LEAVE us;
+    END IF;
+
+    SET v_audit_old = hrms_audit_salary_json(v_structure);    
+    START TRANSACTION;
+    UPDATE salary_structure
+       SET monthly_ctc = p_monthly_ctc, annual_ctc = p_monthly_ctc * 12, effective_from = p_effective_from
+     WHERE structure_id = v_structure;
+    CALL hrms_attach_component(NULL, v_changed);
+    SET @hrms_calc_date = hrms_structure_calc_date(v_structure);
+    CALL hrms_calculate_structure(v_structure, @hrms_calc_date, v_changed, v_errs, v_text);   
+    IF v_errs > 0 THEN
+        ROLLBACK;
+        SELECT 'N' AS status, LEFT(CONCAT('Not saved: ', COALESCE(v_text, 'the salary could not be calculated.')), 500) AS remarks;
+        LEAVE us;
+    END IF;
+    
+    SET v_audit_new = hrms_audit_salary_json(v_structure);
+    CALL hrms_payroll_audit_add('SALARY', 'CTC_REVISE', 'salary_structure', v_structure, p_target_emp_id,
+         NULL, NULL, NULL, v_audit_old, v_audit_new,
+         CONCAT('Monthly CTC ', JSON_UNQUOTE(JSON_EXTRACT(v_audit_old, '$.monthly_ctc')), ' -> ', p_monthly_ctc,
+                ', effective from ', DATE_FORMAT(p_effective_from, '%d %b %Y'), '.'), p_emp_id);
+    COMMIT;
+
+    SELECT 'Y' AS status, 'Salary structure updated and salary recalculated.' AS remarks,
+           p_target_emp_id AS emp_id, v_structure AS structure_id, p_monthly_ctc AS monthly_ctc,
+           p_monthly_ctc * 12 AS annual_ctc, p_effective_from AS effective_from;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hrms_update_user_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hrms_update_user_details`(
+    IN p_emp_id VARCHAR(20),
+    IN p_json_data JSON
+)
+BEGIN
+    
+    START TRANSACTION;
+
+    IF EXISTS (SELECT 1 FROM user_details WHERE emp_id = p_emp_id) THEN
+        UPDATE user_details
+        SET 
+            
+            emp_name = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.emp_name'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_name')), emp_name),
+            email = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.email'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.email')), email),
+            mobile = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.mobile'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mobile')), mobile),
+            dob = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.dob'), CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.dob')) AS DATE), dob),
+            gender = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.gender'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.gender')), gender),
+            marital_status = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.marital_status'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.marital_status')), marital_status),
+            father_name = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.father_name'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.father_name')), father_name),
+            mother_name = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.mother_name'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mother_name')), mother_name),
+            current_address = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.current_address'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.current_address')), current_address),
+            perminent_address = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.perminent_address'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.perminent_address')), perminent_address),
+            bank_holder_name = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.bank_holder_name'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_holder_name')), bank_holder_name),
+            bank_name = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.bank_name'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_name')), bank_name),
+            bank_branch = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.bank_branch'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_branch')), bank_branch),
+            bank_account_no = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.bank_account_no'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_no')), bank_account_no),
+            ifsc = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.ifsc'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ifsc')), ifsc),
+            upi_id = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.upi_id'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.upi_id')), upi_id),
+            bank_account_type = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.bank_account_type'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_type')), bank_account_type),
+            pan = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.pan'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pan')), pan),
+            aadhaar = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.aadhaar'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.aadhaar')), aadhaar),
+            uan = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.uan'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.uan')), uan),
+            skills = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.skills'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.skills')), skills),
+            qualification = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.qualification'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.qualification')), qualification),
+            experience = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.experience'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.experience')), experience),
+            documents = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.documents'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.documents')), documents),
+            department = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.department'), CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.department')) AS SIGNED), department),
+            designation = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.designation'), CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.designation')) AS SIGNED), designation),
+            reporting = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.reporting'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.reporting')), reporting),
+            joining_date = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.joining_date'), CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.joining_date')) AS DATE), joining_date),
+            
+            
+            received_on = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.received_on'), CAST(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.received_on')) AS DATETIME), received_on),
+            
+            at_blooms = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.at_blooms'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.at_blooms')), at_blooms),
+            profisional_details_status = IF(JSON_CONTAINS_PATH(p_json_data, 'one', '$.profisional_details_status'), JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.profisional_details_status')), profisional_details_status),
+            
+            
+            updated_on = CURRENT_TIMESTAMP
+        WHERE emp_id = p_emp_id;
+        
+        COMMIT;
+        SELECT 'Y' AS status, 'User details updated successfully.' AS remarks;
+    ELSE
+        ROLLBACK;
+        SELECT 'N' AS status, 'Employee ID not found.' AS remarks;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_add_new_employee` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_add_new_employee`(
+    IN p_hr_emp_id VARCHAR(20),
+    IN p_json_data LONGTEXT
+)
+BEGIN
+    
+    DECLARE v_is_hr INT DEFAULT 0;
+    DECLARE v_emp_exists INT DEFAULT 0;
+    
+    
+    DECLARE v_emp_id VARCHAR(20);
+    DECLARE v_emp_name VARCHAR(150);
+    DECLARE v_mobile VARCHAR(15);
+    DECLARE v_email VARCHAR(150);
+    DECLARE v_dob DATE;
+    DECLARE v_gender VARCHAR(10);
+    DECLARE v_marital_status VARCHAR(20);
+    DECLARE v_father_name VARCHAR(150);
+    DECLARE v_mother_name VARCHAR(150);
+    DECLARE v_designation INT;
+    DECLARE v_reporting VARCHAR(20);
+    DECLARE v_pan VARCHAR(20);
+    DECLARE v_aadhaar VARCHAR(20);
+    DECLARE v_location VARCHAR(400);
+    DECLARE v_joining_date DATE;
+    
+    
+    DECLARE v_bank_holder_name VARCHAR(150);
+    DECLARE v_bank_name VARCHAR(100);
+    DECLARE v_bank_branch VARCHAR(150);
+    DECLARE v_bank_account_no VARCHAR(50);
+    DECLARE v_ifsc VARCHAR(20);
+    DECLARE v_upi_id VARCHAR(100);
+    DECLARE v_bank_account_type VARCHAR(30);
+    DECLARE v_esic_no VARCHAR(20);
+    DECLARE v_pf_account_no VARCHAR(400);
+    DECLARE v_uan VARCHAR(20);
+
+    
+    DECLARE v_current_address JSON;
+    DECLARE v_perminent_address JSON;
+    DECLARE v_qualification JSON;
+    DECLARE v_experience JSON;
+    DECLARE v_temp_password VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT COUNT(*) INTO v_is_hr 
+    FROM user_login_details 
+    WHERE emp_id = p_hr_emp_id 
+      AND user_category IN ('ADMIN', 'HR') 
+      AND status = 'Active';
+
+    IF v_is_hr = 0 THEN
+        SELECT 
+            'N' AS status,
+            NULL AS emp_id,
+            'Unauthorized operation: HR/Admin validation failed or inactive user' AS remarks;
+    ELSE
+        
+        SET v_emp_id = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_id'));
+        SET v_email  = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.email'));
+
+        
+        SELECT COUNT(*) INTO v_emp_exists 
+        FROM user_details 
+        WHERE emp_id = v_emp_id OR email = v_email;
+
+        IF v_emp_exists > 0 THEN
+            SELECT 
+                'N' AS status,
+                v_emp_id AS emp_id,
+                'Employee ID or Email already exists in the system' AS remarks;
+        ELSE
+            
+            SET v_emp_name         = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.emp_name'));
+            SET v_mobile           = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mobile'));
+            SET v_dob              = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.dob'));
+            SET v_gender           = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.gender'));
+            SET v_marital_status   = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.marital_status'));
+            SET v_father_name      = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.father_name'));
+            SET v_mother_name      = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.mother_name'));
+            SET v_designation      = NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.designation')), 'null');
+            SET v_reporting        = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.reporting_officer'));
+            SET v_pan              = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pan'));
+            SET v_aadhaar          = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.aadhaar'));
+            SET v_location         = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.location'));
+            SET v_joining_date     = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.date_of_joining'));
+
+            
+            SET v_bank_holder_name = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_holder_name'));
+            SET v_bank_name        = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_name'));
+            SET v_bank_branch      = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_branch'));
+            SET v_bank_account_no  = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_no'));
+            SET v_ifsc             = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.ifsc'));
+            SET v_upi_id           = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.upi_id'));
+            SET v_bank_account_type= JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.bank_account_type'));
+            SET v_esic_no          = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.esic'));
+            SET v_pf_account_no    = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pf_account_no'));
+            SET v_uan              = JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.uan'));
+
+            
+            SET v_current_address = JSON_OBJECT(
+                'houseNo', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.house_number')),
+                'area', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.area_town')),
+                'city', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.city')),
+                'state', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.state')),
+                'pin_code', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pincode'))
+            );
+
+            SET v_perminent_address = JSON_OBJECT(
+                'address', CONCAT(
+                    COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.house_number')), ''), ', ',
+                    COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.area_town')), '')
+                ),
+                'city', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.city')),
+                'state', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.state')),
+                'pin_code', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.pincode')),
+                'country', COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.country')), 'India')
+            );
+
+            
+            IF JSON_CONTAINS_PATH(p_json_data, 'one', '$.qualifications') THEN
+                SET v_qualification = JSON_EXTRACT(p_json_data, '$.qualifications');
+            ELSE
+                SET v_qualification = JSON_ARRAY(
+                    JSON_OBJECT(
+                        'education_type', 'graduation',
+                        'institution', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.grad_college')),
+                        'degree', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.grad_degree')),
+                        'year_of_pass', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.grad_year')),
+                        'percentage', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.grad_percentage'))
+                    ),
+                    JSON_OBJECT(
+                        'education_type', 'intermediate',
+                        'institution', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.inter_college')),
+                        'board', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.inter_board')),
+                        'year_of_pass', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.inter_year')),
+                        'percentage', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.inter_percentage'))
+                    ),
+                    JSON_OBJECT(
+                        'education_type', '10th',
+                        'institution', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.tenth_school')),
+                        'board', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.tenth_board')),
+                        'year_of_pass', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.tenth_year')),
+                        'percentage', JSON_UNQUOTE(JSON_EXTRACT(p_json_data, '$.tenth_percentage'))
+                    )
+                );
+            END IF;
+
+            
+            IF JSON_CONTAINS_PATH(p_json_data, 'one', '$.experiences') THEN
+                SET v_experience = JSON_EXTRACT(p_json_data, '$.experiences');
+            ELSE
+                SET v_experience = JSON_ARRAY();
+            END IF;
+
+            
+            SET v_temp_password = CONCAT('Emp@', SUBSTRING(MD5(RAND()), 1, 4));
+
+            
+            INSERT INTO user_details (
+                emp_id,
+                emp_name,
+                email,
+                mobile,
+                dob,
+                gender,
+                marital_status,
+                father_name,
+                mother_name,
+                current_address,
+                perminent_address,
+                bank_holder_name,
+                bank_name,
+                bank_branch,
+                bank_account_no,
+                ifsc,
+                upi_id,
+                bank_account_type,
+                pan,
+                location,
+                pf_account_no,
+                esic_no,
+                aadhaar,
+                uan,
+                qualification,
+                experience,
+                designation,
+                reporting,
+                joining_date,
+                received_on,
+                updated_on,
+                at_blooms,
+                profisional_details_status
+            ) VALUES (
+                v_emp_id,
+                v_emp_name,
+                v_email,
+                v_mobile,
+                v_dob,
+                v_gender,
+                v_marital_status,
+                v_father_name,
+                v_mother_name,
+                v_current_address,
+                v_perminent_address,
+                v_bank_holder_name,
+                v_bank_name,
+                v_bank_branch,
+                v_bank_account_no,
+                v_ifsc,
+                v_upi_id,
+                v_bank_account_type,
+                v_pan,
+                v_location,
+                v_pf_account_no,
+                v_esic_no,
+                v_aadhaar,
+                v_uan,
+                v_qualification,
+                v_experience,
+                v_designation,
+                v_reporting,
+                v_joining_date,
+                NOW(),
+                NOW(),
+                'true',
+                'Active'
+            );
+
+            
+            INSERT INTO user_login_details (
+                emp_id,
+                enc_pwd,
+                user_category,
+                is_first_login,
+                status,
+                received_on,
+                updated_on
+            ) VALUES (
+                v_emp_id,
+                v_temp_password,
+                'EMPLOYEE',
+                1,
+                'Active',
+                NOW(),
+                NOW()
+            );
+
+            
+            SELECT 
+                'Y' AS status,
+                v_emp_id AS emp_id,
+                v_temp_password AS temp_password,
+                v_email AS email,
+                'Employee onboarding completed successfully' AS remarks;
+
+        END IF;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_announcement_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_announcement_get`(
+    IN p_actor_emp_id VARCHAR(20)
+)
+main_block:BEGIN
+
+    DECLARE v_actor_category VARCHAR(20);
+    DECLARE v_record_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT user_category INTO v_actor_category 
+    FROM user_login_details 
+    WHERE emp_id = p_actor_emp_id AND status = 'ACTIVE';
+
+    
+    IF v_actor_category IS NULL THEN
+        SELECT 'N' AS status, 'Invalid or inactive user profile' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT COUNT(*) INTO v_record_count
+    FROM announcements a
+    WHERE 
+        
+        (v_actor_category IN ('HR', 'ADMIN'))
+        
+        
+        OR (v_actor_category = 'MANAGER' AND a.status = 'ACTIVE' AND a.user_category IN ('MANAGER', 'EMP', 'INTERN', 'ALL'))
+        
+        
+        OR (v_actor_category = 'EMP' AND a.status = 'ACTIVE' AND a.user_category IN ('EMP', 'ALL'))
+        
+        
+        OR (v_actor_category = 'INTERN' AND a.status = 'ACTIVE' AND a.user_category IN ('INTERN', 'ALL'));
+
+    
+    IF v_record_count = 0 THEN
+        SELECT 'N' AS status, 'No announcements available' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT 
+        'Y' AS status,
+        'Success' AS remarks,
+        a.announcement_id AS AnnouncementID,
+        a.title AS Title,
+        a.user_category AS UserCategory,
+        a.message AS Message,
+        a.status AS Status,
+        a.created_on AS CreatedOn,
+        a.updated_on AS UpdatedOn
+    FROM announcements a
+    WHERE 
+        
+        (v_actor_category IN ('HR', 'ADMIN'))
+        
+        
+        OR (v_actor_category = 'MANAGER' AND a.status = 'ACTIVE' AND a.user_category IN ('MANAGER', 'EMP', 'INTERN', 'ALL'))
+        
+        
+        OR (v_actor_category = 'EMP' AND a.status = 'ACTIVE' AND a.user_category IN ('EMP', 'ALL'))
+        
+        
+        OR (v_actor_category = 'INTERN' AND a.status = 'ACTIVE' AND a.user_category IN ('INTERN', 'ALL'))
+    ORDER BY a.created_on DESC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_announcement_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_announcement_save`(
+    IN p_mode VARCHAR(10),           
+    IN p_announcement_id BIGINT,     
+    IN p_title VARCHAR(255),
+    IN p_message TEXT,
+    IN p_user_category VARCHAR(20),  
+    IN p_status VARCHAR(20),         
+    IN p_actor_emp_id VARCHAR(20)
+)
+main_block:BEGIN
+
+    DECLARE v_actor_category VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT user_category INTO v_actor_category 
+    FROM user_login_details 
+    WHERE emp_id = p_actor_emp_id AND status = 'ACTIVE';
+
+    
+    IF v_actor_category IS NULL OR v_actor_category NOT IN ('HR', 'ADMIN') THEN
+        SELECT 'N' AS status, 'Unauthorized. Only HR or ADMIN can manage announcements.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    
+    
+    IF UPPER(p_mode) = 'INSERT' THEN
+        INSERT INTO announcements (title, message, user_category, created_by, status)
+        VALUES (p_title, p_message, UPPER(p_user_category), p_actor_emp_id, COALESCE(UPPER(p_status), 'ACTIVE'));
+        
+        SELECT 'Y' AS status, 'Announcement created successfully' AS remarks;
+        LEAVE main_block;
+
+    
+    ELSEIF UPPER(p_mode) IN ('UPDATE', 'DELETE') THEN
+    
+        IF NOT EXISTS (SELECT 1 FROM announcements WHERE announcement_id = p_announcement_id) THEN
+            SELECT 'N' AS status, 'Announcement record not found' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        
+        IF UPPER(p_mode) = 'UPDATE' THEN
+            UPDATE announcements 
+            SET title = COALESCE(p_title, title),
+                message = COALESCE(p_message, message),
+                user_category = COALESCE(UPPER(p_user_category), user_category),
+                status = COALESCE(UPPER(p_status), status),
+                updated_on = NOW()
+            WHERE announcement_id = p_announcement_id;
+
+            SELECT 'Y' AS status, 'Announcement updated successfully' AS remarks;
+            LEAVE main_block;
+            
+        
+        ELSEIF UPPER(p_mode) = 'DELETE' THEN
+            UPDATE announcements 
+            SET status = 'INACTIVE',
+                updated_on = NOW()
+            WHERE announcement_id = p_announcement_id;
+
+            SELECT 'Y' AS status, 'Announcement deleted (marked as INACTIVE) successfully' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+    
+    ELSE
+        SELECT 'N' AS status, 'Invalid action mode provided. Use INSERT, UPDATE, or DELETE.' AS remarks;
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_apply_leave` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_apply_leave`(
+    IN p_emp_id VARCHAR(20),
+    IN p_leave_code VARCHAR(10),
+    IN p_from_date DATE,
+    IN p_to_date DATE,
+    IN p_reason VARCHAR(500)
+)
+main_block:BEGIN
+
+DECLARE v_emp_count INT DEFAULT 0;
+DECLARE v_gender VARCHAR(10);
+DECLARE v_user_category VARCHAR(20);
+
+DECLARE v_leave_type_id INT;
+DECLARE v_leave_status CHAR(1);
+DECLARE v_gender_applicable VARCHAR(10);
+DECLARE v_actual_leave_code VARCHAR(10);
+
+DECLARE v_overlap INT DEFAULT 0;
+DECLARE v_total_days DECIMAL(5,2);
+DECLARE v_holidays INT DEFAULT 0;
+DECLARE v_intern_month_count INT DEFAULT 0;
+DECLARE v_applied_year INT;
+
+
+DECLARE v_balance_id INT DEFAULT NULL;
+DECLARE v_closing_balance DECIMAL(5,2) DEFAULT 0.00;
+DECLARE v_pending_days DECIMAL(5,2) DEFAULT 0.00;
+DECLARE v_effective_balance DECIMAL(5,2) DEFAULT 0.00;
+
+SET time_zone='+05:30';
+
+
+SET v_applied_year = YEAR(p_from_date);
+
+
+SET v_actual_leave_code = UPPER(TRIM(p_leave_code));
+IF v_actual_leave_code = 'PERSONAL' THEN
+    SET v_actual_leave_code = 'PL';
+END IF;
+
+
+SELECT COUNT(*), IFNULL(MAX(gender),'')
+INTO v_emp_count, v_gender
+FROM user_details
+WHERE emp_id = p_emp_id;
+
+IF v_emp_count = 0 THEN
+    SELECT 'N' AS status, 'Employee not found' AS remarks;
+    LEAVE main_block;
+END IF;
+
+SELECT user_category 
+INTO v_user_category
+FROM user_login_details
+WHERE emp_id = p_emp_id AND status = 'ACTIVE'
+LIMIT 1;
+
+
+IF v_user_category = 'INTERN' THEN
+    IF v_actual_leave_code NOT IN ('PL', 'LOP') THEN
+        SELECT 'N' AS status, 'Unauthorized: Interns can only apply for Personal (PL) or Loss of Pay (LOP) leaves.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    IF v_actual_leave_code = 'PL' THEN
+        SELECT COUNT(*)
+        INTO v_intern_month_count
+        FROM leave_application la
+        INNER JOIN leave_type lt ON la.leave_type_id = lt.leave_type_id
+        WHERE la.emp_id = p_emp_id
+          AND la.status IN ('PENDING', 'APPROVED')
+          AND lt.leave_code IN ('PL', 'PERSONAL')
+          AND MONTH(la.from_date) = MONTH(p_from_date)
+          AND YEAR(la.from_date) = v_applied_year;
+
+        IF v_intern_month_count >= 1 THEN
+            
+            SET v_actual_leave_code = 'LOP';
+        END IF;
+    END IF;
+END IF;
+
+
+SELECT leave_type_id, status, IFNULL(gender_applicable,'')
+INTO v_leave_type_id, v_leave_status, v_gender_applicable
+FROM leave_type
+WHERE leave_code = v_actual_leave_code
+  AND year = v_applied_year
+LIMIT 1;
+
+IF v_leave_type_id IS NULL THEN
+    SELECT 'N' AS status, CONCAT('Invalid leave Type.', v_applied_year) AS remarks;
+    LEAVE main_block;
+END IF;
+
+IF v_leave_status <> 'A' THEN
+    SELECT 'N' AS status, 'Leave type inactive' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+IF v_gender_applicable <> '' THEN
+    IF UPPER(v_gender) <> UPPER(v_gender_applicable) THEN
+        SELECT 'N' AS status, 'Leave not applicable for employee gender' AS remarks;
+        LEAVE main_block;
+    END IF;
+END IF;
+
+
+IF p_from_date > p_to_date THEN
+    SELECT 'N' AS status, 'Invalid date range' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+SELECT COUNT(*)
+INTO v_overlap
+FROM leave_application
+WHERE emp_id = p_emp_id
+  AND status IN ('PENDING', 'APPROVED')
+  AND (p_from_date <= to_date AND p_to_date >= from_date);
+
+IF v_overlap > 0 THEN
+    SELECT 'N' AS status, 'Overlapping leave request exists' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+IF v_actual_leave_code IN ('PL', 'SL', 'WFH', 'ML') THEN
+    SELECT COUNT(*)
+    INTO v_holidays
+    FROM holiday_master
+    WHERE holiday_date BETWEEN p_from_date AND p_to_date
+      AND status = 'A';
+
+    SET v_total_days = DATEDIFF(p_to_date, p_from_date) + 1 - v_holidays;
+ELSE
+    
+    SET v_holidays = 0;
+    SET v_total_days = DATEDIFF(p_to_date, p_from_date) + 1;
+END IF;
+
+IF v_total_days <= 0 THEN
+    SELECT 'N' AS status, 'Selected dates are holidays' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+
+IF v_actual_leave_code NOT IN ('LOP', 'WFH') THEN
+    SELECT balance_id, IFNULL(closing_balance, 0.00)
+    INTO v_balance_id, v_closing_balance
+    FROM emp_leave_balance
+    WHERE emp_id = p_emp_id
+      AND leave_type_id = v_leave_type_id
+      AND year = v_applied_year
+    LIMIT 1;
+
+    IF v_balance_id IS NULL THEN
+        SELECT 'N' AS status, CONCAT('No leave balance entry found for leave type ', v_actual_leave_code, ' for year ', v_applied_year) AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT IFNULL(SUM(total_days), 0.00)
+    INTO v_pending_days
+    FROM leave_application
+    WHERE emp_id = p_emp_id
+      AND leave_type_id = v_leave_type_id
+      AND status = 'PENDING'
+      AND YEAR(from_date) = v_applied_year;
+
+    
+    SET v_effective_balance = v_closing_balance - v_pending_days;
+
+    IF v_total_days > v_effective_balance THEN
+        SELECT 
+            'N' AS status, 
+            CONCAT('Insufficient balance for ', v_actual_leave_code, '. Requested: ', v_total_days, ' day(s), Available: ', v_effective_balance, ' day(s) (including pending requests).') AS remarks;
+        LEAVE main_block;
+    END IF;
+END IF;
+
+
+INSERT INTO leave_application (
+    emp_id,
+    leave_type_id,
+    from_date,
+    to_date,
+    total_days,
+    applied_days,
+    approved_leave_days,
+    lop_days,
+    reason,
+    status,
+    applied_on,
+    approved_by,
+    approved_on,
+    rejection_reason,
+    cancel_reason,
+    received_on,
+    updated_on
+)
+VALUES (
+    p_emp_id,
+    v_leave_type_id,
+    p_from_date,
+    p_to_date,
+    v_total_days,
+    v_total_days,
+    0,
+    IF(v_actual_leave_code = 'LOP', v_total_days, 0),
+    p_reason,
+    'PENDING',
+    NOW(),
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+);
+
+
+
+
+
+SELECT
+    'Y' AS status,
+    CASE 
+        WHEN v_actual_leave_code = 'LOP' AND UPPER(TRIM(p_leave_code)) IN ('PL', 'PERSONAL')
+        THEN 'Leave applied. Monthly limit exceeded, converted to LOP.'
+        ELSE 'Leave applied successfully' 
+    END AS remarks,
+    p_emp_id AS emp_id,
+    v_actual_leave_code AS leave_code,
+    v_leave_type_id AS leave_type_id,
+    p_from_date AS from_date,
+    p_to_date AS to_date,
+    v_total_days AS applied_days,
+    v_holidays AS holiday_count,
+    'PENDING' AS leave_status;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_approve_candidate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_approve_candidate`(
+    IN p_ref_id VARCHAR(20),
+    IN p_approver_emp_id VARCHAR(20)
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+    DECLARE v_email VARCHAR(100);
+    DECLARE v_approved_count INT DEFAULT 0;
+    DECLARE v_emp_id VARCHAR(20);
+    DECLARE v_password VARCHAR(20);
+    DECLARE v_error_message TEXT;
+    DECLARE v_approver_role VARCHAR(20) DEFAULT NULL;
+    DECLARE v_candidate_type VARCHAR(20) DEFAULT NULL;
+    DECLARE v_next_num INT DEFAULT 0;
+
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_message = MESSAGE_TEXT;
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            NULL AS emp_id,
+            v_error_message AS remarks;
+    END;
+
+    
+    SET time_zone = '+05:30';
+
+    
+    SELECT user_category 
+    INTO v_approver_role
+    FROM user_login_details
+    WHERE emp_id = p_approver_emp_id
+      AND status = 'ACTIVE'
+    LIMIT 1;
+
+    IF v_approver_role IS NULL OR v_approver_role NOT IN ('HR', 'ADMIN') THEN
+        
+        SELECT
+            'N' AS status,
+            NULL AS emp_id,
+            'Unauthorized: Only ACTIVE users with HR or ADMIN roles can approve candidates' AS remarks;
+
+    ELSE
+
+        
+        SELECT 
+            IFNULL(email, ''), 
+            candidate_type
+        INTO 
+            v_email, 
+            v_candidate_type
+        FROM candidate_details
+        WHERE ref_id = p_ref_id
+        LIMIT 1;
+
+        
+        SELECT COUNT(*)
+        INTO v_approved_count
+        FROM candidate_details
+        WHERE ref_id = p_ref_id
+          AND hr_status = 'APPROVED';
+
+        IF v_approved_count > 0 THEN
+
+            SELECT
+                'N' AS status,
+                NULL AS emp_id,
+                'candidate already approved' AS remarks;
+
+        ELSE
+
+            
+            SELECT COUNT(*)
+            INTO v_count
+            FROM candidate_details
+            WHERE ref_id = p_ref_id
+              AND current_step = 6;
+
+            IF v_count > 0 THEN
+
+                START TRANSACTION;
+
+                
+                IF v_candidate_type = 'INTERN' THEN
+                    
+                    SELECT IFNULL(MAX(CAST(SUBSTRING(emp_id, 4) AS UNSIGNED)), 0) + 1
+                    INTO v_next_num
+                    FROM user_details
+                    WHERE emp_id LIKE 'INT0%' AND LENGTH(emp_id) = 8;
+
+                    SET v_emp_id = CONCAT('INT', LPAD(v_next_num, 5, '0'));
+                ELSE
+                    
+                    SELECT IFNULL(MAX(CAST(SUBSTRING(emp_id, 3) AS UNSIGNED)), 0) + 1
+                    INTO v_next_num
+                    FROM user_details
+                    WHERE emp_id LIKE 'BS0%' AND LENGTH(emp_id) = 7;
+
+                    
+                    SET v_emp_id = CONCAT('BS', LPAD(v_next_num, 5, '0'));
+                END IF;
+
+                SET v_password = 'Welcome@123';
+
+                
+                INSERT INTO user_details (
+                    ref_id,
+                    emp_id,
+                    emp_name,
+                    email,
+                    mobile,
+                    dob,
+                    gender,
+                    marital_status,
+                    father_name,
+                    mother_name,
+                    current_address,
+                    perminent_address,
+                    bank_holder_name,
+                    bank_name,
+                    bank_branch,
+                    bank_account_no,
+                    ifsc,
+                    upi_id,
+                    bank_account_type,
+                    pan,
+                    aadhaar,
+                    uan,
+                    skills,
+                    qualification,
+                    experience,
+                    documents,
+                    department,
+                    designation,
+                    reporting,
+                    joining_date,
+                    received_on,
+                    updated_on
+                )
+                SELECT
+                    p_ref_id,
+                    v_emp_id,
+                    emp_name,
+                    email,
+                    mobile,
+                    dob,
+                    gender,
+                    marital_status,
+                    father_name,
+                    mother_name,
+                    current_address,
+                    perminent_address,
+                    bank_holder_name,
+                    bank_name,
+                    bank_branch,
+                    bank_account_no,
+                    ifsc,
+                    upi_id,
+                    bank_account_type,
+                    pan,
+                    Aadhaar,
+                    uan,
+                    skills,
+                    qualification,
+                    experience,
+                    documents,
+                    department,
+                    designation,
+                    reporting,
+                    joining_date,
+                    NOW(),
+                    NOW()
+                FROM candidate_details
+                WHERE ref_id = p_ref_id;
+
+                
+                INSERT INTO user_login_details (
+                    emp_id,
+                    enc_pwd,
+                    user_category,
+                    is_first_login,
+                    status,
+                    received_on,
+                    updated_on
+                )
+                SELECT
+                    v_emp_id,
+                    v_password,
+                    candidate_type,
+                    1,
+                    'ACTIVE',
+                    NOW(),
+                    NOW()
+                FROM candidate_details
+                WHERE ref_id = p_ref_id;
+
+                
+                UPDATE candidate_details
+                SET
+                    hr_status = 'APPROVED',
+                    onboarding_status = 'COMPLETED',
+                    current_step = 6,
+                    remarks = CONCAT('Employee Created : ', v_emp_id, ' by ', p_approver_emp_id),
+                    updated_on = NOW()
+                WHERE ref_id = p_ref_id;
+
+                
+                CALL hr_generate_leave_balances(2026);
+
+                COMMIT;
+
+                
+                SELECT
+                    'Y' AS status,
+                    v_emp_id AS emp_id,
+                    v_password AS password,
+                    v_email AS email,
+                    'employee created successfully' AS remarks;
+
+            ELSE
+
+                SELECT
+                    'N' AS status,
+                    NULL AS emp_id,
+                    'candidate has not completed step 6' AS remarks;
+
+            END IF;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_create_candidate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_create_candidate`(
+    IN p_candidate_type VARCHAR(20),
+    IN p_emp_name VARCHAR(150),
+    IN p_email VARCHAR(150),
+    IN p_mobile VARCHAR(15),
+    IN p_experience VARCHAR(50),
+    IN p_offer_letter_url TEXT,
+    IN p_created_by VARCHAR(20)
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+    DECLARE v_ref_id VARCHAR(20);
+    DECLARE v_password VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT 
+        (SELECT COUNT(*) FROM candidate_details WHERE email = p_email) +
+        (SELECT COUNT(*) FROM user_details WHERE email = p_email)
+    INTO v_count;
+
+    IF v_count = 0 THEN
+
+        
+        SET v_ref_id = CONCAT(
+            'REF',
+            FLOOR(100000 + RAND() * 900000)
+        );
+
+        
+        SET v_password = SUBSTRING(MD5(RAND()), 1, 8);
+
+        
+        INSERT INTO candidate_details (
+            ref_id,
+            candidate_type,
+            application_source,
+            temp_password,
+            offer_letter_url,
+            emp_name,
+            email,
+            mobile,
+            experience,
+            created_by,
+            hr_status
+        )
+        VALUES (
+            v_ref_id,
+            p_candidate_type,
+            'HR',
+            v_password,
+            p_offer_letter_url,
+            p_emp_name,
+            p_email,
+            p_mobile,
+            p_experience,
+            p_created_by,
+            'SELECTED'
+        );
+
+        
+        SELECT
+            'Y' AS status,
+            v_ref_id AS ref_id,
+            v_password AS password,
+            p_email AS email,
+            'candidate created successfully' AS remarks;
+
+    ELSE
+
+        
+        SELECT
+            'N' AS status,
+            NULL AS ref_id,
+            NULL AS password,
+            'email already exists' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_generate_leave_balances` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_generate_leave_balances`(
+    IN p_year INT
+)
+BEGIN
+    SET time_zone = '+05:30';
+
+    INSERT INTO emp_leave_balance
+    (
+        emp_id,
+        leave_type_id,
+        year,
+        opening_balance,
+        credited,
+        availed,
+        closing_balance,
+        received_on,
+        updated_on
+    )
+    SELECT
+        u.emp_id,
+        l.leave_type_id,
+        p_year,
+
+        
+        0.00 AS opening_balance,
+
+        
+        CASE
+
+            
+            WHEN YEAR(u.joining_date) < p_year THEN
+                l.yearly_quota
+
+            
+            WHEN YEAR(u.joining_date) = p_year THEN
+                ROUND(
+                    l.yearly_quota *
+                    ((12 - MONTH(u.joining_date)) + 1) / 12,
+                    0
+                )
+
+            ELSE
+                0
+        END AS credited,
+
+        0.00 AS availed,
+
+        
+        CASE
+
+            WHEN YEAR(u.joining_date) < p_year THEN
+                l.yearly_quota
+
+            WHEN YEAR(u.joining_date) = p_year THEN
+                ROUND(
+                    l.yearly_quota *
+                    ((12 - MONTH(u.joining_date)) + 1) / 12,
+                    0
+                )
+
+            ELSE
+                0
+        END AS closing_balance,
+
+        NOW(),
+        NOW()
+
+    FROM user_details u
+
+    INNER JOIN user_login_details ul
+        ON ul.emp_id = u.emp_id
+       AND LOWER(TRIM(ul.status)) = 'active'
+
+    INNER JOIN leave_type l
+        ON l.year = p_year
+       AND LOWER(TRIM(l.status)) IN ('a','active')
+
+       
+       AND l.leave_code <> 'ML'
+
+       
+       AND l.leave_code IN ('PL','SL','WFH','LOP')
+
+       
+       AND (
+            (
+                UPPER(ul.user_category)='INTERN'
+                AND l.leave_code IN ('PL','LOP')
+            )
+            OR
+            (
+                UPPER(ul.user_category)<>'INTERN'
+            )
+       )
+
+    WHERE u.joining_date IS NOT NULL
+      AND YEAR(u.joining_date) <= p_year
+
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM emp_leave_balance b
+          WHERE b.emp_id = u.emp_id
+            AND b.leave_type_id = l.leave_type_id
+            AND b.year = p_year
+      );
+
+    SELECT
+        'Y' AS status,
+        CONCAT('Leave balances generated successfully for year ', p_year) AS remarks;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_departments` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_departments`()
+BEGIN
+    SET time_zone = '+05:30';
+
+    SELECT 
+        'Y' AS status,
+        'Success' AS remarks,
+        dm.department_id,
+        dm.department_name,
+        dm.status,
+        COUNT(ud.id) AS member_count,
+        dm.received_on,
+        dm.updated_on
+    FROM department_master dm
+    LEFT JOIN user_details ud
+        ON ud.department = dm.department_id
+    GROUP BY
+        dm.department_id,
+        dm.department_name,
+        dm.status,
+        dm.received_on,
+        dm.updated_on
+    ORDER BY dm.department_name ASC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_designation` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_designation`()
+BEGIN
+    SET time_zone = '+05:30';
+
+    SELECT
+        'Y' AS status,
+        'Success' AS remarks,
+        dm.designation_id,
+        dm.designation_name,
+        dm.status,
+        COUNT(ud.id) AS member_count,
+        dm.received_on,
+        dm.updated_on
+    FROM designation_master dm
+    LEFT JOIN user_details ud
+        ON ud.designation = dm.designation_id
+    GROUP BY
+        dm.designation_id,
+        dm.designation_name,
+        dm.status,
+        dm.received_on,
+        dm.updated_on
+    ORDER BY dm.designation_name ASC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_designations` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_designations`()
+BEGIN
+    SET time_zone = '+05:30';
+
+    SELECT
+        'Y' AS status,
+        'Success' AS remarks,
+        dm.designation_id,
+        dm.designation_name,
+        dm.status,
+        COUNT(ud.id) AS member_count,
+        dm.received_on,
+        dm.updated_on
+    FROM designation_master dm
+    LEFT JOIN user_details ud
+        ON ud.designation = dm.designation_id
+    GROUP BY
+        dm.designation_id,
+        dm.designation_name,
+        dm.status,
+        dm.received_on,
+        dm.updated_on
+    ORDER BY dm.designation_name ASC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_employee_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_employee_details`(
+    IN p_emp_id VARCHAR(20),
+    IN p_role VARCHAR(20),
+    IN p_search_emp_id VARCHAR(20)
+)
+BEGIN
+
+    SET time_zone = '+05:30';
+
+    
+    IF EXISTS (
+        SELECT 1
+        FROM user_details u
+
+        INNER JOIN (
+            SELECT emp_id, MAX(status) AS status
+            FROM user_login_details
+            GROUP BY emp_id
+        ) ul
+            ON ul.emp_id = u.emp_id
+
+        WHERE
+        (
+            (
+                p_role IN ('MANAGER', 'EMP', 'HR')
+                AND u.reporting = p_emp_id
+            )
+            OR
+            (
+                p_role = 'ADMIN'
+            )
+        )
+        AND
+        (
+            p_search_emp_id = 'ALL'
+            OR u.emp_id = p_search_emp_id
+        )
+    )
+    THEN
+
+        SELECT
+            'Y' AS status,
+            'Success' AS remarks,
+            u.id,
+            u.emp_id,
+            u.ref_id,
+            u.emp_name,
+            u.email,
+            u.mobile,
+            u.dob,
+            u.gender,
+            u.marital_status,
+            u.father_name,
+            u.mother_name,
+            u.current_address,
+            u.perminent_address,
+
+            u.department AS department_id,
+            IFNULL(d.department_name, 'Department Not Available') AS department_name,
+            IFNULL(d.status, '') AS department_status,
+
+            u.designation,
+            u.reporting,
+            IFNULL(r.emp_name, '') AS reporting_name,
+            u.joining_date,
+            u.skills,
+            u.qualification,
+            u.experience,
+            u.bank_holder_name,
+            u.bank_name,
+            u.bank_branch,
+            u.bank_account_no,
+            u.ifsc,
+            u.upi_id,
+            u.bank_account_type,
+            u.pan,
+            u.aadhaar,
+            u.uan,
+            u.documents,
+            u.received_on,
+            u.updated_on,
+
+            ul.status AS employee_login_status,
+
+            total_counts.total_employee_count
+
+        FROM user_details u
+
+        INNER JOIN (
+            SELECT emp_id, MAX(status) AS status
+            FROM user_login_details
+            GROUP BY emp_id
+        ) ul
+            ON ul.emp_id = u.emp_id
+
+        LEFT JOIN department_master d
+            ON d.department_id = u.department
+
+        LEFT JOIN user_details r
+            ON r.emp_id = u.reporting
+
+        CROSS JOIN (
+            SELECT COUNT(DISTINCT ud.emp_id) AS total_employee_count
+            FROM user_details ud
+            INNER JOIN user_login_details uld
+                ON ud.emp_id = uld.emp_id
+        ) total_counts
+
+        WHERE
+        (
+            (
+                p_role IN ('MANAGER', 'EMP', 'HR')
+                AND u.reporting = p_emp_id
+            )
+            OR
+            (
+                p_role = 'ADMIN'
+            )
+        )
+        AND
+        (
+            p_search_emp_id = 'ALL'
+            OR u.emp_id = p_search_emp_id
+        )
+
+        ORDER BY u.joining_date;
+
+    ELSE
+
+        
+        SELECT
+            'N' AS status,
+            'No employee details found' AS remarks,
+		
+
+            (
+                SELECT COUNT(DISTINCT ud.emp_id)
+                FROM user_details ud
+                INNER JOIN user_login_details uld
+                    ON ud.emp_id = uld.emp_id
+            ) AS total_employee_count;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_employee_leave_dashboard` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_employee_leave_dashboard`(
+    IN p_emp_id VARCHAR(20),
+    IN p_year INT
+)
+BEGIN
+
+SET time_zone='+05:30';
+
+SELECT
+    'Y' AS status,
+    'Success' AS remarks,
+    b.emp_id,
+    p_year AS leave_year,
+
+    
+    MAX(CASE WHEN l.leave_code = 'PL'  THEN b.credited ELSE 0 END) AS Personal_leaves_opening,
+    MAX(CASE WHEN l.leave_code = 'SL'  THEN b.credited ELSE 0 END) AS sick_leaves_opening,
+    MAX(CASE WHEN l.leave_code = 'ML'  THEN b.credited ELSE 0 END) AS maternity_opening,
+    MAX(CASE WHEN l.leave_code = 'LOP' THEN b.credited ELSE 0 END) AS lop_opening,
+
+    
+    MAX(CASE WHEN l.leave_code = 'PL'  THEN b.availed ELSE 0 END) AS Personal_leaves_used,
+    MAX(CASE WHEN l.leave_code = 'SL'  THEN b.availed ELSE 0 END) AS sick_leaves_used,
+    MAX(CASE WHEN l.leave_code = 'ML'  THEN b.availed ELSE 0 END) AS maternity_used,
+    MAX(CASE WHEN l.leave_code = 'LOP' THEN b.availed ELSE 0 END) AS lop_used,
+
+    
+    MAX(CASE WHEN l.leave_code = 'PL'  THEN b.closing_balance ELSE 0 END) AS Personal_leaves_bal,
+    MAX(CASE WHEN l.leave_code = 'SL'  THEN b.closing_balance ELSE 0 END) AS sick_leavs_bal,
+    MAX(CASE WHEN l.leave_code = 'ML'  THEN b.closing_balance ELSE 0 END) AS maternity_bal,
+    MAX(CASE WHEN l.leave_code = 'LOP' THEN b.closing_balance ELSE 0 END) AS lop_bal,
+    
+    
+    MAX(CASE WHEN l.leave_code = 'WFH' THEN b.availed ELSE 0 END) AS WFH_taken,
+
+    
+    IFNULL(apps.approved_count, 0)  AS Approved_leaves,
+    IFNULL(apps.pending_count, 0)   AS Pending_Leaves,
+    IFNULL(apps.cancelled_count, 0) AS Cancelled_leaves,
+    IFNULL(apps.rejected_count, 0)  AS Rejected_leaves,
+
+    
+    IFNULL(apps.total_leaves_applied_filtered, 0) AS Total_leaves_applied,
+
+    
+    IFNULL(apps.total_approved_days_filtered, 0) AS Total_Approved_Days,
+    IFNULL(apps.total_pending_days_filtered, 0)  AS Total_Pending_Days,
+    
+    
+    (IFNULL(apps.total_approved_days_filtered, 0) + IFNULL(apps.total_pending_days_filtered, 0)) AS Total_Leave_Days
+
+FROM emp_leave_balance b
+INNER JOIN leave_type l 
+    ON b.leave_type_id = l.leave_type_id 
+   AND l.year = p_year
+
+
+LEFT JOIN (
+    SELECT 
+        la.emp_id,
+        
+        SUM(CASE WHEN la.status = 'APPROVED' THEN 1 ELSE 0 END) AS approved_count,
+        SUM(CASE WHEN la.status = 'PENDING' THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN la.status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected_count,
+        SUM(CASE WHEN la.status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_count,
+        
+        
+        SUM(CASE WHEN lt.leave_code <> 'WFH' AND la.status <> 'CANCELLED' THEN 1 ELSE 0 END) AS total_leaves_applied_filtered,
+        
+        
+        SUM(CASE WHEN lt.leave_code <> 'WFH' AND la.status = 'APPROVED' 
+                 THEN IF(la.approved_leave_days > 0, la.approved_leave_days, la.total_days) 
+                 ELSE 0 END) AS total_approved_days_filtered,
+                 
+        
+        SUM(CASE WHEN lt.leave_code <> 'WFH' AND la.status = 'PENDING' 
+                 THEN la.total_days ELSE 0 END) AS total_pending_days_filtered
+                 
+    FROM leave_application la
+    INNER JOIN leave_type lt ON la.leave_type_id = lt.leave_type_id
+    WHERE la.emp_id = p_emp_id 
+      AND YEAR(la.from_date) = p_year
+    GROUP BY la.emp_id
+) apps ON apps.emp_id = b.emp_id
+
+WHERE
+    b.emp_id = p_emp_id
+    AND b.year = p_year
+    AND l.status = 'A'
+GROUP BY
+    b.emp_id;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_holiday_master` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_holiday_master`()
+BEGIN
+    SELECT
+        holiday_id,
+        holiday_date,
+        holiday_name,
+        holiday_type,
+        applicable_for
+    FROM holiday_master
+    ORDER BY holiday_date ASC;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_leave_application` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_leave_application`(
+    IN p_emp_id VARCHAR(20),
+    IN p_role VARCHAR(20),
+    IN p_status VARCHAR(20),
+    IN p_from_date DATE,
+    IN p_to_date DATE
+)
+BEGIN
+    
+    DECLARE v_total_count INT DEFAULT 0;
+    DECLARE v_approved_count INT DEFAULT 0;
+    DECLARE v_pending_count INT DEFAULT 0;
+    DECLARE v_rejected_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT 
+        COUNT(1),
+        COALESCE(SUM(CASE WHEN l.status = 'APPROVED' THEN 1 ELSE 0 END), 0),
+        COALESCE(SUM(CASE WHEN l.status = 'PENDING' THEN 1 ELSE 0 END), 0),
+        COALESCE(SUM(CASE WHEN l.status = 'REJECTED' THEN 1 ELSE 0 END), 0)
+    INTO 
+        v_total_count, 
+        v_approved_count, 
+        v_pending_count, 
+        v_rejected_count
+    FROM leave_application l
+    INNER JOIN user_details u ON u.emp_id = l.emp_id
+    WHERE
+    (
+        
+        p_role = 'ADMIN'
+        OR
+        
+        (
+            p_role = 'MANAGER' 
+            AND (l.emp_id = p_emp_id OR u.reporting = p_emp_id)
+        )
+        OR
+        
+        (
+            p_role NOT IN ('ADMIN', 'MANAGER') 
+            AND u.reporting = p_emp_id
+        )
+    )
+    AND l.status <> 'CANCELLED'
+    AND (p_status IS NULL OR p_status = '' OR l.status = p_status)
+    AND (p_from_date IS NULL OR l.from_date >= p_from_date)
+    AND (p_to_date IS NULL OR l.to_date <= p_to_date);
+
+    
+    IF v_total_count > 0 THEN
+
+        SELECT
+            'Y' AS status,
+            'Success' AS remarks,
+            v_total_count AS total_applications,
+            v_approved_count AS total_approved,
+            v_pending_count AS total_pending,
+            v_rejected_count AS total_rejected,
+            l.leave_app_id,
+            l.emp_id,
+            u.emp_name,
+            u.gender,
+            IFNULL(d.department_name, 'Department Not Available') AS department_name,
+            IFNULL(rm.emp_name, '') AS reporting_to_name,
+            lt.leave_type_id,
+            lt.leave_code,
+            lt.leave_name,
+            l.from_date,
+            l.to_date,
+            l.total_days,
+            l.applied_days,
+            l.reason,
+            l.status AS leave_status,
+            l.applied_on,
+            l.approved_by,
+            IFNULL(a.emp_name, '') AS approved_by_name,
+            l.approved_on,
+            l.rejection_reason,
+            l.cancel_reason,
+            l.received_on,
+            l.updated_on
+        FROM leave_application l
+        INNER JOIN user_details u ON u.emp_id = l.emp_id
+        LEFT JOIN department_master d ON d.department_id = u.department
+        LEFT JOIN user_details rm ON rm.emp_id = u.reporting
+        INNER JOIN leave_type lt ON lt.leave_type_id = l.leave_type_id
+        LEFT JOIN user_details a ON a.emp_id = l.approved_by
+        WHERE
+        (
+            
+            p_role = 'ADMIN'
+            OR
+            
+            (
+                p_role = 'MANAGER' 
+                AND (l.emp_id = p_emp_id OR u.reporting = p_emp_id)
+            )
+            OR
+            
+            (
+                p_role NOT IN ('ADMIN', 'MANAGER') 
+                AND u.reporting = p_emp_id
+            )
+        )
+        AND l.status <> 'CANCELLED'
+        AND (p_status IS NULL OR p_status = '' OR l.status = p_status)
+        AND (p_from_date IS NULL OR l.from_date >= p_from_date)
+        AND (p_to_date IS NULL OR l.to_date <= p_to_date)
+        ORDER BY 
+            l.applied_on DESC, 
+            l.leave_app_id DESC;
+
+    ELSE
+        
+        SELECT
+            'N' AS status,
+            'There are no leave applications.' AS remarks,
+            0 AS total_applications,
+            0 AS total_approved,
+            0 AS total_pending,
+            0 AS total_rejected;
+            
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_leave_detailed_report` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_leave_detailed_report`(
+    in p_requestor_id varchar(20),  
+    in p_target_emp_id varchar(20),  
+    in p_month varchar(5),           
+    in p_year int                    
+)
+main_block:begin
+    declare v_user_category varchar(20);
+    declare v_status varchar(20);
+    declare v_record_count int default 0;
+
+    set time_zone='+05:30';
+
+    
+    select user_category, status into v_user_category, v_status
+    from user_login_details
+    where emp_id = p_requestor_id
+    limit 1;
+
+    
+    if v_user_category not in ('ADMIN', 'HR') or v_user_category is null or v_status <> 'ACTIVE' then
+        select 'N' as status, 'Access Denied: Only active ADMIN or HR accounts can access this data.' as remarks;
+        leave main_block;
+    end if;
+
+    
+    select count(*) into v_record_count
+    from leave_application la
+    inner join user_details ud on ud.emp_id = la.emp_id
+    where (upper(p_target_emp_id) = 'ALL' or la.emp_id = p_target_emp_id)
+      and year(la.from_date) = p_year
+      and (upper(p_month) = 'ALL' or month(la.from_date) = cast(p_month as unsigned));
+
+    
+    if v_record_count = 0 then
+        select 'N' as status, 'leave records not available' as remarks;
+        leave main_block;
+    end if;
+
+    
+    select 
+        'Y' as status,
+        'Success' as remarks,
+        row_number() over (order by la.applied_on desc, la.leave_app_id desc) as `sl.no`,
+        la.emp_id as `employee id`,
+        ud.emp_name as `employee name`,
+        la.reason as `leave reason`,
+        la.from_date as `leave from`,
+        la.to_date as `leave to`,
+        la.approved_leave_days as `leave days`,
+        la.status as `status`,
+        case 
+            when la.status = 'REJECTED' then ifnull(la.rejection_reason, '')
+            when la.status = 'CANCELLED' then ifnull(la.cancel_reason, '')
+            else concat('Approved by ', ifnull(la.approved_by, 'N/A'))
+        end as `remarks`
+    from 
+        leave_application la
+    inner join 
+        user_details ud on ud.emp_id = la.emp_id
+    where 
+        (upper(p_target_emp_id) = 'ALL' or la.emp_id = p_target_emp_id)
+        and year(la.from_date) = p_year
+        and (upper(p_month) = 'ALL' or month(la.from_date) = cast(p_month as unsigned))
+    order by 
+        la.applied_on desc, 
+        la.leave_app_id desc;
+
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_leave_history` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_leave_history`(
+    IN p_emp_id VARCHAR(20)
+)
+main_block:BEGIN
+
+    DECLARE v_record_count INT DEFAULT 0;
+
+    SET time_zone='+05:30';
+
+    
+    SELECT COUNT(*) INTO v_record_count
+    FROM leave_application
+    WHERE emp_id = p_emp_id;
+
+    
+    IF v_record_count = 0 THEN
+        SELECT 'N' AS status, 'leave history not available' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT
+        'Y' AS status,
+        'Success' AS remarks,
+        l.leave_app_id,
+        l.emp_id,
+        u.emp_name,
+        lt.leave_type_id,
+        lt.leave_code,
+        lt.leave_name,
+        l.from_date,
+        l.to_date,
+        l.total_days,
+        l.applied_days,
+        l.reason,
+        l.status AS leave_status,
+        l.applied_on,
+        l.approved_by,
+        IFNULL(a.emp_name,'') AS approved_by_name,
+        l.approved_on,
+        l.rejection_reason,
+        l.cancel_reason,
+        l.received_on,
+        l.updated_on
+    FROM leave_application l
+    INNER JOIN user_details u ON u.emp_id = l.emp_id
+    INNER JOIN leave_type lt ON lt.leave_type_id = l.leave_type_id
+    LEFT JOIN user_details a ON a.emp_id = l.approved_by
+    WHERE
+        l.emp_id = p_emp_id
+    ORDER BY
+        l.applied_on DESC,
+        l.from_date DESC,
+        l.leave_app_id DESC;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_leave_types` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_leave_types`()
+BEGIN
+
+    SET time_zone='+05:30';
+
+    SELECT 
+        'Y' AS status,
+        'Success' AS remarks,
+        lt.leave_type_id,
+        lt.leave_code,
+        lt.leave_name,
+        lt.year,
+        lt.yearly_quota,
+        lt.carry_forward_flag,
+        lt.max_carry_forward,
+        lt.encashment_flag,
+        lt.requires_approval,
+        lt.affects_salary,
+        lt.gender_applicable,
+        lt.status,
+        lt.received_on,
+        lt.updated_on
+    FROM leave_type lt
+    INNER JOIN (
+        
+        SELECT leave_code, MAX(year) AS max_year
+        FROM leave_type
+        WHERE status = 'A'
+        GROUP BY leave_code
+    ) latest 
+      ON lt.leave_code = latest.leave_code 
+     AND lt.year = latest.max_year
+    WHERE lt.status = 'A'
+    ORDER BY FIELD(lt.leave_code, 'PL', 'SL', 'WFH', 'ML', 'LOP');
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_get_upcoming_birthdays` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_get_upcoming_birthdays`()
+BEGIN
+    SET time_zone = '+05:30';
+
+    SELECT 
+        
+        GROUP_CONCAT(u.emp_name ORDER BY u.emp_name ASC SEPARATOR ',') AS emp_names,
+        
+        
+        DATE_FORMAT(
+            IF(
+                STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()), '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d') >= CURRENT_DATE(),
+                STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()), '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d'),
+                STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()) + 1, '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d')
+            ),
+            '%m-%d'
+        ) AS birthday_date,
+        
+        
+        DATEDIFF(
+            IF(
+                STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()), '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d') >= CURRENT_DATE(),
+                STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()), '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d'),
+                STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()) + 1, '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d')
+            ),
+            CURRENT_DATE()
+        ) AS days_left
+    FROM user_details u
+    INNER JOIN user_login_details ul ON u.emp_id = ul.emp_id
+    WHERE u.dob IS NOT NULL
+      AND ul.status = 'ACTIVE' 
+    GROUP BY 
+        
+        IF(
+            STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()), '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d') >= CURRENT_DATE(),
+            STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()), '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d'),
+            STR_TO_DATE(CONCAT(YEAR(CURRENT_DATE()) + 1, '-', DATE_FORMAT(u.dob, '%m-%d')), '%Y-%m-%d')
+        )
+    ORDER BY days_left ASC
+    LIMIT 3; 
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_leave_action` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_leave_action`(
+    IN p_leave_app_id BIGINT,
+    IN p_action VARCHAR(20), 
+    IN p_actor_emp_id VARCHAR(20),
+    IN p_reason VARCHAR(500)
+)
+main_block:BEGIN
+
+DECLARE v_emp_id VARCHAR(20);
+DECLARE v_leave_type_id INT;
+DECLARE v_leave_code VARCHAR(10);
+DECLARE v_is_accrual CHAR(1);
+DECLARE v_applied_days DECIMAL(5,2);
+DECLARE v_approved_days DECIMAL(5,2);
+DECLARE v_status VARCHAR(20);
+DECLARE v_leave_date DATE; 
+
+DECLARE v_reporting VARCHAR(20);
+DECLARE v_actor_category VARCHAR(20); 
+DECLARE v_applicant_category VARCHAR(20); 
+
+DECLARE v_available DECIMAL(5,2);
+DECLARE v_lop_type_id INT;
+DECLARE v_lop_days DECIMAL(5,2);
+DECLARE v_intern_month_approved_count INT DEFAULT 0;
+
+SET time_zone = '+05:30';
+
+START TRANSACTION;
+
+
+SELECT 
+    l.emp_id,
+    l.leave_type_id,
+    lt.leave_code,
+    lt.is_accrual,
+    l.applied_days,
+    l.status,
+    IFNULL(l.from_date, CURDATE()) 
+INTO 
+    v_emp_id,
+    v_leave_type_id,
+    v_leave_code,
+    v_is_accrual,
+    v_applied_days,
+    v_status,
+    v_leave_date
+FROM leave_application l
+INNER JOIN leave_type lt ON lt.leave_type_id = l.leave_type_id
+WHERE l.leave_app_id = p_leave_app_id;
+
+IF v_emp_id IS NULL THEN
+    ROLLBACK;
+    SELECT 'N' AS status, 'Invalid leave request' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+SELECT user_category INTO v_actor_category FROM user_login_details WHERE emp_id = p_actor_emp_id AND status = 'ACTIVE';
+SELECT user_category INTO v_applicant_category FROM user_login_details WHERE emp_id = v_emp_id AND status = 'ACTIVE';
+SELECT reporting INTO v_reporting FROM user_details WHERE emp_id = v_emp_id;
+
+
+SELECT leave_type_id INTO v_lop_type_id FROM leave_type WHERE leave_code = 'LOP' LIMIT 1;
+
+
+IF p_action IN ('APPROVED', 'REJECT') AND p_actor_emp_id = v_emp_id THEN
+    ROLLBACK;
+    SELECT 'N' AS status, 'Self action not allowed for Approval or Rejection' AS remarks;
+    LEAVE main_block;
+END IF;
+
+IF p_action IN ('APPROVED', 'REJECT') THEN
+    IF NOT (
+        (v_actor_category IN ('EMP', 'MANAGER', 'INTERN') AND p_actor_emp_id = v_reporting) 
+        OR v_actor_category IN ('HR', 'ADMIN')
+    ) THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Not authorized. Only HR, ADMIN, or your reporting MANAGER can perform this action.' AS remarks;
+        LEAVE main_block;
+    END IF;
+END IF;
+
+
+IF p_action = 'APPROVED' THEN
+
+    IF v_status <> 'PENDING' THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Only pending leave can be approved' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    IF v_applicant_category = 'INTERN' THEN
+        
+        IF v_leave_code NOT IN ('PERSONAL', 'PL', 'LOP') THEN
+            ROLLBACK;
+            SELECT 'N' AS status, 'Unauthorized: Interns can only apply for Personal or LOP leaves.' AS remarks;
+            LEAVE main_block;
+        END IF;
+
+        IF v_leave_code = 'LOP' THEN
+            SET v_approved_days = v_applied_days; 
+            SET v_lop_days = v_applied_days;
+            
+            INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, availed, closing_balance, updated_on)
+            VALUES (v_emp_id, v_leave_type_id, YEAR(v_leave_date), 0, v_approved_days, 0, NOW())
+            ON DUPLICATE KEY UPDATE availed = availed + VALUES(availed), updated_on = NOW();
+        ELSE
+            
+            SELECT IFNULL(SUM(approved_leave_days), 0)
+            INTO v_intern_month_approved_count
+            FROM leave_application la
+            INNER JOIN leave_type lt ON la.leave_type_id = lt.leave_type_id
+            WHERE la.emp_id = v_emp_id
+              AND la.status = 'APPROVED'
+              AND lt.leave_code IN ('PERSONAL', 'PL')
+              AND MONTH(la.from_date) = MONTH(v_leave_date)
+              AND YEAR(la.from_date) = YEAR(v_leave_date);
+
+            IF v_intern_month_approved_count >= 1 THEN
+                SET v_approved_days = v_applied_days;
+                SET v_lop_days = v_applied_days;
+                SET v_leave_type_id = v_lop_type_id; 
+                
+                INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, availed, closing_balance, updated_on)
+                VALUES (v_emp_id, v_leave_type_id, YEAR(v_leave_date), 0, v_approved_days, 0, NOW())
+                ON DUPLICATE KEY UPDATE availed = availed + VALUES(availed), updated_on = NOW();
+            ELSE
+                IF v_applied_days <= 1 THEN
+                    SET v_approved_days = v_applied_days;
+                    SET v_lop_days = 0;
+                ELSE
+                    SET v_approved_days = 1;
+                    SET v_lop_days = v_applied_days - 1;
+                    
+                    INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, availed, closing_balance, updated_on)
+                    VALUES (v_emp_id, v_lop_type_id, YEAR(v_leave_date), 0, v_lop_days, 0, NOW())
+                    ON DUPLICATE KEY UPDATE availed = availed + VALUES(availed), updated_on = NOW();
+                END IF;
+                
+                UPDATE emp_leave_balance
+                SET availed = availed + v_approved_days,
+                    closing_balance = GREATEST(0, closing_balance - v_approved_days),
+                    updated_on = NOW()
+                WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+            END IF;
+        END IF;
+
+    
+    ELSE
+        
+        IF v_leave_code = 'WFH' THEN
+            SET v_approved_days = v_applied_days;
+            SET v_lop_days = 0;
+
+            INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, availed, closing_balance, updated_on)
+            VALUES (v_emp_id, v_leave_type_id, YEAR(v_leave_date), 0, v_approved_days, 0, NOW())
+            ON DUPLICATE KEY UPDATE availed = availed + VALUES(availed), updated_on = NOW();
+
+        
+        ELSEIF v_is_accrual = 'N' AND v_leave_code <> 'LOP' THEN
+            SET v_approved_days = v_applied_days;
+            SET v_lop_days = 0;
+
+        
+        ELSEIF v_leave_code = 'LOP' THEN
+            SET v_approved_days = v_applied_days; 
+            SET v_lop_days = v_applied_days;
+
+            INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, availed, closing_balance, updated_on)
+            VALUES (v_emp_id, v_leave_type_id, YEAR(v_leave_date), 0, v_approved_days, 0, NOW())
+            ON DUPLICATE KEY UPDATE availed = availed + VALUES(availed), updated_on = NOW();
+
+        
+        ELSE
+            SELECT IFNULL(closing_balance,0) INTO v_available
+            FROM emp_leave_balance
+            WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+
+            IF v_available >= v_applied_days THEN
+                SET v_approved_days = v_applied_days;
+                SET v_lop_days = 0;
+            ELSE
+                SET v_approved_days = v_available;
+                SET v_lop_days = v_applied_days - v_available; 
+
+                
+                INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, availed, closing_balance, updated_on)
+                VALUES (v_emp_id, v_lop_type_id, YEAR(v_leave_date), 0, v_lop_days, 0, NOW())
+                ON DUPLICATE KEY UPDATE availed = availed + VALUES(availed), updated_on = NOW();
+            END IF;
+
+            IF v_approved_days > 0 THEN
+                UPDATE emp_leave_balance
+                SET availed = availed + v_approved_days,
+                    closing_balance = closing_balance - v_approved_days,
+                    updated_on = NOW()
+                WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+            END IF;
+        END IF;
+    END IF;
+
+    
+    UPDATE leave_application
+    SET status = 'APPROVED',
+        leave_type_id = v_leave_type_id,
+        approved_leave_days = v_approved_days,
+        approved_by = p_actor_emp_id,
+        approved_on = NOW(),
+        updated_on = NOW()
+    WHERE leave_app_id = p_leave_app_id;
+
+    COMMIT;
+
+    SELECT 'Y' AS status, 'Leave approved successfully' AS remarks,
+           v_approved_days AS approved_leave_days,
+           v_lop_days AS lop_days;
+    LEAVE main_block;
+END IF;
+
+
+IF p_action = 'REJECT' THEN
+    IF v_status <> 'PENDING' THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Only pending leave can be rejected' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    UPDATE leave_application
+    SET status = 'REJECTED',
+        rejection_reason = p_reason,
+        approved_by = p_actor_emp_id, 
+        approved_on = NOW(),
+        updated_on = NOW()
+    WHERE leave_app_id = p_leave_app_id;
+
+    COMMIT;
+    SELECT 'Y' AS status, 'Leave rejected successfully' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+IF p_action = 'CANCEL' THEN
+    IF p_actor_emp_id <> v_emp_id THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Only the applicant can execute standard CANCEL on pending leaves' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    IF v_status <> 'PENDING' THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Only pending leaves can be cancelled using this action.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    UPDATE leave_application
+    SET status = 'CANCELLED',
+        cancel_reason = p_reason,
+        updated_on = NOW()
+    WHERE leave_app_id = p_leave_app_id;
+
+    COMMIT;
+    SELECT 'Y' AS status, 'Pending leave cancelled successfully' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+IF p_action = 'APPROVE_CANCEL' THEN
+
+    
+    IF v_status <> 'APPROVED' THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Only approved leave requests can be cancelled.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    IF NOT (p_actor_emp_id = v_emp_id OR v_actor_category IN ('HR', 'ADMIN')) THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Not authorized. Only the applicant employee, HR, or ADMIN can cancel an approved leave.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    IF CURDATE() > v_leave_date THEN
+        ROLLBACK;
+        SELECT 'N' AS status, 'Cannot cancel leave because the leave date has already passed.' AS remarks;
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT IFNULL(approved_leave_days, 0), leave_type_id INTO v_approved_days, v_leave_type_id
+    FROM leave_application
+    WHERE leave_app_id = p_leave_app_id;
+
+    SET v_lop_days = IF(v_applied_days > v_approved_days, v_applied_days - v_approved_days, 0);
+
+    IF v_applicant_category = 'INTERN' THEN
+        IF v_leave_type_id = v_lop_type_id THEN
+            UPDATE emp_leave_balance
+            SET availed = GREATEST(0, availed - v_approved_days), updated_on = NOW()
+            WHERE emp_id = v_emp_id AND leave_type_id = v_lop_type_id AND year = YEAR(v_leave_date);
+        ELSE
+            IF v_approved_days > 0 THEN
+                UPDATE emp_leave_balance
+                SET availed = GREATEST(0, availed - v_approved_days),
+                    closing_balance = closing_balance + v_approved_days,
+                    updated_on = NOW()
+                WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+            END IF;
+            
+            IF v_lop_days > 0 THEN
+                UPDATE emp_leave_balance
+                SET availed = GREATEST(0, availed - v_lop_days), updated_on = NOW()
+                WHERE emp_id = v_emp_id AND leave_type_id = v_lop_type_id AND year = YEAR(v_leave_date);
+            END IF;
+        END IF;
+    ELSE
+        
+        IF v_leave_code = 'LOP' THEN
+            UPDATE emp_leave_balance
+            SET availed = GREATEST(0, availed - v_applied_days), updated_on = NOW()
+            WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+        ELSEIF v_is_accrual = 'Y' THEN
+            IF v_approved_days > 0 THEN
+                UPDATE emp_leave_balance
+                SET availed = GREATEST(0, availed - v_approved_days),
+                    closing_balance = closing_balance + v_approved_days,
+                    updated_on = NOW()
+                WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+            END IF;
+            
+            IF v_lop_days > 0 THEN
+                UPDATE emp_leave_balance
+                SET availed = GREATEST(0, availed - v_lop_days), updated_on = NOW()
+                WHERE emp_id = v_emp_id AND leave_type_id = v_lop_type_id AND year = YEAR(v_leave_date);
+            END IF;
+        ELSEIF v_leave_code = 'WFH' THEN
+            UPDATE emp_leave_balance
+            SET availed = GREATEST(0, availed - v_approved_days), updated_on = NOW()
+            WHERE emp_id = v_emp_id AND leave_type_id = v_leave_type_id AND year = YEAR(v_leave_date);
+        END IF;
+    END IF;
+
+    
+    UPDATE leave_application
+    SET status = 'CANCELLED',
+        cancel_reason = p_reason,
+        approved_by = p_actor_emp_id,
+        updated_on = NOW()
+    WHERE leave_app_id = p_leave_app_id;
+    
+    UPDATE leave_application
+    SET status = 'CANCELLED',
+        cancel_reason = p_reason,
+        approved_by = p_actor_emp_id,
+        updated_on = NOW()
+    WHERE leave_app_id = p_leave_app_id;
+
+    COMMIT;
+    SELECT 'Y' AS status, 'Approved leave cancelled and balances restored successfully' AS remarks;
+    LEAVE main_block;
+END IF;
+
+
+ROLLBACK;
+SELECT 'N' AS status, 'Invalid action' AS remarks;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_reject_candidate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_reject_candidate`(
+
+    IN p_ref_id VARCHAR(20),
+
+    IN p_remarks LONGTEXT
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    DECLARE v_offer_status VARCHAR(20);
+
+    DECLARE v_hr_status VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE ref_id = p_ref_id;
+
+    IF v_count > 0 THEN
+
+        
+
+        SELECT
+            IFNULL(offer_status,''),
+            IFNULL(hr_status,'')
+        INTO
+            v_offer_status,
+            v_hr_status
+        FROM candidate_details
+        WHERE ref_id = p_ref_id;
+
+        
+
+        IF v_hr_status = 'APPROVED' THEN
+
+            SELECT
+                'N' AS status,
+                p_ref_id AS ref_id,
+                'candidate already approved' AS remarks;
+
+        
+
+        ELSEIF v_offer_status = 'ACCEPTED' THEN
+
+            SELECT
+                'N' AS status,
+                p_ref_id AS ref_id,
+                'candidate already accepted offer letter' AS remarks;
+
+        ELSE
+
+            
+
+            UPDATE candidate_details
+            SET
+                hr_status = 'REJECTED',
+                onboarding_status = 'REJECTED',
+                remarks = p_remarks,
+                updated_on = NOW()
+            WHERE ref_id = p_ref_id;
+
+            
+
+            SELECT
+                'Y' AS status,
+                p_ref_id AS ref_id,
+                p_remarks AS remarks;
+
+        END IF;
+
+    ELSE
+
+        SELECT
+            'N' AS status,
+            p_ref_id AS ref_id,
+            'candidate not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_select_candidate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_select_candidate`(
+
+    IN p_candidate_id INT,
+
+    IN p_candidate_type VARCHAR(20),
+
+    IN p_offer_letter_url TEXT
+
+)
+BEGIN
+
+    DECLARE v_ref_id VARCHAR(20);
+
+    DECLARE v_password VARCHAR(20);
+
+    SET v_ref_id = CONCAT(
+        'REF',
+        FLOOR(100000 + RAND() * 900000)
+    );
+
+    SET v_password = SUBSTRING(MD5(RAND()),1,8);
+
+    UPDATE candidate_details
+    SET
+        ref_id = v_ref_id,
+        candidate_type = p_candidate_type,
+        temp_password = v_password,
+        offer_letter_url = p_offer_letter_url,
+        hr_status = 'SELECTED'
+    WHERE id = p_candidate_id;
+
+    SELECT
+        v_ref_id AS ref_id,
+        v_password AS password;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_select_candidate_offer` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_select_candidate_offer`(
+
+    IN p_candidate_id INT,
+
+    IN p_candidate_type VARCHAR(20),
+
+    IN p_offer_letter_url TEXT
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    DECLARE v_ref_id VARCHAR(20);
+
+    DECLARE v_password VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE id = p_candidate_id;
+
+    IF v_count > 0 THEN
+
+        
+
+        SET v_ref_id = CONCAT(
+            'REF',
+            FLOOR(100000 + RAND() * 900000)
+        );
+
+        
+
+        SET v_password = SUBSTRING(MD5(RAND()),1,8);
+
+        
+
+        UPDATE candidate_details
+        SET
+            ref_id = v_ref_id,
+            candidate_type = p_candidate_type,
+            temp_password = v_password,
+            offer_letter_url = p_offer_letter_url,
+            hr_status = 'SELECTED'
+        WHERE id = p_candidate_id;
+
+        
+
+        SELECT
+            'Y' AS status,
+            v_ref_id AS ref_id,
+            v_password AS password,
+            'offer letter sent successfully' AS remarks;
+
+    ELSE
+
+        SELECT
+            'N' AS status,
+            NULL AS ref_id,
+            NULL AS password,
+            'candidate not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `hr_toggle_user_status` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `hr_toggle_user_status`(
+    IN p_admin_emp_id VARCHAR(20),   
+    IN p_admin_category VARCHAR(20), 
+    IN p_target_emp_id VARCHAR(20)   
+)
+BEGIN
+    DECLARE v_current_status VARCHAR(20);
+    DECLARE v_new_status VARCHAR(20);
+
+    SET time_zone = '+05:30';
+
+    
+    IF p_admin_category IN ('ADMIN', 'HR') THEN
+        
+        
+        SELECT status INTO v_current_status
+        FROM user_login_details
+        WHERE emp_id = p_target_emp_id;
+
+        
+        IF v_current_status IS NOT NULL THEN
+            
+            
+            IF v_current_status = 'ACTIVE' THEN
+                SET v_new_status = 'INACTIVE';
+            ELSE
+                SET v_new_status = 'ACTIVE';
+            END IF;
+
+            
+            UPDATE user_login_details
+            SET status = v_new_status,
+                updated_on = NOW()
+            WHERE emp_id = p_target_emp_id;
+
+            
+            SELECT 
+                'Y' AS status,
+                CONCAT('Success: Employee ', p_target_emp_id, ' changed from ', v_current_status, ' to ', v_new_status, '.') AS remarks;
+
+        ELSE
+            
+            SELECT 
+                'N' AS status,
+                CONCAT('Failure: Employee ID ', p_target_emp_id, ' was not found in user login records.') AS remarks;
+        END IF;
+
+    ELSE
+        
+        SELECT 
+            'N' AS status,
+            'Access Denied: Status modifications are restricted to ADMIN or HR roles only.' AS remarks;
+            
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `new_payslip_allowance` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `new_payslip_allowance`(
+    IN p_staff_id VARCHAR(45),
+    IN p_month VARCHAR(45),
+    IN p_year VARCHAR(4)
+)
+    SQL SECURITY INVOKER
+BEGIN
+    IF TRIM(p_month) = 'ALL' OR p_month IS NULL OR p_month = '' THEN
+        SELECT * 
+        FROM allowance_list 
+        WHERE staff_id = p_staff_id 
+          AND year = p_year
+        ORDER BY FIELD(month, 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December');
+    ELSE
+        SELECT * 
+        FROM allowance_list 
+        WHERE staff_id = p_staff_id 
+          AND year = p_year
+          AND month = p_month
+        ORDER BY FIELD(month, 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December');
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `new_payslip_deductions` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `new_payslip_deductions`(
+    in p_staff_id varchar(45),
+    in p_month varchar(40),
+    in p_year int
+)
+begin
+    select * from deduction_list 
+    where staff_id = p_staff_id 
+      and year = p_year
+      and (p_month = 'ALL' or month = p_month)
+    order by field(month, 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December');
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `new_pay_slip` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `new_pay_slip`(
+    IN p_staff_id VARCHAR(45),
+    IN p_month VARCHAR(40),
+    IN p_fin_year VARCHAR(15)
+)
+BEGIN
+    DECLARE l_cnt INT;
+    DECLARE l_start_year INT;
+    DECLARE l_end_year INT;
+
+    
+    SET l_start_year = CAST(LEFT(TRIM(p_fin_year), 4) AS UNSIGNED);
+
+    
+    IF LENGTH(TRIM(p_fin_year)) = 4 AND LOWER(TRIM(p_month)) IN ('january', 'february', 'march') THEN
+        SET l_start_year = l_start_year - 1;
+        SET l_end_year = l_start_year + 1;
+    ELSEIF LENGTH(TRIM(p_fin_year)) > 7 THEN
+        SET l_end_year = CAST(RIGHT(TRIM(p_fin_year), 4) AS UNSIGNED);
+    ELSE
+        SET l_end_year = l_start_year + 1;
+    END IF;
+
+    
+    SELECT COUNT(*) INTO l_cnt
+    FROM salary_tbl
+    WHERE staff_id = p_staff_id 
+      AND (p_month = 'ALL' OR LOWER(TRIM(month)) = LOWER(TRIM(p_month)))
+      AND (
+          (LOWER(TRIM(month)) IN ('april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december') AND year = l_start_year)
+          OR
+          (LOWER(TRIM(month)) IN ('january', 'february', 'march') AND year = l_end_year)
+      );
+
+    
+    IF (l_cnt >= 1) THEN 
+        SELECT 
+            st.emp_name AS user_name,
+            st.*,
+            sl.basic_salary,
+            sl.total_working_days,
+            sl.no_days_present,
+            sl.no_days_absent,
+            sl.total_allowances,
+            sl.total_deductions,
+            sl.advance_amount,
+            sl.monthly_ctc,
+            sl.ctc,
+            sl.net_income,
+            sl.month,
+            sl.year,
+            dt.department_name,
+            ds.designation_name
+        FROM user_details st 
+        LEFT JOIN salary_tbl sl ON st.emp_id = sl.staff_id
+        LEFT JOIN department_master dt ON dt.department_id = st.department
+        LEFT JOIN designation_master ds ON ds.designation_id = st.designation
+        WHERE st.emp_id = p_staff_id 
+          AND (p_month = 'ALL' OR LOWER(TRIM(sl.month)) = LOWER(TRIM(p_month)))
+          AND (
+              (LOWER(TRIM(sl.month)) IN ('april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december') AND sl.year = l_start_year)
+              OR
+              (LOWER(TRIM(sl.month)) IN ('january', 'february', 'march') AND sl.year = l_end_year)
+          )
+        ORDER BY FIELD(LOWER(TRIM(sl.month)), 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'january', 'february', 'march');
+
+        
+        INSERT INTO user_activity (staff_id, activity, trans_date)
+        VALUES (p_staff_id, CONCAT('USER SEEN PAY SLIP FOR ', p_month, ' (FY ', p_fin_year, ')'), NOW());
+
+    ELSE 
+        SELECT 'N' AS status, 'Payslip is not available for this Month/Financial Year' AS remarks;
+    END IF; 
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `save_candidate_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `save_candidate_details`(
+
+    IN p_ref_id VARCHAR(20),
+
+    IN p_data JSON
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    DECLARE v_error_message TEXT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+
+        GET DIAGNOSTICS CONDITION 1
+        v_error_message = MESSAGE_TEXT;
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            p_ref_id AS ref_id,
+            v_error_message AS remarks;
+
+    END;
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE ref_id = p_ref_id;
+
+    IF v_count > 0 THEN
+
+        START TRANSACTION;
+
+        UPDATE candidate_details
+        SET
+
+            emp_name = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.emp_name')),
+                emp_name
+            ),
+
+            email = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.email')),
+                email
+            ),
+
+            mobile = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.mobile')),
+                mobile
+            ),
+
+            dob = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.dob')),
+                dob
+            ),
+
+            gender = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.gender')),
+                gender
+            ),
+
+            marital_status = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.marital_status')),
+                marital_status
+            ),
+
+            father_name = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.father_name')),
+                father_name
+            ),
+
+            mother_name = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.mother_name')),
+                mother_name
+            ),
+
+            current_address = IFNULL(
+                JSON_EXTRACT(p_data, '$.current_address'),
+                current_address
+            ),
+
+            perminent_address = IFNULL(
+                JSON_EXTRACT(p_data, '$.perminent_address'),
+                perminent_address
+            ),
+
+            bank_holder_name = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.bank_holder_name')),
+                bank_holder_name
+            ),
+
+            bank_name = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.bank_name')),
+                bank_name
+            ),
+
+            bank_branch = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.bank_branch')),
+                bank_branch
+            ),
+
+            bank_account_no = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.bank_account_no')),
+                bank_account_no
+            ),
+
+            ifsc = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.ifsc')),
+                ifsc
+            ),
+
+            upi_id = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.upi_id')),
+                upi_id
+            ),
+
+            bank_account_type = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.bank_account_type')),
+                bank_account_type
+            ),
+
+            pan = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.pan')),
+                pan
+            ),
+
+            aadhaar = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.aadhaar')),
+                aadhaar
+            ),
+
+            uan = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.uan')),
+                uan
+            ),
+
+            skills = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.skills')),
+                skills
+            ),
+
+            qualification = IFNULL(
+                JSON_EXTRACT(p_data, '$.qualification'),
+                qualification
+            ),
+
+            experience = IFNULL(
+                JSON_EXTRACT(p_data, '$.experience'),
+                experience
+            ),
+
+            documents = IFNULL(
+                JSON_EXTRACT(p_data, '$.documents'),
+                documents
+            ),
+
+            department = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.department')),
+                department
+            ),
+
+            designation = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.designation')),
+                designation
+            ),
+
+            reporting = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.reporting')),
+                reporting
+            ),
+            joining_date = IFNULL(
+    JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.joining_date')),
+    joining_date
+),
+
+            current_step = IFNULL(
+                JSON_UNQUOTE(JSON_EXTRACT(p_data, '$.current_step')),
+                current_step
+            ),
+
+            updated_on = NOW()
+
+        WHERE ref_id = p_ref_id;
+
+        COMMIT;
+
+        SELECT
+
+            'Y' AS status,
+
+            p_ref_id AS ref_id,
+
+            'details saved successfully' AS remarks;
+
+    ELSE
+
+        SELECT
+
+            'N' AS status,
+
+            p_ref_id AS ref_id,
+
+            'candidate not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `select_salary_by_id` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `select_salary_by_id`(in p_staff_id varchar(400))
+begin
+    select distinct 
+        st.*,
+        sft.emp_name,
+        sft.current_address,
+        sft.mobile,
+        sft.email,
+        dt.department_name
+    from salary_tbl st
+    join user_details sft on sft.emp_id = st.staff_id
+    join department_master dt on dt.department_id = sft.department
+    join user_login_details ud on st.staff_id = ud.emp_id and ud.status = 'Active'
+    where st.staff_id = p_staff_id
+    limit 1;
+end ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `select_salary_by_staff_id` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `select_salary_by_staff_id`(IN p_staff_id VARCHAR(400))
+BEGIN
+    SELECT DISTINCT 
+        st.*,
+        sft.emp_name,
+        sft.current_address,
+        sft.mobile,
+        sft.email,
+        dt.department_name
+    FROM salary_tbl st
+    JOIN user_details sft ON sft.emp_id = st.staff_id
+    JOIN department_master dt ON dt.department_id = sft.department
+    JOIN user_login_details ud ON sft.emp_id = ud.emp_id AND ud.status = 'Active'
+    WHERE st.staff_id = p_staff_id
+    LIMIT 1;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_add_component_to_all_employees` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_add_component_to_all_employees`(
+    IN p_component_id BIGINT
+)
+BEGIN
+    DECLARE v_processed INT DEFAULT 0;
+    DECLARE v_status CHAR(1) DEFAULT 'N';
+    DECLARE v_remarks VARCHAR(255);
+
+    DECLARE v_calc_type VARCHAR(30);
+    DECLARE v_pct_base VARCHAR(30);
+    DECLARE v_pct_val DECIMAL(7,4);
+
+    
+    IF p_component_id IS NULL OR p_component_id <= 0 THEN
+
+        SET v_remarks = 'Valid component ID is required.';
+
+    ELSEIF NOT EXISTS (
+        SELECT 1
+        FROM salary_component_master
+        WHERE component_id = p_component_id
+    ) THEN
+
+        SET v_remarks = 'Salary component not found.';
+
+    ELSE
+
+        
+        SELECT
+            calculation_type,
+            IFNULL(percentage_base, 'NONE'),
+            percentage_value
+        INTO
+            v_calc_type,
+            v_pct_base,
+            v_pct_val
+        FROM salary_component_master
+        WHERE component_id = p_component_id;
+
+        
+        INSERT INTO employee_salary_component (
+            salary_structure_id,
+            component_id,
+            monthly_amount,
+            percentage_value,
+            is_active,
+            created_at
+        )
+        SELECT
+            ess.salary_structure_id,
+            p_component_id,
+            CASE
+                WHEN v_calc_type = 'PERCENTAGE'
+                     AND v_pct_val IS NOT NULL
+                     AND v_pct_base = 'BASIC'
+                THEN ROUND(
+                    (
+                        SELECT IFNULL(MAX(esc.monthly_amount), 0)
+                        FROM employee_salary_component esc
+                        JOIN salary_component_master scm
+                            ON scm.component_id = esc.component_id
+                        WHERE esc.salary_structure_id =
+                              ess.salary_structure_id
+                          AND scm.component_code = 'BASIC'
+                          AND esc.is_active = 1
+                    ) * v_pct_val / 100,
+                    2
+                )
+
+                WHEN v_calc_type = 'PERCENTAGE'
+                     AND v_pct_val IS NOT NULL
+                     AND v_pct_base IN ('GROSS', 'CTC')
+                THEN ROUND(
+                    IFNULL(ess.monthly_ctc, 0) * v_pct_val / 100,
+                    2
+                )
+
+                ELSE 0.00
+            END,
+            v_pct_val,
+            1,
+            NOW()
+        FROM employee_salary_structure ess
+        JOIN user_login_details u
+            ON u.emp_id = ess.emp_id
+        WHERE u.status = 'Active'
+          AND ess.payroll_status IN ('APPROVED', 'ACTIVE')
+          AND ess.salary_structure_id = (
+              SELECT MAX(ess2.salary_structure_id)
+              FROM employee_salary_structure ess2
+              WHERE ess2.emp_id = ess.emp_id
+                AND ess2.payroll_status IN ('APPROVED', 'ACTIVE')
+          )
+        ON DUPLICATE KEY UPDATE
+            is_active = 1,
+            percentage_value = VALUES(percentage_value);
+
+        SET v_processed = ROW_COUNT();
+        SET v_status = 'Y';
+
+        SET v_remarks = CONCAT(
+            'Salary component processed successfully. Component ID: ',
+            p_component_id,
+            '. Rows affected: ',
+            v_processed,
+            '.'
+        );
+
+    END IF;
+
+    
+    SELECT
+        v_status AS status,
+        v_remarks AS remarks,
+        p_component_id AS component_id,
+        v_processed AS processed_rows;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_admin_edit_absent_attendance` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_admin_edit_absent_attendance`(
+    IN  p_emp_id        VARCHAR(20),
+    IN  p_att_date      DATE,
+    IN  p_edit_type     VARCHAR(10),   
+    IN  p_admin_emp_id  VARCHAR(20),
+    IN  p_punch_in      DATETIME,
+    IN  p_punch_out     DATETIME,
+    OUT p_out_status    CHAR(1),
+    OUT p_out_message   VARCHAR(500)
+)
+BEGIN
+    main_block: BEGIN
+    
+    DECLARE v_leave_type_id     INT    DEFAULT NULL;
+    DECLARE v_lop_type_id       INT    DEFAULT NULL;
+    DECLARE v_balance_id        BIGINT DEFAULT NULL;
+    DECLARE v_closing_balance   DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_att_exists        INT    DEFAULT 0;
+    DECLARE v_att_status        VARCHAR(30) DEFAULT '';
+    DECLARE v_leave_year        INT;
+    DECLARE v_new_att_status    VARCHAR(20) DEFAULT 'ABSENT';
+    DECLARE v_approved_days     DECIMAL(5,2) DEFAULT 1.00;
+    DECLARE v_lop_days          DECIMAL(5,2) DEFAULT 0.00;
+    DECLARE v_app_leave_type_id INT DEFAULT NULL;
+    DECLARE v_app_id            BIGINT DEFAULT NULL;
+    DECLARE v_reason_text       VARCHAR(500) DEFAULT '';
+    DECLARE v_user_category     VARCHAR(20)  DEFAULT NULL;   
+    DECLARE v_audit_new   JSON    DEFAULT NULL;    
+    DECLARE v_audit_cycle BIGINT  DEFAULT NULL;    
+    DECLARE v_audit_month INT     DEFAULT NULL;    
+    DECLARE v_audit_year  INT     DEFAULT NULL;    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            @sq_errno = MYSQL_ERRNO,
+            @sq_msg   = MESSAGE_TEXT;
+        ROLLBACK;
+        SET p_out_status  = 'N';
+        SET p_out_message = CONCAT('DB Error [', IFNULL(@sq_errno,'?'), ']: ', IFNULL(@sq_msg, 'Unknown'));
+    END;
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_admin_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SET p_out_status  = 'N';
+        SET p_out_message = 'Access denied: only active ADMIN or HR users can edit attendance.';
+        LEAVE main_block;
+    END IF;
+
+    SET p_out_status  = 'N';
+    SET p_out_message = 'Init';
+
+    SET v_leave_year = YEAR(p_att_date);
+
+    
+    SELECT 1, UPPER(TRIM(status))
+    INTO   v_att_exists, v_att_status
+    FROM   attendance
+    WHERE  emp_id = p_emp_id AND attendance_date = p_att_date
+    LIMIT  1;
+
+    IF v_att_exists = 0 THEN
+        SET p_out_status  = 'N';
+        SET p_out_message = CONCAT('No attendance record for ', p_emp_id, ' on ', p_att_date);
+        LEAVE main_block;
+    END IF;
+
+    IF v_att_status NOT IN ('ABSENT', 'A') THEN
+        SET p_out_status  = 'N';
+        SET p_out_message = CONCAT('Day is not ABSENT (current: ', v_att_status, '). Only ABSENT days can be edited.');
+        LEAVE main_block;
+    END IF;
+
+    
+    SELECT leave_type_id INTO v_lop_type_id
+    FROM   leave_type
+    WHERE  UPPER(TRIM(leave_code)) = 'LOP'
+      AND  year   = v_leave_year
+      AND  status = 'A'
+    ORDER  BY leave_type_id ASC
+    LIMIT  1;
+
+    START TRANSACTION;
+
+    
+    IF UPPER(p_edit_type) = 'WFH' THEN
+
+        
+        SELECT leave_type_id INTO v_leave_type_id
+        FROM   leave_type
+        WHERE  UPPER(TRIM(leave_code)) = 'WFH'
+          AND  year   = v_leave_year
+          AND  status = 'A'
+        ORDER  BY leave_type_id ASC LIMIT 1;
+
+        IF v_leave_type_id IS NULL THEN
+            ROLLBACK;
+            SET p_out_status  = 'N';
+            SET p_out_message = CONCAT('WFH leave type not found for year ', v_leave_year);
+            LEAVE main_block;
+        END IF;
+
+        
+        SELECT balance_id, closing_balance
+        INTO   v_balance_id, v_closing_balance
+        FROM   emp_leave_balance
+        WHERE  emp_id        = p_emp_id
+          AND  leave_type_id = v_leave_type_id
+          AND  year          = v_leave_year
+        ORDER  BY balance_id ASC LIMIT 1;
+        IF v_balance_id IS NULL THEN
+            
+            INSERT INTO emp_leave_balance (emp_id, leave_type_id, year, opening_balance, credited, availed, closing_balance)
+            VALUES (p_emp_id, v_leave_type_id, v_leave_year, 0, 0, 0, 0);
+            SET v_balance_id = LAST_INSERT_ID();
+        END IF;
+
+        
+        UPDATE emp_leave_balance
+        SET    availed          = availed + 1,
+               closing_balance  = closing_balance - 1,
+               updated_on       = NOW(),
+               updated_at       = NOW()
+        WHERE  balance_id = v_balance_id;
+
+        SET v_approved_days = 1.00;
+        SET v_lop_days      = 0.00;
+        SET v_new_att_status = 'WFH';
+        SET v_reason_text = CONCAT('Admin adjusted: Absent on ', DATE_FORMAT(p_att_date,'%d-%b-%Y'), ' changed to WFH.');
+
+        
+        SET v_app_leave_type_id = v_leave_type_id;
+        INSERT INTO leave_application (
+            emp_id, leave_type_id,
+            from_date, to_date,
+            total_days, applied_days, approved_leave_days, lop_days,
+            reason, status,
+            applied_on, approved_by, approved_on,
+            received_on, updated_on
+        ) VALUES (
+            p_emp_id, v_app_leave_type_id,
+            p_att_date, p_att_date,
+            1.00, 1.00, v_approved_days, v_lop_days,
+            v_reason_text, 'APPROVED',
+            NOW(), p_admin_emp_id, NOW(),
+            NOW(), NOW()
+        );
+        SET v_app_id = LAST_INSERT_ID();
+
+        
+        UPDATE attendance
+        SET    status     = v_new_att_status,
+               punch_in   = IF(v_new_att_status = 'WFH', p_punch_in, NULL),
+               punch_out  = IF(v_new_att_status = 'WFH', p_punch_out, NULL),
+               updated_at = NOW()
+        WHERE  emp_id = p_emp_id AND attendance_date = p_att_date;
+
+        COMMIT;
+
+        IF v_new_att_status = 'WFH' THEN
+            SET p_out_status  = 'Y';
+            SET p_out_message = CONCAT('WFH applied for ', DATE_FORMAT(p_att_date,'%d %b %Y'), '. WFH balance deducted. Application #', v_app_id, ' created.');
+        ELSE
+            SET p_out_status  = 'Y';
+            SET p_out_message = CONCAT('No WFH balance available. Marked as LOP for ', DATE_FORMAT(p_att_date,'%d %b %Y'), '. Application #', v_app_id, ' created.');
+        END IF;
+
+    
+    ELSEIF UPPER(p_edit_type) IN ('PL','SL','ML') THEN
+
+        
+        SELECT leave_type_id INTO v_leave_type_id
+        FROM   leave_type
+        WHERE  UPPER(TRIM(leave_code)) = UPPER(TRIM(p_edit_type))
+          AND  year   = v_leave_year
+          AND  status = 'A'
+        ORDER  BY leave_type_id ASC LIMIT 1;
+
+        IF v_leave_type_id IS NULL THEN
+            ROLLBACK;
+            SET p_out_status  = 'N';
+            SET p_out_message = CONCAT(UPPER(p_edit_type), ' leave type not found for year ', v_leave_year);
+            LEAVE main_block;
+        END IF;
+
+        
+        SELECT balance_id, closing_balance
+        INTO   v_balance_id, v_closing_balance
+        FROM   emp_leave_balance
+        WHERE  emp_id        = p_emp_id
+          AND  leave_type_id = v_leave_type_id
+          AND  year          = v_leave_year
+        ORDER  BY balance_id ASC LIMIT 1;
+
+        IF v_balance_id IS NULL THEN
+            ROLLBACK;
+            SET p_out_status  = 'N';
+            SET p_out_message = CONCAT('No balance record for ', UPPER(p_edit_type), ' in year ', v_leave_year, ' for employee ', p_emp_id);
+            LEAVE main_block;
+        END IF;
+
+        IF v_closing_balance >= 1 THEN
+            
+            UPDATE emp_leave_balance
+            SET    availed          = availed + 1,
+                   closing_balance  = closing_balance - 1,
+                   updated_on       = NOW(),
+                   updated_at       = NOW()
+            WHERE  balance_id = v_balance_id;
+
+            SET v_approved_days  = 1.00;
+            SET v_lop_days       = 0.00;
+            SET v_new_att_status = 'LEAVE';
+            SET v_app_leave_type_id = v_leave_type_id;
+            SET v_reason_text = CONCAT('Admin adjusted: Absent on ', DATE_FORMAT(p_att_date,'%d-%b-%Y'), ' changed to ', UPPER(p_edit_type), ' leave. Balance deducted.');
+
+            INSERT INTO leave_application (
+                emp_id, leave_type_id,
+                from_date, to_date,
+                total_days, applied_days, approved_leave_days, lop_days,
+                reason, status,
+                applied_on, approved_by, approved_on,
+                received_on, updated_on
+            ) VALUES (
+                p_emp_id, v_app_leave_type_id,
+                p_att_date, p_att_date,
+                1.00, 1.00, 1.00, 0.00,
+                v_reason_text, 'APPROVED',
+                NOW(), p_admin_emp_id, NOW(),
+                NOW(), NOW()
+            );
+            SET v_app_id = LAST_INSERT_ID();
+
+            UPDATE attendance
+            SET    status     = 'LEAVE',
+                   punch_in   = NULL,
+                   punch_out  = NULL,
+                   updated_at = NOW()
+            WHERE  emp_id = p_emp_id AND attendance_date = p_att_date;
+
+            COMMIT;
+            SET p_out_status  = 'Y';
+            SET p_out_message = CONCAT(UPPER(p_edit_type), ' leave applied for ', DATE_FORMAT(p_att_date,'%d %b %Y'), '. Balance deducted. Application #', v_app_id, ' created.');
+
+        ELSE
+            
+            SET v_app_leave_type_id = IFNULL(v_lop_type_id, v_leave_type_id);
+            SET v_reason_text = CONCAT('Admin adjusted: Absent on ', DATE_FORMAT(p_att_date,'%d-%b-%Y'), ' - no ', UPPER(p_edit_type), ' balance, marked as LOP.');
+
+            INSERT INTO leave_application (
+                emp_id, leave_type_id,
+                from_date, to_date,
+                total_days, applied_days, approved_leave_days, lop_days,
+                reason, status,
+                applied_on, approved_by, approved_on,
+                received_on, updated_on
+            ) VALUES (
+                p_emp_id, v_app_leave_type_id,
+                p_att_date, p_att_date,
+                1.00, 1.00, 0.00, 1.00,
+                v_reason_text, 'APPROVED',
+                NOW(), p_admin_emp_id, NOW(),
+                NOW(), NOW()
+            );
+            SET v_app_id = LAST_INSERT_ID();
+
+            UPDATE attendance
+            SET    status     = 'ABSENT',
+                   punch_in   = NULL,
+                   punch_out  = NULL,
+                   updated_at = NOW()
+            WHERE  emp_id = p_emp_id AND attendance_date = p_att_date;
+
+            COMMIT;
+            SET p_out_status  = 'Y';
+            SET p_out_message = CONCAT('No ', UPPER(p_edit_type), ' balance. Marked as LOP for ', DATE_FORMAT(p_att_date,'%d %b %Y'), '. Application #', v_app_id, ' created.');
+        END IF;
+
+    
+    ELSEIF UPPER(p_edit_type) = 'LOP' THEN
+
+        SET v_app_leave_type_id = v_lop_type_id;
+
+        IF v_app_leave_type_id IS NULL THEN
+            ROLLBACK;
+            SET p_out_status  = 'N';
+            SET p_out_message = CONCAT('LOP leave type not found for year ', v_leave_year);
+            LEAVE main_block;
+        END IF;
+
+        SET v_reason_text = CONCAT('Admin adjusted: Absent on ', DATE_FORMAT(p_att_date,'%d-%b-%Y'), ' marked as Loss of Pay (LOP).');
+
+        INSERT INTO leave_application (
+            emp_id, leave_type_id,
+            from_date, to_date,
+            total_days, applied_days, approved_leave_days, lop_days,
+            reason, status,
+            applied_on, approved_by, approved_on,
+            received_on, updated_on
+        ) VALUES (
+            p_emp_id, v_app_leave_type_id,
+            p_att_date, p_att_date,
+            1.00, 1.00, 0.00, 1.00,
+            v_reason_text, 'APPROVED',
+            NOW(), p_admin_emp_id, NOW(),
+            NOW(), NOW()
+        );
+        SET v_app_id = LAST_INSERT_ID();
+
+        UPDATE attendance
+        SET    status     = 'ABSENT',
+               punch_in   = NULL,
+               punch_out  = NULL,
+               updated_at = NOW()
+        WHERE  emp_id = p_emp_id AND attendance_date = p_att_date;
+
+        COMMIT;
+        SET p_out_status  = 'Y';
+        SET p_out_message = CONCAT('Marked as Loss of Pay (LOP) for ', DATE_FORMAT(p_att_date,'%d %b %Y'), '. Application #', v_app_id, ' created.');
+
+    ELSE
+        ROLLBACK;
+        SET p_out_status  = 'N';
+        SET p_out_message = CONCAT('Invalid edit type: "', p_edit_type, '". Allowed: WFH, PL, SL, ML, LOP.');
+    END IF;
+
+    
+    IF p_out_status = 'Y' THEN
+        SELECT MAX(payroll_cycle_id), MAX(payroll_month), MAX(payroll_year) INTO v_audit_cycle, v_audit_month, v_audit_year
+          FROM payroll_cycles WHERE p_att_date BETWEEN period_start AND period_end;
+        SET v_audit_new = (SELECT JSON_OBJECT('status', status, 'punch_in', punch_in, 'punch_out', punch_out)
+                             FROM attendance WHERE emp_id = p_emp_id AND attendance_date = p_att_date LIMIT 1);
+        SET v_audit_new = JSON_MERGE_PATCH(COALESCE(v_audit_new, JSON_OBJECT()),
+                                           JSON_OBJECT('edit_type', UPPER(p_edit_type), 'leave_application_id', v_app_id));
+        CALL hrms_payroll_audit_add('ATTENDANCE', 'ABSENCE_EDIT', 'attendance', DATE_FORMAT(p_att_date, '%Y-%m-%d'),
+             p_emp_id, v_audit_cycle, v_audit_month, v_audit_year,
+             JSON_OBJECT('status', v_att_status, 'date', DATE_FORMAT(p_att_date, '%Y-%m-%d')), v_audit_new,
+             p_out_message, p_admin_emp_id);
+    END IF;
+
+    END main_block;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_attendance_freeze` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_attendance_freeze`(IN p_month TINYINT, IN p_year SMALLINT)
+BEGIN
+  DECLARE v_run_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+
+  SELECT status INTO v_run_status
+  FROM payroll_runs WHERE month = p_month AND year = p_year LIMIT 1;
+
+  IF v_run_status IS NOT NULL AND v_run_status NOT IN ('DRAFT', 'CALCULATED') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot freeze: payroll run for this period is already APPROVED or later';
+  END IF;
+
+  START TRANSACTION;
+  
+  UPDATE payroll_attendance SET is_frozen = 1 WHERE month = p_month AND year = p_year;
+  UPDATE payroll_attendance_summary SET is_finalized = 'Y' WHERE payroll_month = p_month AND payroll_year = p_year;
+  COMMIT;
+  SELECT 'OK' AS status, 'Attendance frozen' AS message, 0 AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_attendance_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_attendance_list`(IN p_month TINYINT, IN p_year SMALLINT)
+BEGIN
+  
+  IF EXISTS (SELECT 1 FROM payroll_attendance_summary WHERE payroll_month = p_month AND payroll_year = p_year) THEN
+    SELECT pas.summary_id AS id,
+           u.user_id,
+           u.emp_code,
+           u.full_name,
+           pas.payroll_month AS month,
+           pas.payroll_year AS year,
+           pas.total_days,
+           pas.working_days,
+           pas.present_days,
+           pas.wfh_days,
+           pas.leave_days AS paid_leave_days,
+           pas.unpaid_days AS lop_days,
+           pas.holiday_days AS holidays,
+           pas.weekly_off_days AS weekly_offs,
+           pas.absent_days,
+           pas.paid_days,
+           pas.unpaid_days,
+           pas.late_count,
+           pas.half_days,
+           pas.overtime_hours,
+           IF(pas.is_finalized = 'Y', 1, 0) AS is_frozen
+    FROM   payroll_attendance_summary pas
+    JOIN   userdetails u ON u.emp_code = pas.emp_id
+    WHERE  pas.payroll_month = p_month AND pas.payroll_year = p_year
+    ORDER BY u.emp_code;
+  ELSE
+    SELECT pa.id, pa.user_id, u.emp_code, u.full_name,
+           pa.month, pa.year, pa.total_days, pa.present_days,
+           pa.paid_leave_days, pa.lop_days, pa.holidays, pa.weekly_offs,
+           pa.overtime_hours, pa.is_frozen
+    FROM   payroll_attendance pa
+    JOIN   userdetails u ON u.user_id = pa.user_id
+    WHERE  pa.month = p_month AND pa.year = p_year
+    ORDER BY u.emp_code;
+  END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_attendance_unfreeze` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_attendance_unfreeze`(IN p_month TINYINT, IN p_year SMALLINT)
+BEGIN
+  
+  DECLARE v_run_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  SELECT status INTO v_run_status
+  FROM payroll_runs WHERE month = p_month AND year = p_year LIMIT 1;
+
+  IF v_run_status IS NOT NULL AND v_run_status NOT IN ('DRAFT', 'CALCULATED') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot unfreeze: payroll run for this period is already APPROVED or later';
+  END IF;
+
+  START TRANSACTION;
+  
+  UPDATE payroll_attendance SET is_frozen = 0 WHERE month = p_month AND year = p_year;
+  UPDATE payroll_attendance_summary SET is_finalized = 'N' WHERE payroll_month = p_month AND payroll_year = p_year;
+  COMMIT;
+  SELECT 'OK' AS status, 'Attendance unfrozen' AS message, 0 AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_auth_check_admin_hr` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_auth_check_admin_hr`(IN p_user VARCHAR(50))
+BEGIN
+  DECLARE v_check_user VARCHAR(50);
+  DECLARE v_valid INT DEFAULT 0;
+
+  
+  SET v_check_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  IF v_check_user = 'admin' THEN
+    SET v_check_user = 'BS00001';
+  END IF;
+
+  SELECT COUNT(*) INTO v_valid
+  FROM user_login_details
+  WHERE (emp_id = v_check_user OR emp_id = p_user OR (p_user = 'admin' AND user_category IN ('ADMIN', 'HR')))
+    AND status = 'Active'
+    AND user_category IN ('ADMIN', 'HR');
+
+  IF v_valid = 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Unauthorized: Operation requires an active ADMIN or HR account.';
+  END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_delete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_delete`(IN p_component_id INT)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+  START TRANSACTION;
+  
+  IF EXISTS (SELECT 1 FROM structure_components WHERE component_id = p_component_id) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot delete component: currently attached to one or more salary structures';
+  END IF;
+
+  DELETE FROM pay_components WHERE component_id = p_component_id;
+  COMMIT;
+  SELECT 'OK' AS status, 'Component deleted' AS message, p_component_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_get`(IN p_component_id INT)
+BEGIN
+  SELECT component_id, code, name, type, calc_type,
+         fixed_amount, percent_value, percent_of_code, formula,
+         minimum_amount, maximum_amount, calculation_scope, is_slab, is_manual,
+         is_prorated, is_taxable, include_in_pf, include_in_esi,
+         show_in_payslip, calc_order, is_active
+  FROM   pay_components
+  WHERE  component_id = p_component_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_list`()
+BEGIN
+  SELECT component_id, code, name, type, calc_type,
+         fixed_amount, percent_value, percent_of_code, formula,
+         minimum_amount, maximum_amount, calculation_scope, is_slab, is_manual,
+         is_prorated, is_taxable, include_in_pf, include_in_esi,
+         show_in_payslip, calc_order, is_active
+  FROM   pay_components
+  ORDER BY calc_order, code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_save`(
+  IN p_component_id       INT,
+  IN p_code               VARCHAR(30),
+  IN p_name               VARCHAR(100),
+  IN p_type               VARCHAR(30),
+  IN p_calc_type          VARCHAR(20),
+  IN p_fixed_amount       DECIMAL(12,2),
+  IN p_percent_value      DECIMAL(7,3),
+  IN p_percent_of_code    VARCHAR(30),
+  IN p_formula            TEXT,
+  IN p_minimum_amount     DECIMAL(12,2),
+  IN p_maximum_amount     DECIMAL(12,2),
+  IN p_calculation_scope  VARCHAR(20),
+  IN p_is_slab            TINYINT(1),
+  IN p_is_manual          TINYINT(1),
+  IN p_is_prorated        TINYINT(1),
+  IN p_is_taxable         TINYINT(1),
+  IN p_include_in_pf      TINYINT(1),
+  IN p_include_in_esi     TINYINT(1),
+  IN p_show_in_payslip     TINYINT(1),
+  IN p_calc_order         INT,
+  IN p_is_active          TINYINT(1)
+)
+BEGIN
+  DECLARE v_id INT DEFAULT p_component_id;
+  DECLARE v_result DECIMAL(14,4);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
+
+  
+  IF p_calc_type = 'FORMULA' AND p_formula IS NOT NULL AND p_formula <> '' THEN
+    DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+    CREATE TEMPORARY TABLE tmp_vars (code VARCHAR(40) PRIMARY KEY, val DECIMAL(14,4));
+    INSERT INTO tmp_vars VALUES
+      ('CTC_MONTHLY',  50000), ('CTC1', 50000), ('TOTAL_DAYS', 30), ('PAYABLE_DAYS', 30),
+      ('LOP_DAYS', 0), ('OT_HOURS', 0), ('GROSS', 50000),
+      ('PF_WAGE', 15000), ('ESI_WAGE', 15000);
+
+    INSERT INTO tmp_vars (code, val)
+    SELECT code, 10000
+    FROM pay_components
+    WHERE calc_order < p_calc_order AND code <> p_code;
+
+    
+    BEGIN
+      DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_result = 0;
+      CALL sp_eval_formula(p_formula, v_result);
+    END;
+    DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+  END IF;
+
+  IF p_component_id IS NULL THEN
+    INSERT INTO pay_components
+      (code, name, type, calc_type, fixed_amount, percent_value, percent_of_code,
+       formula, minimum_amount, maximum_amount, calculation_scope, is_slab, is_manual,
+       is_prorated, is_taxable, include_in_pf, include_in_esi,
+       show_in_payslip, calc_order, is_active)
+    VALUES
+      (p_code, p_name, p_type, p_calc_type, p_fixed_amount, p_percent_value, p_percent_of_code,
+       p_formula, p_minimum_amount, p_maximum_amount, IFNULL(p_calculation_scope,'COMPONENT'),
+       IFNULL(p_is_slab,0), IFNULL(p_is_manual,0), p_is_prorated, p_is_taxable,
+       p_include_in_pf, p_include_in_esi, p_show_in_payslip, p_calc_order, p_is_active);
+    SET v_id = LAST_INSERT_ID();
+  ELSE
+    UPDATE pay_components SET
+      code = p_code, name = p_name, type = p_type, calc_type = p_calc_type,
+      fixed_amount = p_fixed_amount, percent_value = p_percent_value,
+      percent_of_code = p_percent_of_code, formula = p_formula,
+      minimum_amount = p_minimum_amount, maximum_amount = p_maximum_amount,
+      calculation_scope = IFNULL(p_calculation_scope,'COMPONENT'),
+      is_slab = IFNULL(p_is_slab,0), is_manual = IFNULL(p_is_manual,0),
+      is_prorated = p_is_prorated, is_taxable = p_is_taxable,
+      include_in_pf = p_include_in_pf, include_in_esi = p_include_in_esi,
+      show_in_payslip = p_show_in_payslip, calc_order = p_calc_order,
+      is_active = p_is_active
+    WHERE component_id = p_component_id;
+  END IF;
+
+  
+  INSERT INTO structure_components (structure_id, component_id, override_fixed, override_formula, display_order)
+  VALUES (1, v_id, NULL, NULL, p_calc_order)
+  ON DUPLICATE KEY UPDATE
+    display_order = p_calc_order;
+
+  COMMIT;
+  SELECT 'OK' AS status, 'Component saved' AS message, v_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_slabs_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_slabs_list`(IN p_component_id INT)
+BEGIN
+  SELECT 
+    s.slab_id,
+    s.component_id,
+    COALESCE(m.component_code, pc.code) AS component_code,
+    COALESCE(m.component_name, pc.name) AS component_name,
+    s.slab_based_on,
+    s.slab_min_value,
+    s.slab_max_value,
+    s.result_type,
+    s.result_value,
+    s.percentage_base,
+    s.priority,
+    s.effective_from,
+    s.effective_to,
+    s.is_active
+  FROM test_table_salary_component_slab s
+  LEFT JOIN test_table_salary_component_master m ON m.component_id = s.component_id
+  LEFT JOIN pay_components pc ON pc.code = m.component_code OR pc.component_id = s.component_id
+  WHERE (p_component_id IS NULL OR s.component_id = p_component_id OR pc.component_id = p_component_id)
+  ORDER BY COALESCE(m.calculation_order, pc.calc_order, 999), s.priority, s.slab_min_value;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_slab_delete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_slab_delete`(IN p_slab_id BIGINT)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
+  DELETE FROM test_table_salary_component_slab WHERE slab_id = p_slab_id;
+  COMMIT;
+  SELECT 'OK' AS status, 'Slab deleted successfully' AS message, p_slab_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_slab_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_slab_save`(
+  IN p_slab_id         BIGINT,
+  IN p_component_id    BIGINT,
+  IN p_slab_based_on   VARCHAR(20),
+  IN p_slab_min_value  DECIMAL(12,2),
+  IN p_slab_max_value  DECIMAL(12,2),
+  IN p_result_type     VARCHAR(20),
+  IN p_result_value    DECIMAL(12,2),
+  IN p_percentage_base VARCHAR(20),
+  IN p_priority        INT,
+  IN p_effective_from  DATE,
+  IN p_effective_to    DATE,
+  IN p_is_active       TINYINT(1)
+)
+BEGIN
+  DECLARE v_id BIGINT DEFAULT p_slab_id;
+  DECLARE v_master_comp_id BIGINT DEFAULT p_component_id;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
+
+  
+  IF NOT EXISTS (SELECT 1 FROM test_table_salary_component_master WHERE component_id = p_component_id) THEN
+    SELECT m.component_id INTO v_master_comp_id
+    FROM pay_components pc
+    JOIN test_table_salary_component_master m ON m.component_code = pc.code
+    WHERE pc.component_id = p_component_id
+    LIMIT 1;
+  END IF;
+
+  IF v_master_comp_id IS NULL THEN
+    SET v_master_comp_id = p_component_id;
+  END IF;
+
+  IF p_slab_id IS NULL OR p_slab_id = 0 THEN
+    INSERT INTO test_table_salary_component_slab
+      (component_id, slab_based_on, slab_min_value, slab_max_value, result_type, result_value, percentage_base, priority, effective_from, effective_to, is_active)
+    VALUES
+      (v_master_comp_id, p_slab_based_on, p_slab_min_value, p_slab_max_value, p_result_type, p_result_value, IFNULL(p_percentage_base, 'NONE'), IFNULL(p_priority, 1), IFNULL(p_effective_from, '2026-04-01'), p_effective_to, IFNULL(p_is_active, 1));
+    SET v_id = LAST_INSERT_ID();
+  ELSE
+    UPDATE test_table_salary_component_slab SET
+      component_id    = v_master_comp_id,
+      slab_based_on   = p_slab_based_on,
+      slab_min_value  = p_slab_min_value,
+      slab_max_value  = p_slab_max_value,
+      result_type     = p_result_type,
+      result_value    = p_result_value,
+      percentage_base = IFNULL(p_percentage_base, 'NONE'),
+      priority        = IFNULL(p_priority, 1),
+      effective_from  = IFNULL(p_effective_from, '2026-04-01'),
+      effective_to    = p_effective_to,
+      is_active       = IFNULL(p_is_active, 1)
+    WHERE slab_id = p_slab_id;
+  END IF;
+
+  COMMIT;
+  SELECT 'OK' AS status, 'Slab saved successfully' AS message, v_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_component_toggle` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_component_toggle`(IN p_component_id INT, IN p_is_active TINYINT(1))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+  START TRANSACTION;
+  UPDATE pay_components SET is_active = p_is_active WHERE component_id = p_component_id;
+  COMMIT;
+  SELECT 'OK' AS status, 'Component updated' AS message, p_component_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_dashboard_summary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_dashboard_summary`()
+BEGIN
+  SELECT
+    pr.run_id    AS latest_run_id,
+    pr.month     AS latest_run_month,
+    pr.year      AS latest_run_year,
+    pr.status    AS latest_run_status,
+    pr.total_net AS total_net_pay,
+    (SELECT COUNT(*) FROM userdetails WHERE status = 'ACTIVE') AS headcount,
+    (SELECT COUNT(*) FROM payroll_inputs WHERE status = 'PENDING') AS pending_inputs,
+    COALESCE(
+      (SELECT COUNT(*) FROM payroll_entries pe2 WHERE pe2.run_id = pr.run_id AND pe2.status = 'ERROR'),
+    0) AS error_entries
+  FROM payroll_runs pr
+  ORDER BY pr.year DESC, pr.month DESC
+  LIMIT 1;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_assign_structure` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_assign_structure`(IN p_user_id INT, IN p_structure_id INT)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  UPDATE salaries SET structure_id = p_structure_id
+  WHERE user_id = p_user_id AND is_current = 1;
+  IF ROW_COUNT() = 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No current salary record found for this employee';
+  END IF;
+  COMMIT;
+  SELECT 'OK' AS status, 'Structure assigned' AS message, p_user_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_list`()
+BEGIN
+  SELECT u.user_id, u.emp_code, u.full_name, u.department, u.designation,
+         u.date_of_joining, u.status,
+         u.bank_name, u.bank_account_no, u.ifsc, u.pan, u.uan,
+         s.ctc_annual, 
+         ROUND(s.ctc_annual / 12, 2) AS ctc_monthly,
+         s.structure_id,
+         COALESCE(ss.name, 'Standard Company Salary Structure') AS structure_name,
+         (SELECT COUNT(*) FROM employee_component_overrides eco WHERE eco.user_id = u.user_id AND eco.is_active = 1) AS override_count
+  FROM   userdetails u
+  LEFT JOIN salaries s ON s.user_id = u.user_id AND s.is_current = 1
+  LEFT JOIN salary_structures ss ON ss.structure_id = s.structure_id
+  WHERE  u.status = 'ACTIVE'
+  ORDER BY u.emp_code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_overrides_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_overrides_get`(IN p_user_id INT)
+BEGIN
+  SELECT 
+    pc.component_id,
+    pc.code AS component_code,
+    pc.name AS component_name,
+    pc.type,
+    pc.calc_type,
+    pc.fixed_amount AS default_fixed,
+    pc.percent_value AS default_percent,
+    pc.percent_of_code AS default_percent_of,
+    pc.formula AS default_formula,
+    pc.minimum_amount,
+    pc.maximum_amount,
+    pc.calc_order,
+    eco.id AS override_id,
+    eco.user_id,
+    eco.override_type,
+    eco.override_percentage,
+    eco.override_amount,
+    eco.override_formula,
+    eco.remarks,
+    IF(eco.id IS NOT NULL AND eco.is_active = 1, 1, 0) AS is_overridden
+  FROM pay_components pc
+  LEFT JOIN employee_component_overrides eco 
+    ON eco.component_id = pc.component_id AND eco.user_id = p_user_id AND eco.is_active = 1
+  WHERE pc.is_active = 1
+  ORDER BY pc.calc_order, pc.code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_override_delete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_override_delete`(IN p_user_id INT, IN p_component_id INT)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  DELETE FROM employee_component_overrides
+  WHERE user_id = p_user_id AND component_id = p_component_id;
+  COMMIT;
+  SELECT 'OK' AS status, 'Employee override removed' AS message, p_user_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_override_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_override_save`(
+  IN p_user_id             INT,
+  IN p_component_id        INT,
+  IN p_override_type       VARCHAR(20),
+  IN p_override_percentage DECIMAL(7,3),
+  IN p_override_amount     DECIMAL(12,2),
+  IN p_override_formula    TEXT,
+  IN p_remarks             VARCHAR(255)
+)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  INSERT INTO employee_component_overrides
+    (user_id, component_id, override_type, override_percentage, override_amount, override_formula, remarks, is_active)
+  VALUES
+    (p_user_id, p_component_id, p_override_type, p_override_percentage, p_override_amount, p_override_formula, p_remarks, 1)
+  ON DUPLICATE KEY UPDATE
+    override_type       = VALUES(override_type),
+    override_percentage = VALUES(override_percentage),
+    override_amount     = VALUES(override_amount),
+    override_formula    = VALUES(override_formula),
+    remarks             = VALUES(remarks),
+    is_active           = 1,
+    updated_at          = CURRENT_TIMESTAMP;
+  COMMIT;
+  SELECT 'OK' AS status, 'Employee component override saved' AS message, p_user_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_statutory_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_statutory_get`(IN p_user_id INT)
+BEGIN
+  DECLARE v_has_row INT DEFAULT 0;
+
+  SELECT COUNT(*) INTO v_has_row FROM employee_statutory_settings WHERE user_id = p_user_id;
+
+  IF v_has_row > 0 THEN
+    SELECT
+      ess.id, ess.user_id,
+      ess.pf_applicable, ess.pf_wage_ceiling, ess.pf_percent,
+      ess.esi_applicable,
+      ess.nps_applicable, ess.nps_calc_type, ess.nps_percent, ess.nps_fixed_amount, ess.nps_minimum,
+      ess.pt_applicable, ess.pt_state,
+      ess.created_at, ess.updated_at
+    FROM employee_statutory_settings ess
+    WHERE ess.user_id = p_user_id;
+  ELSE
+    
+    SELECT
+      NULL AS id, p_user_id AS user_id,
+      1 AS pf_applicable, NULL AS pf_wage_ceiling, 12.00 AS pf_percent,
+      1 AS esi_applicable,
+      0 AS nps_applicable, 'PERCENT' AS nps_calc_type, 14.00 AS nps_percent,
+      NULL AS nps_fixed_amount, 1000.00 AS nps_minimum,
+      1 AS pt_applicable, NULL AS pt_state,
+      NULL AS created_at, NULL AS updated_at;
+  END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_employee_statutory_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_employee_statutory_save`(
+  IN p_user_id          INT,
+  IN p_pf_applicable    TINYINT,
+  IN p_pf_wage_ceiling  DECIMAL(12,2),
+  IN p_pf_percent       DECIMAL(5,2),
+  IN p_esi_applicable   TINYINT,
+  IN p_nps_applicable   TINYINT,
+  IN p_nps_calc_type    VARCHAR(10),
+  IN p_nps_percent      DECIMAL(5,2),
+  IN p_nps_fixed_amount DECIMAL(12,2),
+  IN p_nps_minimum      DECIMAL(12,2),
+  IN p_pt_applicable    TINYINT,
+  IN p_pt_state         VARCHAR(30)
+)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  START TRANSACTION;
+
+  INSERT INTO employee_statutory_settings (
+    user_id,
+    pf_applicable, pf_wage_ceiling, pf_percent,
+    esi_applicable,
+    nps_applicable, nps_calc_type, nps_percent, nps_fixed_amount, nps_minimum,
+    pt_applicable, pt_state
+  ) VALUES (
+    p_user_id,
+    IFNULL(p_pf_applicable, 1),
+    p_pf_wage_ceiling,
+    IFNULL(p_pf_percent, 12.00),
+    IFNULL(p_esi_applicable, 1),
+    IFNULL(p_nps_applicable, 0),
+    IFNULL(p_nps_calc_type, 'PERCENT'),
+    IFNULL(p_nps_percent, 14.00),
+    p_nps_fixed_amount,
+    IFNULL(p_nps_minimum, 1000.00),
+    IFNULL(p_pt_applicable, 1),
+    p_pt_state
+  )
+  ON DUPLICATE KEY UPDATE
+    pf_applicable    = IFNULL(p_pf_applicable, pf_applicable),
+    pf_wage_ceiling  = p_pf_wage_ceiling,
+    pf_percent       = IFNULL(p_pf_percent, pf_percent),
+    esi_applicable   = IFNULL(p_esi_applicable, esi_applicable),
+    nps_applicable   = IFNULL(p_nps_applicable, nps_applicable),
+    nps_calc_type    = IFNULL(p_nps_calc_type, nps_calc_type),
+    nps_percent      = IFNULL(p_nps_percent, nps_percent),
+    nps_fixed_amount = p_nps_fixed_amount,
+    nps_minimum      = IFNULL(p_nps_minimum, nps_minimum),
+    pt_applicable    = IFNULL(p_pt_applicable, pt_applicable),
+    pt_state         = p_pt_state,
+    updated_at       = NOW();
+
+  COMMIT;
+
+  CALL sp_employee_statutory_get(p_user_id);
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_entry_calculate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_entry_calculate`(IN p_run_id INT, IN p_user_id INT)
+proc_body: BEGIN
+  DECLARE v_entry_id       INT DEFAULT NULL;
+  DECLARE v_ctc_annual     DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_ctc_monthly    DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_structure_id   INT DEFAULT NULL;
+  DECLARE v_total_days     DECIMAL(5,2) DEFAULT 0;
+  DECLARE v_lop_days       DECIMAL(5,2) DEFAULT 0;
+  DECLARE v_payable_days   DECIMAL(5,2) DEFAULT 0;
+  DECLARE v_ot_hours       DECIMAL(6,2) DEFAULT 0;
+  DECLARE v_is_frozen      TINYINT(1) DEFAULT 0;
+  DECLARE v_att_exists     INT DEFAULT 0;
+  DECLARE v_run_month      TINYINT;
+  DECLARE v_run_year       SMALLINT;
+  DECLARE v_error_msg      VARCHAR(500) DEFAULT NULL;
+  DECLARE v_gross          DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_deductions     DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_employer       DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_net            DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_pf_wage        DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_esi_wage       DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_ctc1              DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_standard_esi_wage DECIMAL(12,2) DEFAULT 0;
+  DECLARE v_standard_gross    DECIMAL(12,2) DEFAULT 0;
+
+  
+  DECLARE v_pf_applicable    TINYINT DEFAULT 1;
+  DECLARE v_pf_wage_ceiling  DECIMAL(12,2) DEFAULT NULL;
+  DECLARE v_pf_percent       DECIMAL(5,2) DEFAULT 12.00;
+  DECLARE v_esi_applicable   TINYINT DEFAULT 1;
+  DECLARE v_nps_applicable   TINYINT DEFAULT 0;
+  DECLARE v_nps_calc_type    VARCHAR(10) DEFAULT 'PERCENT';
+  DECLARE v_nps_percent      DECIMAL(5,2) DEFAULT 14.00;
+  DECLARE v_nps_fixed_amount DECIMAL(12,2) DEFAULT NULL;
+  DECLARE v_nps_minimum      DECIMAL(12,2) DEFAULT 1000.00;
+  DECLARE v_pt_applicable    TINYINT DEFAULT 1;
+
+  
+  DECLARE v_comp_id        INT;
+  DECLARE v_comp_code      VARCHAR(30);
+  DECLARE v_comp_name      VARCHAR(100);
+  DECLARE v_comp_type      VARCHAR(30);
+  DECLARE v_calc_type      VARCHAR(20);
+  DECLARE v_fixed          DECIMAL(12,2);
+  DECLARE v_pct_val        DECIMAL(7,3);
+  DECLARE v_pct_of         VARCHAR(30);
+  DECLARE v_formula        TEXT;
+  DECLARE v_ov_type        VARCHAR(20);
+  DECLARE v_ov_pct         DECIMAL(7,3);
+  DECLARE v_ov_fixed       DECIMAL(12,2);
+  DECLARE v_ov_formula     TEXT;
+  DECLARE v_is_prorated    TINYINT(1);
+  DECLARE v_incl_pf        TINYINT(1);
+  DECLARE v_incl_esi       TINYINT(1);
+  DECLARE v_disp_order     INT;
+  DECLARE v_full_amount    DECIMAL(12,2);
+  DECLARE v_amount         DECIMAL(12,2);
+  DECLARE v_base_val       DECIMAL(14,4);
+  DECLARE v_eval_result    DECIMAL(14,4);
+  DECLARE done             INT DEFAULT 0;
+
+  DECLARE cur_earning CURSOR FOR
+    SELECT pc.component_id, pc.code, pc.name, pc.type, pc.calc_type,
+           pc.fixed_amount, pc.percent_value, pc.percent_of_code, pc.formula,
+           eco.override_type,
+           eco.override_percentage,
+           COALESCE(eco.override_amount, sc.override_fixed) AS override_fixed,
+           COALESCE(eco.override_formula, sc.override_formula) AS override_formula,
+           pc.is_prorated, pc.include_in_pf, pc.include_in_esi, sc.display_order
+    FROM structure_components sc
+    JOIN pay_components pc ON pc.component_id = sc.component_id
+    LEFT JOIN employee_component_overrides eco
+      ON eco.component_id = pc.component_id AND eco.user_id = p_user_id AND eco.is_active = 1
+    WHERE sc.structure_id = v_structure_id AND pc.is_active = 1
+      AND pc.type = 'EARNING'
+      AND (pc.calculation_scope IS NULL OR pc.calculation_scope <> 'AGGREGATE')
+    ORDER BY pc.calc_order, sc.display_order;
+
+  DECLARE cur_deduct CURSOR FOR
+    SELECT pc.component_id, pc.code, pc.name, pc.type, pc.calc_type,
+           pc.fixed_amount, pc.percent_value, pc.percent_of_code, pc.formula,
+           eco.override_type,
+           eco.override_percentage,
+           COALESCE(eco.override_amount, sc.override_fixed) AS override_fixed,
+           COALESCE(eco.override_formula, sc.override_formula) AS override_formula,
+           pc.is_prorated, pc.include_in_pf, pc.include_in_esi, sc.display_order
+    FROM structure_components sc
+    JOIN pay_components pc ON pc.component_id = sc.component_id
+    LEFT JOIN employee_component_overrides eco
+      ON eco.component_id = pc.component_id AND eco.user_id = p_user_id AND eco.is_active = 1
+    WHERE sc.structure_id = v_structure_id AND pc.is_active = 1
+      AND pc.type IN ('DEDUCTION','EMPLOYER_CONTRIBUTION')
+      AND (pc.calculation_scope IS NULL OR pc.calculation_scope <> 'AGGREGATE')
+    ORDER BY pc.calc_order, sc.display_order;
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  
+  
+  
+  SET @v_doj = NULL;
+  SET @v_join_day = NULL;
+  SET @v_active_days = NULL;
+  SET @v_pending_other_earnings = 0;
+  SET @v_override_other_earnings = 0;
+  SET @v_prorated_salary = 0;
+  SET @v_fixed_er_cost = 0;
+  SET @v_esi_rate_dec = 0;
+  SET @v_target_gross = 0;
+  SET @v_target_gross_temp = 0;
+  SET @v_emp_esi_est = 0;
+  SET @v_prev_earnings = 0;
+  SET @v_er_nps_est = 0;
+  SET @v_emp_epf_est = 0;
+  SET @v_er_admin_est = 0;
+  SET @v_ctc_variance = 0;
+  SET @v_total_ctc = 0;
+
+  
+  SELECT month, year INTO v_run_month, v_run_year
+  FROM payroll_runs WHERE run_id = p_run_id;
+
+  
+  SELECT s.ctc_annual, s.structure_id
+  INTO v_ctc_annual, v_structure_id
+  FROM salaries s
+  WHERE s.user_id = p_user_id AND s.is_current = 1
+  LIMIT 1;
+
+  SET v_ctc_monthly = ROUND(IFNULL(v_ctc_annual, 0) / 12, 2);
+
+  
+  SELECT
+    pf_applicable, pf_wage_ceiling, pf_percent,
+    esi_applicable,
+    nps_applicable, nps_calc_type, nps_percent, nps_fixed_amount, nps_minimum,
+    pt_applicable
+  INTO
+    v_pf_applicable, v_pf_wage_ceiling, v_pf_percent,
+    v_esi_applicable,
+    v_nps_applicable, v_nps_calc_type, v_nps_percent, v_nps_fixed_amount, v_nps_minimum,
+    v_pt_applicable
+  FROM employee_statutory_settings
+  WHERE user_id = p_user_id
+  LIMIT 1;
+  
+  SET done = 0;
+
+  
+  IF v_pf_applicable   IS NULL THEN SET v_pf_applicable   = 1;         END IF;
+  IF v_pf_percent      IS NULL THEN SET v_pf_percent      = 12.00;     END IF;
+  IF v_esi_applicable  IS NULL THEN SET v_esi_applicable  = 1;         END IF;
+  IF v_nps_applicable  IS NULL THEN SET v_nps_applicable  = 0;         END IF;
+  IF v_nps_calc_type   IS NULL THEN SET v_nps_calc_type   = 'PERCENT'; END IF;
+  IF v_nps_percent     IS NULL THEN SET v_nps_percent     = 14.00;     END IF;
+  IF v_nps_minimum     IS NULL THEN SET v_nps_minimum     = 1000.00;   END IF;
+  IF v_pt_applicable   IS NULL THEN SET v_pt_applicable   = 1;         END IF;
+
+  
+  IF EXISTS (
+    SELECT 1 FROM payroll_attendance_summary pas
+    JOIN userdetails u ON u.emp_code = pas.emp_id
+    WHERE u.user_id = p_user_id AND pas.payroll_month = v_run_month AND pas.payroll_year = v_run_year
+  ) THEN
+    SELECT COUNT(*), MAX(total_days), MAX(unpaid_days), MAX(overtime_hours), MAX(IF(is_finalized = 'Y', 1, 0))
+    INTO v_att_exists, v_total_days, v_lop_days, v_ot_hours, v_is_frozen
+    FROM payroll_attendance_summary pas
+    JOIN userdetails u ON u.emp_code = pas.emp_id
+    WHERE u.user_id = p_user_id AND pas.payroll_month = v_run_month AND pas.payroll_year = v_run_year;
+  ELSE
+    SELECT COUNT(*), MAX(total_days), MAX(lop_days), MAX(overtime_hours), MAX(is_frozen)
+    INTO v_att_exists, v_total_days, v_lop_days, v_ot_hours, v_is_frozen
+    FROM payroll_attendance
+    WHERE user_id = p_user_id AND month = v_run_month AND year = v_run_year;
+  END IF;
+  SET done = 0;
+
+  
+  IF v_total_days <= 0 OR v_total_days IS NULL THEN
+    SET v_total_days = 30.00;
+  END IF;
+
+  
+  SELECT date_of_joining INTO @v_doj FROM userdetails WHERE user_id = p_user_id;
+  SET done = 0;
+  IF @v_doj IS NOT NULL AND @v_doj > STR_TO_DATE(CONCAT(v_run_year,'-',v_run_month,'-01'), '%Y-%c-%d') THEN
+    SET @v_join_day = DAY(@v_doj);
+    SET @v_active_days = GREATEST(v_total_days - (@v_join_day - 1), 0);
+    SET v_payable_days = GREATEST(ROUND(@v_active_days - v_lop_days, 2), 0);
+  ELSE
+    SET v_payable_days = GREATEST(ROUND(v_total_days - v_lop_days, 2), 0);
+  END IF;
+
+  
+  SET v_payable_days = LEAST(v_payable_days, v_total_days);
+
+  
+  IF v_structure_id IS NULL THEN
+    SET v_error_msg = 'No salary structure assigned to this employee';
+  ELSEIF v_att_exists = 0 THEN
+    SET v_error_msg = 'No attendance record found for this period';
+  ELSEIF v_is_frozen = 0 THEN
+    SET v_error_msg = 'Attendance is not frozen for this period';
+  END IF;
+
+  IF v_error_msg IS NOT NULL THEN
+    INSERT INTO payroll_entries
+      (run_id, user_id, structure_id, ctc_monthly, total_days, payable_days, lop_days,
+       overtime_hours, gross_earnings, total_deductions, employer_contribution, net_pay, status, error_message)
+    VALUES
+      (p_run_id, p_user_id, v_structure_id, v_ctc_monthly, v_total_days, v_payable_days, v_lop_days,
+       v_ot_hours, 0, 0, 0, 0, 'ERROR', v_error_msg)
+    ON DUPLICATE KEY UPDATE
+      status = 'ERROR', error_message = v_error_msg,
+      gross_earnings = 0, total_deductions = 0, employer_contribution = 0, net_pay = 0;
+    LEAVE proc_body;
+  END IF;
+
+  
+  INSERT INTO payroll_entries
+    (run_id, user_id, structure_id, ctc_monthly, total_days, payable_days, lop_days, overtime_hours,
+     gross_earnings, total_deductions, employer_contribution, net_pay, status)
+  VALUES
+    (p_run_id, p_user_id, v_structure_id, v_ctc_monthly, v_total_days, v_payable_days, v_lop_days,
+     v_ot_hours, 0, 0, 0, 0, 'CALCULATED')
+  ON DUPLICATE KEY UPDATE
+    structure_id = v_structure_id, ctc_monthly = v_ctc_monthly,
+    total_days = v_total_days, payable_days = v_payable_days, lop_days = v_lop_days,
+    overtime_hours = v_ot_hours, status = 'CALCULATED', error_message = NULL, hold_reason = NULL;
+
+  SELECT entry_id INTO v_entry_id
+  FROM payroll_entries WHERE run_id = p_run_id AND user_id = p_user_id;
+  SET done = 0;
+
+  
+  DELETE FROM payroll_entry_lines WHERE entry_id = v_entry_id;
+
+  
+  SET @v_pending_other_earnings = 0;
+  SELECT COALESCE(SUM(pi.amount), 0) INTO @v_pending_other_earnings
+  FROM payroll_inputs pi
+  JOIN pay_components pc ON pc.component_id = pi.component_id
+  WHERE pi.user_id = p_user_id AND pi.month = v_run_month AND pi.year = v_run_year
+    AND pi.status = 'PENDING' AND pc.code = 'OTHER_EARNINGS';
+  SET done = 0;
+
+  SET @v_override_other_earnings = 0;
+  SELECT COALESCE(eco.override_amount, 0) INTO @v_override_other_earnings
+  FROM employee_component_overrides eco
+  JOIN pay_components pc ON pc.component_id = eco.component_id
+  WHERE eco.user_id = p_user_id AND eco.is_active = 1 AND pc.code = 'OTHER_EARNINGS'
+  LIMIT 1;
+  SET done = 0;
+
+  
+  IF v_total_days > 0 THEN
+    SET @v_prorated_salary = ROUND(v_ctc_monthly * v_payable_days / v_total_days, 2);
+  ELSE
+    SET @v_prorated_salary = v_ctc_monthly;
+  END IF;
+
+  SET v_ctc1 = @v_prorated_salary + IFNULL(@v_pending_other_earnings, 0) + IFNULL(@v_override_other_earnings, 0);
+
+  
+  IF v_payable_days = 0 AND IFNULL(@v_pending_other_earnings, 0) = 0 THEN
+    UPDATE payroll_entries SET
+      gross_earnings = 0, total_deductions = 0, employer_contribution = 0, net_pay = 0,
+      status = 'CALCULATED', error_message = NULL
+    WHERE entry_id = v_entry_id;
+    DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+    LEAVE proc_body;
+  END IF;
+
+  
+  DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+  CREATE TEMPORARY TABLE tmp_vars (code VARCHAR(40) PRIMARY KEY, val DECIMAL(14,4));
+  INSERT INTO tmp_vars VALUES
+    ('CTC_MONTHLY',       v_ctc_monthly),
+    ('CTC',               v_ctc_monthly),
+    ('CTC1',              v_ctc1),
+    ('TOTAL_DAYS',        v_total_days),
+    ('PAYABLE_DAYS',      v_payable_days),
+    ('LOP_DAYS',          v_lop_days),
+    ('OT_HOURS',          v_ot_hours),
+    ('GROSS',             0),
+    ('STANDARD_GROSS',    0),
+    ('PF_WAGE',           0),
+    ('ESI_WAGE',          0),
+    ('STANDARD_ESI_WAGE', 0),
+    ('IS_ESI_ELIGIBLE',   0),
+    ('OTHER_EARNINGS',    IFNULL(@v_pending_other_earnings, 0) + IFNULL(@v_override_other_earnings, 0));
+
+  
+  INSERT INTO tmp_vars (code, val)
+  SELECT code, 0 FROM pay_components WHERE is_active = 1
+  ON DUPLICATE KEY UPDATE val = tmp_vars.val;
+
+  
+  SET done = 0;
+  OPEN cur_earning;
+  earn_loop: LOOP
+    FETCH cur_earning INTO v_comp_id, v_comp_code, v_comp_name, v_comp_type, v_calc_type,
+      v_fixed, v_pct_val, v_pct_of, v_formula, v_ov_type, v_ov_pct, v_ov_fixed, v_ov_formula,
+      v_is_prorated, v_incl_pf, v_incl_esi, v_disp_order;
+    IF done THEN LEAVE earn_loop; END IF;
+
+    IF v_ov_type = 'PERCENTAGE' AND v_ov_pct IS NOT NULL THEN
+      SET v_base_val = 0;
+      IF v_pct_of = 'CTC1' THEN
+        SET v_base_val = @v_prorated_salary;
+      ELSE
+        SELECT val INTO v_base_val FROM tmp_vars WHERE code = IFNULL(NULLIF(v_pct_of, ''), 'CTC') LIMIT 1;
+      END IF;
+      IF v_base_val IS NULL OR v_base_val = 0 THEN
+        SELECT val INTO v_base_val FROM tmp_vars WHERE code = 'CTC_MONTHLY' LIMIT 1;
+      END IF;
+      SET done = 0;
+      SET v_full_amount = ROUND(v_ov_pct / 100 * IFNULL(v_base_val, 0), 2);
+    ELSEIF v_ov_type = 'FIXED' AND v_ov_fixed IS NOT NULL THEN
+      SET v_full_amount = ROUND(v_ov_fixed, 2);
+    ELSEIF v_ov_type = 'FORMULA' AND v_ov_formula IS NOT NULL THEN
+      CALL sp_eval_formula(v_ov_formula, v_eval_result);
+      SET done = 0;
+      SET v_full_amount = ROUND(v_eval_result, 2);
+    ELSE
+      IF v_calc_type = 'FIXED' THEN
+        SET v_full_amount = ROUND(IFNULL(v_ov_fixed, IFNULL(v_fixed, 0)), 2);
+      ELSEIF v_calc_type = 'PERCENT_OF' THEN
+        SET v_base_val = 0;
+        IF v_pct_of = 'CTC1' THEN
+          SET v_base_val = @v_prorated_salary;
+        ELSE
+          SELECT val INTO v_base_val FROM tmp_vars WHERE code = v_pct_of LIMIT 1;
+        END IF;
+        IF v_base_val IS NULL OR v_base_val = 0 THEN
+          SELECT val INTO v_base_val FROM tmp_vars WHERE code = 'CTC_MONTHLY' LIMIT 1;
+        END IF;
+        SET done = 0;
+        SET v_full_amount = ROUND(v_pct_val / 100 * IFNULL(v_base_val, 0), 2);
+      ELSE
+        SET v_formula = IFNULL(v_ov_formula, v_formula);
+        CALL sp_eval_formula(v_formula, v_eval_result);
+        SET done = 0;
+        SET v_full_amount = ROUND(v_eval_result, 2);
+      END IF;
+    END IF;
+
+    
+    IF v_comp_code = 'OTHERS' AND (v_ov_type IS NULL OR (v_ov_fixed IS NULL AND v_ov_pct IS NULL AND v_ov_formula IS NULL)) THEN
+      SET @v_fixed_er_cost = @v_er_nps_est + @v_emp_epf_est + @v_er_admin_est;
+
+      
+      IF v_esi_applicable = 1 AND ((v_ctc_monthly - @v_fixed_er_cost) / 1.0325) <= 21000.00 THEN
+        SET @v_esi_rate_dec = 0.0325;
+        SET @v_target_gross = ROUND((v_ctc1 - @v_fixed_er_cost) / (1.0 + @v_esi_rate_dec), 2);
+        SET @v_emp_esi_est = ROUND(v_ctc1 - @v_fixed_er_cost - @v_target_gross, 2);
+      ELSE
+        SET @v_esi_rate_dec = 0.0000;
+        SET @v_target_gross = ROUND(v_ctc1 - @v_fixed_er_cost, 2);
+        SET @v_emp_esi_est = 0.00;
+      END IF;
+
+      INSERT INTO tmp_vars (code, val) VALUES ('EMP_ESI', @v_emp_esi_est)
+      ON DUPLICATE KEY UPDATE val = @v_emp_esi_est;
+
+      SELECT COALESCE(SUM(val), 0) INTO @v_prev_earnings
+      FROM tmp_vars
+      WHERE code IN ('BASIC', 'HRA', 'MEDICAL', 'CONVEYANCE', 'OTHER_EARNINGS');
+      SET done = 0;
+
+      SET v_full_amount = ROUND(@v_target_gross - @v_prev_earnings, 2);
+      IF v_full_amount < 0 THEN
+        SET v_error_msg = CONCAT('Fixed employer contributions and earnings (₹', ROUND(@v_prev_earnings + @v_fixed_er_cost, 2), ') exceed available CTC (₹', v_ctc1, ')');
+      END IF;
+    END IF;
+
+    IF v_total_days > 0 AND v_is_prorated = 1 AND IFNULL(v_pct_of, '') <> 'CTC1' THEN
+      SET v_amount = ROUND(v_full_amount * v_payable_days / v_total_days, 2);
+    ELSE
+      SET v_amount = v_full_amount;
+    END IF;
+
+    SET v_gross = v_gross + v_amount;
+
+    INSERT INTO tmp_vars (code, val) VALUES (v_comp_code, v_full_amount)
+    ON DUPLICATE KEY UPDATE val = v_full_amount;
+
+    
+    IF v_comp_code = 'BASIC' THEN
+      
+      IF v_nps_applicable = 1 THEN
+        IF v_nps_calc_type = 'FIXED' THEN
+          SET @v_er_nps_est = IFNULL(v_nps_fixed_amount, 0);
+        ELSE
+          SET @v_er_nps_est = GREATEST(ROUND(v_full_amount * (v_nps_percent / 100.0), 2), v_nps_minimum);
+        END IF;
+      ELSE
+        SET @v_er_nps_est = 0;
+      END IF;
+
+      
+      IF v_pf_applicable = 1 THEN
+        IF v_pf_wage_ceiling IS NOT NULL AND v_pf_wage_ceiling = 0 THEN
+          
+          SET @v_emp_epf_est = ROUND(v_full_amount * (v_pf_percent / 100.0), 2);
+          SET @v_er_admin_est = ROUND(v_full_amount * 0.01, 2);
+        ELSEIF v_pf_wage_ceiling IS NOT NULL THEN
+          
+          SET @v_emp_epf_est = ROUND(LEAST(v_full_amount, v_pf_wage_ceiling) * (v_pf_percent / 100.0), 2);
+          SET @v_er_admin_est = LEAST(ROUND(v_full_amount * 0.01, 2), 250.00);
+        ELSE
+          
+          SET @v_emp_epf_est = LEAST(ROUND(v_full_amount * (v_pf_percent / 100.0), 2), 3000.00);
+          SET @v_er_admin_est = LEAST(ROUND(v_full_amount * 0.01, 2), 250.00);
+        END IF;
+      ELSE
+        SET @v_emp_epf_est  = 0;
+        SET @v_er_admin_est = 0;
+      END IF;
+
+      
+      IF v_esi_applicable = 1 AND ((v_ctc_monthly - (@v_er_nps_est + @v_emp_epf_est + @v_er_admin_est)) / 1.0325) <= 21000.00 THEN
+        SET @v_target_gross_temp = ROUND((v_ctc1 - (@v_er_nps_est + @v_emp_epf_est + @v_er_admin_est)) / 1.0325, 2);
+        SET @v_emp_esi_est = ROUND(v_ctc1 - (@v_er_nps_est + @v_emp_epf_est + @v_er_admin_est) - @v_target_gross_temp, 2);
+      ELSE
+        SET @v_emp_esi_est = 0;
+      END IF;
+
+      INSERT INTO tmp_vars (code, val) VALUES
+        ('ER_NPS',   @v_er_nps_est),
+        ('EMP_EPF',  @v_emp_epf_est),
+        ('ER_ADMIN', @v_er_admin_est),
+        ('EMP_ESI',  @v_emp_esi_est)
+      ON DUPLICATE KEY UPDATE val = VALUES(val);
+    END IF;
+
+    INSERT INTO payroll_entry_lines
+      (entry_id, component_id, component_code, component_name, type, full_amount, amount, source, display_order)
+    VALUES
+      (v_entry_id, v_comp_id, v_comp_code, v_comp_name, 'EARNING', v_full_amount, v_amount, 'STRUCTURE', v_disp_order);
+
+    UPDATE tmp_vars SET val = val + v_amount WHERE code = 'GROSS';
+  END LOOP;
+  CLOSE cur_earning;
+
+  
+  BEGIN
+    DECLARE v_inp_id    INT;
+    DECLARE v_inp_cid   INT;
+    DECLARE v_inp_code  VARCHAR(30);
+    DECLARE v_inp_name  VARCHAR(100);
+    DECLARE v_inp_type  VARCHAR(30);
+    DECLARE v_inp_amt   DECIMAL(12,2);
+    DECLARE done2       INT DEFAULT 0;
+    DECLARE cur_inp_e CURSOR FOR
+      SELECT pi.input_id, pi.component_id, pc.code, pc.name, pc.type, pi.amount
+      FROM payroll_inputs pi
+      JOIN pay_components pc ON pc.component_id = pi.component_id
+      WHERE pi.user_id = p_user_id AND pi.month = v_run_month
+        AND pi.year = v_run_year AND pi.status = 'PENDING'
+        AND pc.type = 'EARNING';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done2 = 1;
+    OPEN cur_inp_e;
+    inp_e_loop: LOOP
+      FETCH cur_inp_e INTO v_inp_id, v_inp_cid, v_inp_code, v_inp_name, v_inp_type, v_inp_amt;
+      IF done2 THEN LEAVE inp_e_loop; END IF;
+      INSERT INTO payroll_entry_lines
+        (entry_id, component_id, component_code, component_name, type, full_amount, amount, source, display_order)
+      VALUES
+        (v_entry_id, v_inp_cid, v_inp_code, v_inp_name, 'EARNING', v_inp_amt, v_inp_amt, 'INPUT', 999);
+      UPDATE tmp_vars SET val = val + v_inp_amt WHERE code = 'GROSS';
+      SET v_gross = v_gross + v_inp_amt;
+      UPDATE payroll_inputs SET status = 'APPLIED' WHERE input_id = v_inp_id;
+    END LOOP;
+    CLOSE cur_inp_e;
+  END;
+
+  
+  SELECT COALESCE(SUM(pel.amount), 0) INTO v_pf_wage
+  FROM payroll_entry_lines pel
+  JOIN pay_components pc ON pc.code = pel.component_code AND pc.include_in_pf = 1
+  WHERE pel.entry_id = v_entry_id AND pel.type = 'EARNING';
+  SET done = 0;
+
+  
+  SELECT
+    COALESCE(SUM(pel.amount), 0),
+    COALESCE(SUM(pel.full_amount), 0)
+  INTO v_esi_wage, v_standard_esi_wage
+  FROM payroll_entry_lines pel
+  JOIN pay_components pc ON pc.code = pel.component_code AND pc.include_in_esi = 1
+  WHERE pel.entry_id = v_entry_id AND pel.type = 'EARNING';
+  SET done = 0;
+
+  
+  SELECT COALESCE(SUM(pel.full_amount), 0)
+  INTO v_standard_gross
+  FROM payroll_entry_lines pel
+  WHERE pel.entry_id = v_entry_id AND pel.type = 'EARNING';
+  SET done = 0;
+
+  UPDATE tmp_vars SET val = v_pf_wage        WHERE code = 'PF_WAGE';
+  UPDATE tmp_vars SET val = v_esi_wage        WHERE code = 'ESI_WAGE';
+  UPDATE tmp_vars SET val = v_standard_esi_wage WHERE code = 'STANDARD_ESI_WAGE';
+  UPDATE tmp_vars SET val = v_standard_gross  WHERE code = 'STANDARD_GROSS';
+  
+  UPDATE tmp_vars
+  SET val = IF(v_esi_applicable = 1 AND v_standard_esi_wage <= 21000, 1, 0)
+  WHERE code = 'IS_ESI_ELIGIBLE';
+
+  
+  SET done = 0;
+  OPEN cur_deduct;
+  deduct_loop: LOOP
+    FETCH cur_deduct INTO v_comp_id, v_comp_code, v_comp_name, v_comp_type, v_calc_type,
+      v_fixed, v_pct_val, v_pct_of, v_formula, v_ov_type, v_ov_pct, v_ov_fixed, v_ov_formula,
+      v_is_prorated, v_incl_pf, v_incl_esi, v_disp_order;
+    IF done THEN LEAVE deduct_loop; END IF;
+
+    IF v_ov_type = 'PERCENTAGE' AND v_ov_pct IS NOT NULL THEN
+      SET v_base_val = 0;
+      IF v_pct_of = 'CTC1' THEN
+        SET v_base_val = @v_prorated_salary;
+      ELSE
+        SELECT val INTO v_base_val FROM tmp_vars WHERE code = IFNULL(NULLIF(v_pct_of, ''), 'CTC') LIMIT 1;
+      END IF;
+      IF v_base_val IS NULL OR v_base_val = 0 THEN
+        SELECT val INTO v_base_val FROM tmp_vars WHERE code = 'CTC_MONTHLY' LIMIT 1;
+      END IF;
+      SET done = 0;
+      SET v_full_amount = ROUND(v_ov_pct / 100 * IFNULL(v_base_val, 0), 2);
+    ELSEIF v_ov_type = 'FIXED' AND v_ov_fixed IS NOT NULL THEN
+      SET v_full_amount = ROUND(v_ov_fixed, 2);
+    ELSEIF v_ov_type = 'FORMULA' AND v_ov_formula IS NOT NULL THEN
+      CALL sp_eval_formula(v_ov_formula, v_eval_result);
+      SET done = 0;
+      SET v_full_amount = ROUND(v_eval_result, 2);
+    ELSE
+      IF v_calc_type = 'FIXED' THEN
+        SET v_full_amount = ROUND(IFNULL(v_ov_fixed, IFNULL(v_fixed, 0)), 2);
+      ELSEIF v_calc_type = 'PERCENT_OF' THEN
+        SET v_base_val = 0;
+        IF v_pct_of = 'CTC1' THEN
+          SET v_base_val = @v_prorated_salary;
+        ELSE
+          SELECT val INTO v_base_val FROM tmp_vars WHERE code = v_pct_of LIMIT 1;
+        END IF;
+        IF v_base_val IS NULL OR v_base_val = 0 THEN
+          SELECT val INTO v_base_val FROM tmp_vars WHERE code = 'CTC_MONTHLY' LIMIT 1;
+        END IF;
+        SET done = 0;
+        SET v_full_amount = ROUND(v_pct_val / 100 * IFNULL(v_base_val, 0), 2);
+      ELSE
+        SET v_formula = IFNULL(v_ov_formula, v_formula);
+        CALL sp_eval_formula(v_formula, v_eval_result);
+        SET done = 0;
+        SET v_full_amount = ROUND(v_eval_result, 2);
+      END IF;
+    END IF;
+
+    
+    IF v_ov_type IS NULL OR (v_ov_fixed IS NULL AND v_ov_pct IS NULL AND v_ov_formula IS NULL) THEN
+      IF v_comp_code = 'EMP_ESI' THEN
+        SET v_full_amount = IFNULL(@v_emp_esi_est, 0);
+      ELSEIF v_comp_code = 'EE_ESI' THEN
+        SET v_full_amount = IF(v_esi_applicable = 1 AND v_standard_esi_wage <= 21000, ROUND(v_gross * 0.0075, 2), 0);
+      ELSEIF v_comp_code IN ('EE_EPF', 'EMP_EPF') THEN
+        SET v_full_amount = IF(v_pf_applicable = 1, IFNULL(@v_emp_epf_est, 0), 0);
+      ELSEIF v_comp_code = 'ER_ADMIN' THEN
+        SET v_full_amount = IF(v_pf_applicable = 1, IFNULL(@v_er_admin_est, 0), 0);
+      ELSEIF v_comp_code = 'PT' THEN
+        SET v_full_amount = IF(v_pt_applicable = 1, IF(v_gross > 20000, 200, IF(v_gross > 15000, 150, 0)), 0);
+      ELSEIF v_comp_code = 'ER_NPS' THEN
+        SET v_full_amount = IF(v_nps_applicable = 1, IFNULL(@v_er_nps_est, 0), 0);
+      END IF;
+    ELSE
+      
+      IF v_pf_applicable = 0 AND v_comp_code IN ('EE_EPF', 'EMP_EPF', 'ER_ADMIN') THEN
+        SET v_full_amount = 0;
+      END IF;
+      IF v_esi_applicable = 0 AND v_comp_code IN ('EE_ESI', 'EMP_ESI') THEN
+        SET v_full_amount = 0;
+      END IF;
+      IF v_comp_code = 'ER_NPS' AND v_nps_applicable = 0 THEN
+        SET v_full_amount = 0;
+      END IF;
+      IF v_comp_code = 'PT' AND v_pt_applicable = 0 THEN
+        SET v_full_amount = 0;
+      END IF;
+    END IF;
+
+    SET v_amount = v_full_amount;  
+
+    INSERT INTO tmp_vars (code, val) VALUES (v_comp_code, v_full_amount)
+    ON DUPLICATE KEY UPDATE val = v_full_amount;
+
+    INSERT INTO payroll_entry_lines
+      (entry_id, component_id, component_code, component_name, type, full_amount, amount, source, display_order)
+    VALUES
+      (v_entry_id, v_comp_id, v_comp_code, v_comp_name, v_comp_type, v_full_amount, v_amount, 'STRUCTURE', v_disp_order);
+  END LOOP;
+  CLOSE cur_deduct;
+
+  
+  BEGIN
+    DECLARE v_inp_id2   INT;
+    DECLARE v_inp_cid2  INT;
+    DECLARE v_inp_code2 VARCHAR(30);
+    DECLARE v_inp_name2 VARCHAR(100);
+    DECLARE v_inp_type2 VARCHAR(30);
+    DECLARE v_inp_amt2  DECIMAL(12,2);
+    DECLARE done3       INT DEFAULT 0;
+    DECLARE cur_inp_d CURSOR FOR
+      SELECT pi.input_id, pi.component_id, pc.code, pc.name, pc.type, pi.amount
+      FROM payroll_inputs pi
+      JOIN pay_components pc ON pc.component_id = pi.component_id
+      WHERE pi.user_id = p_user_id AND pi.month = v_run_month
+        AND pi.year = v_run_year AND pi.status = 'PENDING'
+        AND pc.type = 'DEDUCTION';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done3 = 1;
+    OPEN cur_inp_d;
+    inp_d_loop: LOOP
+      FETCH cur_inp_d INTO v_inp_id2, v_inp_cid2, v_inp_code2, v_inp_name2, v_inp_type2, v_inp_amt2;
+      IF done3 THEN LEAVE inp_d_loop; END IF;
+      INSERT INTO payroll_entry_lines
+        (entry_id, component_id, component_code, component_name, type, full_amount, amount, source, display_order)
+      VALUES
+        (v_entry_id, v_inp_cid2, v_inp_code2, v_inp_name2, 'DEDUCTION', v_inp_amt2, v_inp_amt2, 'INPUT', 998);
+      UPDATE payroll_inputs SET status = 'APPLIED' WHERE input_id = v_inp_id2;
+    END LOOP;
+    CLOSE cur_inp_d;
+  END;
+
+  
+  SELECT COALESCE(SUM(CASE WHEN type = 'EARNING'               THEN amount ELSE 0 END), 0),
+         COALESCE(SUM(CASE WHEN type = 'DEDUCTION'             THEN amount ELSE 0 END), 0),
+         COALESCE(SUM(CASE WHEN type = 'EMPLOYER_CONTRIBUTION' THEN amount ELSE 0 END), 0)
+  INTO v_gross, v_deductions, v_employer
+  FROM payroll_entry_lines WHERE entry_id = v_entry_id;
+
+  SET v_net = ROUND(v_gross - v_deductions, 2);
+  SET @v_total_ctc = ROUND(v_gross + v_employer, 2);
+  SET @v_ctc_variance = ROUND(v_ctc1 - @v_total_ctc, 2);
+
+  IF v_error_msg IS NOT NULL THEN
+    UPDATE payroll_entries SET
+      gross_earnings = v_gross, total_deductions = v_deductions,
+      employer_contribution = v_employer, net_pay = v_net,
+      status = 'ERROR', error_message = v_error_msg
+    WHERE entry_id = v_entry_id;
+  ELSEIF v_net < 0 THEN
+    UPDATE payroll_entries SET
+      gross_earnings = v_gross, total_deductions = v_deductions,
+      employer_contribution = v_employer, net_pay = v_net,
+      status = 'ERROR', error_message = 'Negative net pay'
+    WHERE entry_id = v_entry_id;
+  ELSEIF ABS(@v_ctc_variance) > 0.05 THEN
+    UPDATE payroll_entries SET
+      gross_earnings = v_gross, total_deductions = v_deductions,
+      employer_contribution = v_employer, net_pay = v_net,
+      status = 'ERROR', error_message = CONCAT('CTC variance detected: ₹', @v_ctc_variance)
+    WHERE entry_id = v_entry_id;
+  ELSE
+    UPDATE payroll_entries SET
+      gross_earnings = v_gross, total_deductions = v_deductions,
+      employer_contribution = v_employer, net_pay = v_net,
+      status = 'CALCULATED', error_message = NULL
+    WHERE entry_id = v_entry_id;
+  END IF;
+
+  DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+END proc_body ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_entry_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_entry_get`(IN p_entry_id INT)
+BEGIN
+  
+  SELECT pe.entry_id, pe.run_id, pe.user_id, u.emp_code, u.full_name, u.department,
+         pe.structure_id, pe.ctc_monthly, pe.total_days, pe.payable_days, pe.lop_days,
+         pe.overtime_hours, pe.gross_earnings, pe.total_deductions,
+         pe.employer_contribution, pe.net_pay, pe.status, pe.hold_reason, pe.error_message
+  FROM   payroll_entries pe
+  JOIN   userdetails u ON u.user_id = pe.user_id
+  WHERE  pe.entry_id = p_entry_id;
+
+  
+  SELECT line_id, entry_id, component_id, component_code, component_name,
+         type, full_amount, amount, source, display_order
+  FROM   payroll_entry_lines
+  WHERE  entry_id = p_entry_id
+  ORDER BY display_order, line_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_entry_hold` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_entry_hold`(IN p_entry_id INT, IN p_reason VARCHAR(255))
+BEGIN
+  DECLARE v_run_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  SELECT pr.status INTO v_run_status
+  FROM payroll_runs pr JOIN payroll_entries pe ON pe.run_id = pr.run_id
+  WHERE pe.entry_id = p_entry_id;
+
+  IF v_run_status IN ('APPROVED','LOCKED','PAID') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot hold entry: run is already APPROVED or later';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_entries SET status = 'ON_HOLD', hold_reason = p_reason
+  WHERE entry_id = p_entry_id;
+  COMMIT;
+  SELECT 'OK' AS status, 'Entry put on hold' AS message, p_entry_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_entry_release` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_entry_release`(IN p_entry_id INT)
+BEGIN
+  DECLARE v_run_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  SELECT pr.status INTO v_run_status
+  FROM payroll_runs pr JOIN payroll_entries pe ON pe.run_id = pr.run_id
+  WHERE pe.entry_id = p_entry_id;
+
+  IF v_run_status IN ('APPROVED','LOCKED','PAID') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot release entry: run is already APPROVED or later';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_entries SET status = 'CALCULATED', hold_reason = NULL
+  WHERE entry_id = p_entry_id AND status = 'ON_HOLD';
+  COMMIT;
+  SELECT 'OK' AS status, 'Entry released' AS message, p_entry_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_eval_formula` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_eval_formula`(IN p_expr TEXT, OUT p_result DECIMAL(14,4))
+BEGIN
+  DECLARE v_expr TEXT;
+  DECLARE v_code VARCHAR(40);
+  DECLARE v_val  DECIMAL(14,4);
+  DECLARE v_safe TEXT;
+  DECLARE done INT DEFAULT 0;
+
+  
+  DECLARE cur CURSOR FOR
+    SELECT code, val FROM tmp_vars ORDER BY LENGTH(code) DESC;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  SET v_expr = p_expr;
+
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO v_code, v_val;
+    IF done THEN LEAVE read_loop; END IF;
+    SET v_expr = REPLACE(v_expr, v_code, CAST(v_val AS CHAR));
+  END LOOP;
+  CLOSE cur;
+
+  
+  SET v_safe = v_expr;
+  SET v_safe = REPLACE(v_safe, 'ROUND',    '');
+  SET v_safe = REPLACE(v_safe, 'GREATEST', '');
+  SET v_safe = REPLACE(v_safe, 'LEAST',    '');
+  SET v_safe = REPLACE(v_safe, 'IF',       '');
+  SET v_safe = REPLACE(v_safe, 'CEIL',     '');
+  SET v_safe = REPLACE(v_safe, 'FLOOR',    '');
+  SET v_safe = REPLACE(v_safe, 'ABS',      '');
+  
+  SET v_safe = REGEXP_REPLACE(v_safe, '[0-9 \\.,()+\\-*/\\<>=Ee]', '');
+
+  IF LENGTH(v_safe) > 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Invalid formula: contains forbidden characters or unknown variable references';
+  END IF;
+
+  SET @_eval_expr = CONCAT('SELECT ', v_expr, ' INTO @_eval_result');
+  PREPARE _st FROM @_eval_expr;
+  EXECUTE _st;
+  DEALLOCATE PREPARE _st;
+
+  SET p_result = @_eval_result;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_formula_validate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_formula_validate`(IN p_formula TEXT)
+BEGIN
+  DECLARE v_result DECIMAL(14,4);
+
+  DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+  CREATE TEMPORARY TABLE tmp_vars (code VARCHAR(40) PRIMARY KEY, val DECIMAL(14,4));
+
+  
+  INSERT INTO tmp_vars VALUES
+    ('CTC_MONTHLY',       50000),
+    ('CTC',               50000),
+    ('CTC1',              50000),
+    ('TOTAL_DAYS',        30),
+    ('PAYABLE_DAYS',      30),
+    ('LOP_DAYS',          0),
+    ('OT_HOURS',          0),
+    ('GROSS',             50000),
+    ('STANDARD_GROSS',    50000),
+    ('PF_WAGE',           15000),
+    ('ESI_WAGE',          15000),
+    ('STANDARD_ESI_WAGE', 20000),
+    ('IS_ESI_ELIGIBLE',   1);
+
+  
+  INSERT INTO tmp_vars (code, val)
+  SELECT code,
+    CASE code
+      WHEN 'BASIC'             THEN 25000
+      WHEN 'HRA'               THEN 10000
+      WHEN 'CONVEYANCE'        THEN 1600
+      WHEN 'MEDICAL'           THEN 1250
+      WHEN 'SPECIAL'           THEN 5000
+      WHEN 'SPECIAL_ALLOWANCE' THEN 5000
+      WHEN 'OVERTIME'          THEN 0
+      WHEN 'BONUS'             THEN 0
+      WHEN 'PF_EE'             THEN 1800
+      WHEN 'ESI_EE'            THEN 112.50
+      WHEN 'PT'                THEN 200
+      WHEN 'PF_ER'             THEN 1800
+      WHEN 'ER_NPS'            THEN 3500
+      WHEN 'EMP_EPF'           THEN 1800
+      WHEN 'ER_ADMIN'          THEN 250
+      WHEN 'EMP_ESI'           THEN 487.50
+      WHEN 'ADVANCE_RECOVERY'  THEN 0
+      WHEN 'OTHERS'            THEN 4000
+      ELSE 1000
+    END
+  FROM pay_components WHERE is_active = 1
+  ON DUPLICATE KEY UPDATE val = tmp_vars.val;
+
+  CALL sp_eval_formula(p_formula, v_result);
+  DROP TEMPORARY TABLE IF EXISTS tmp_vars;
+
+  SELECT 'OK' AS status, CAST(v_result AS CHAR) AS result;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_generate_payroll_attendance` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_generate_payroll_attendance`(
+    IN p_month INT,
+    IN p_year INT,
+    IN p_admin_emp_id VARCHAR(20)
+)
+main_block: BEGIN
+
+    DECLARE done INT DEFAULT FALSE;
+
+    DECLARE v_emp_id VARCHAR(20);
+    DECLARE v_admin_category VARCHAR(20);
+    DECLARE v_audit_old JSON DEFAULT NULL;    
+    DECLARE v_audit_new JSON DEFAULT NULL;    
+    DECLARE v_audit_cycle BIGINT DEFAULT NULL;    
+
+    DECLARE v_start_date DATE;
+    DECLARE v_end_date DATE;
+    DECLARE v_month_start DATE;
+    DECLARE v_previous_month DATE;
+
+    DECLARE v_start_day INT;
+    DECLARE v_end_day INT;
+
+    DECLARE v_finalized_count INT DEFAULT 0;
+    DECLARE v_generated_count INT DEFAULT 0;
+
+    DECLARE v_total_days DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_working_days DECIMAL(5,2) DEFAULT 0;
+
+    DECLARE v_present DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_wfh DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_leave DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_holiday DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_weekoff DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_absent DECIMAL(5,2) DEFAULT 0;
+
+    DECLARE v_late INT DEFAULT 0;
+    DECLARE v_half_days DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_overtime DECIMAL(6,2) DEFAULT 0;
+
+    DECLARE v_paid DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_unpaid DECIMAL(5,2) DEFAULT 0;
+
+    DECLARE v_error_no INT DEFAULT 0;
+    DECLARE v_error_message TEXT;
+
+    
+    DECLARE emp_cursor CURSOR FOR
+        SELECT DISTINCT TRIM(emp_id)
+        FROM user_login_details
+        WHERE UPPER(TRIM(status)) = 'ACTIVE'
+          AND emp_id IS NOT NULL
+          AND TRIM(emp_id) <> ''
+        ORDER BY TRIM(emp_id);
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND
+        SET done = TRUE;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+
+        GET DIAGNOSTICS CONDITION 1
+            v_error_no = MYSQL_ERRNO,
+            v_error_message = MESSAGE_TEXT;
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            CONCAT(
+                'Database error [',
+                COALESCE(v_error_no, 0),
+                ']: ',
+                COALESCE(v_error_message, 'Unknown error')
+            ) AS message;
+
+    END;
+
+    SET time_zone = '+05:30';
+
+    
+
+    IF p_admin_emp_id IS NULL
+       OR TRIM(p_admin_emp_id) = '' THEN
+
+        SELECT
+            'N' AS status,
+            'Admin Employee ID is required.' AS message;
+
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    IF p_month IS NULL
+       OR p_month NOT BETWEEN 1 AND 12
+       OR p_year IS NULL
+       OR p_year NOT BETWEEN 1900 AND 9999 THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid payroll month or year.' AS message;
+
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    SET v_admin_category = NULL;
+
+    SELECT MAX(UPPER(TRIM(user_category)))
+    INTO v_admin_category
+    FROM user_login_details
+    WHERE emp_id = TRIM(p_admin_emp_id)
+      AND LOWER(TRIM(status)) = 'active';   
+
+    IF v_admin_category IS NULL
+       OR v_admin_category NOT IN ('ADMIN', 'HR') THEN
+
+        SELECT 'N' AS status,
+               'Access denied: only active ADMIN or HR users can generate payroll attendance.' AS message;
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    SET v_start_day = NULL;
+    SET v_end_day = NULL;
+
+    SELECT
+        payroll_cycle_start_day,
+        payroll_cycle_end_day
+    INTO
+        v_start_day,
+        v_end_day
+    FROM company_settings
+    ORDER BY id
+    LIMIT 1;
+
+    IF v_start_day IS NULL
+       OR v_end_day IS NULL
+       OR v_start_day NOT BETWEEN 1 AND 31
+       OR v_end_day NOT BETWEEN 1 AND 31 THEN
+
+        SELECT
+            'N' AS status,
+            'Invalid or missing payroll cycle settings in company_settings.'
+                AS message;
+
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    SET v_month_start = STR_TO_DATE(
+        CONCAT(p_year, '-', LPAD(p_month, 2, '0'), '-01'),
+        '%Y-%m-%d'
+    );
+
+    SET v_previous_month =
+        DATE_SUB(v_month_start, INTERVAL 1 MONTH);
+
+    IF v_start_day > v_end_day THEN
+
+        
+
+        SET v_start_date = DATE_ADD(
+            v_previous_month,
+            INTERVAL (
+                LEAST(
+                    v_start_day,
+                    DAY(LAST_DAY(v_previous_month))
+                ) - 1
+            ) DAY
+        );
+
+        SET v_end_date = DATE_ADD(
+            v_month_start,
+            INTERVAL (
+                LEAST(
+                    v_end_day,
+                    DAY(LAST_DAY(v_month_start))
+                ) - 1
+            ) DAY
+        );
+
+    ELSE
+
+        
+
+        SET v_start_date = DATE_ADD(
+            v_month_start,
+            INTERVAL (
+                LEAST(
+                    v_start_day,
+                    DAY(LAST_DAY(v_month_start))
+                ) - 1
+            ) DAY
+        );
+
+        SET v_end_date = DATE_ADD(
+            v_month_start,
+            INTERVAL (
+                LEAST(
+                    v_end_day,
+                    DAY(LAST_DAY(v_month_start))
+                ) - 1
+            ) DAY
+        );
+
+    END IF;
+
+    IF v_start_date > v_end_date THEN
+
+        SELECT
+            'N' AS status,
+            'Calculated payroll start date is after the end date.'
+                AS message;
+
+        LEAVE main_block;
+
+    END IF;
+
+    SET v_total_days =
+        DATEDIFF(v_end_date, v_start_date) + 1;
+
+    
+
+    SELECT COUNT(*)
+    INTO v_finalized_count
+    FROM payroll_attendance_summary
+    WHERE payroll_month = p_month
+      AND payroll_year = p_year
+      AND is_finalized = 'Y';
+
+    IF v_finalized_count > 0 THEN
+
+        SELECT
+            'N' AS status,
+            'Attendance is already finalized for this month and cannot be regenerated.'
+                AS message;
+
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    SET v_audit_old = hrms_audit_attendance_json(p_month, p_year);    
+    START TRANSACTION;
+
+    
+
+    DELETE FROM payroll_attendance_summary
+    WHERE payroll_month = p_month
+      AND payroll_year = p_year
+      AND (
+          is_finalized = 'N'
+          OR is_finalized IS NULL
+      );
+
+    
+
+    SET done = FALSE;
+    SET v_generated_count = 0;
+
+    OPEN emp_cursor;
+
+    read_loop: LOOP
+
+        FETCH emp_cursor INTO v_emp_id;
+
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+
+        
+
+        SET v_present = 0;
+        SET v_wfh = 0;
+        SET v_leave = 0;
+        SET v_holiday = 0;
+        SET v_weekoff = 0;
+        SET v_absent = 0;
+
+        SET v_late = 0;
+        SET v_half_days = 0;
+        SET v_overtime = 0;
+
+        SET v_paid = 0;
+        SET v_unpaid = 0;
+
+        
+
+        SELECT
+            
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status))
+                         IN ('PRESENT', 'LATE')
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0),
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status)) = 'WFH'
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0),
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status))
+                         IN ('LEAVE', 'PL', 'SL', 'CL', 'ML')
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0),
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status)) = 'HOLIDAY'
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0),
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status))
+                         IN ('WEEKOFF', 'WEEKLY_OFF')
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0),
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status))
+                         IN ('ABSENT', 'A', 'LOP')
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0),
+
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(TRIM(status)) = 'LATE'
+                    THEN 1
+                    ELSE 0
+                END
+            ), 0)
+
+        INTO
+            v_present,
+            v_wfh,
+            v_leave,
+            v_holiday,
+            v_weekoff,
+            v_absent,
+            v_late
+
+        FROM attendance
+        WHERE emp_id = v_emp_id
+          AND attendance_date BETWEEN v_start_date AND v_end_date;
+
+        
+
+        SET v_working_days = GREATEST(
+            v_total_days - v_holiday - v_weekoff,
+            0
+        );
+
+        
+
+        SET v_paid =
+            v_present
+            + v_wfh
+            + v_leave
+            + v_holiday
+            + v_weekoff;
+
+        SET v_unpaid = v_absent;
+
+        
+
+        SET v_half_days = 0;
+        SET v_overtime = 0;
+
+        
+
+        INSERT INTO payroll_attendance_summary (
+            emp_id,
+            payroll_month,
+            payroll_year,
+            total_days,
+            working_days,
+            present_days,
+            wfh_days,
+            leave_days,
+            holiday_days,
+            weekly_off_days,
+            absent_days,
+            paid_days,
+            unpaid_days,
+            late_count,
+            half_days,
+            overtime_hours,
+            is_finalized,
+            created_at,
+    updated_at
+        )
+        VALUES (
+            v_emp_id,
+            p_month,
+            p_year,
+            v_total_days,
+            v_working_days,
+            v_present,
+            v_wfh,
+            v_leave,
+            v_holiday,
+            v_weekoff,
+            v_absent,
+            v_paid,
+            v_unpaid,
+            v_late,
+            v_half_days,
+            v_overtime,
+            'N',
+            CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+        );
+
+        SET v_generated_count = v_generated_count + 1;
+
+    END LOOP;
+
+    CLOSE emp_cursor;
+
+    
+
+    IF v_generated_count = 0 THEN
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'No active employees found. No payroll attendance summaries were generated.'
+                AS message;
+
+        LEAVE main_block;
+
+    END IF;
+
+    
+
+    
+    SET v_audit_new = hrms_audit_attendance_json(p_month, p_year);
+    SELECT MAX(payroll_cycle_id) INTO v_audit_cycle FROM payroll_cycles WHERE payroll_month = p_month AND payroll_year = p_year;
+    CALL hrms_payroll_audit_add('ATTENDANCE', 'GENERATE', 'payroll_attendance_summary',
+         CONCAT(p_year, '-', LPAD(p_month, 2, '0')), NULL, v_audit_cycle, p_month, p_year, v_audit_old, v_audit_new,
+         CONCAT('Generated for ', v_generated_count, ' employees, ', DATE_FORMAT(v_start_date, '%d %b %Y'), ' to ',
+                DATE_FORMAT(v_end_date, '%d %b %Y'), '.'), p_admin_emp_id);
+    COMMIT;
+
+    SELECT
+        'Y' AS status,
+        CONCAT(
+            'Payroll attendance generated successfully for period ',
+            DATE_FORMAT(v_start_date, '%d-%b-%Y'),
+            ' to ',
+            DATE_FORMAT(v_end_date, '%d-%b-%Y'),
+            '. Employees processed: ',
+            v_generated_count,
+            '. Status: NOT FINALIZED.'
+        ) AS message,
+        v_start_date AS period_start,
+        v_end_date AS period_end,
+        v_generated_count AS generated_employee_count;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_company_settings` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_company_settings`()
+BEGIN
+    SELECT * FROM `company_settings` ORDER BY `id` ASC LIMIT 1;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_payroll_cycle_status` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_payroll_cycle_status`(
+    IN p_emp_id VARCHAR(20),
+    IN p_financial_year VARCHAR(9)
+)
+cs: BEGIN
+    DECLARE v_start_year INT;
+    DECLARE v_end_year INT;
+    DECLARE v_cycle_start_day INT;
+    DECLARE v_cycle_end_day INT;
+    DECLARE v_total_records INT DEFAULT 0;
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+    DECLARE v_err VARCHAR(500) DEFAULT NULL;
+    DECLARE EXIT HANDLER FOR SQLSTATE '45000'
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT;
+        SELECT 'N' AS status, v_err AS remarks;
+    END;
+
+    
+    SET time_zone = '+05:30';
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS status, 'Access denied: only active ADMIN or HR users can view the attendance cycle.' AS remarks;
+        LEAVE cs;
+    END IF;
+
+    
+    IF p_financial_year IS NULL
+       OR p_financial_year NOT REGEXP '^[0-9]{4}-[0-9]{4}$'
+    THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid financial year. Use YYYY-YYYY.';
+    END IF;
+
+    SET v_start_year =
+        CAST(LEFT(p_financial_year, 4) AS UNSIGNED);
+
+    SET v_end_year =
+        CAST(RIGHT(p_financial_year, 4) AS UNSIGNED);
+
+    
+    IF v_end_year <> v_start_year + 1 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Financial year must contain consecutive years.';
+    END IF;
+
+    
+    SELECT
+        payroll_cycle_start_day,
+        payroll_cycle_end_day
+    INTO
+        v_cycle_start_day,
+        v_cycle_end_day
+    FROM company_settings
+    ORDER BY id
+    LIMIT 1;
+
+    IF v_cycle_start_day IS NULL
+       OR v_cycle_end_day IS NULL
+       OR v_cycle_start_day NOT BETWEEN 1 AND 31
+       OR v_cycle_end_day NOT BETWEEN 1 AND 31
+    THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT =
+                'Invalid payroll cycle configuration.';
+    END IF;
+
+    
+    SELECT COUNT(*)
+    INTO v_total_records
+    FROM payroll_attendance_summary
+    WHERE
+        (payroll_year = v_start_year
+         AND payroll_month BETWEEN 4 AND 12)
+        OR
+        (payroll_year = v_end_year
+         AND payroll_month BETWEEN 1 AND 3);
+
+    
+    IF v_total_records = 0 THEN
+
+        SELECT
+            p_financial_year AS financial_year,
+            NULL AS payroll_year,
+            NULL AS payroll_month,
+            NULL AS cycle_name,
+            NULL AS cycle_start_date,
+            NULL AS cycle_end_date,
+            0 AS employee_count,
+            0 AS finalized_employee_count,
+            'N' AS status,
+            NULL AS attendance_status,
+            'Data not available' AS remarks,
+            '+05:30' AS timezone;
+
+    ELSE
+
+        WITH RECURSIVE payroll_months AS (
+            
+            SELECT
+                1 AS month_no,
+                v_start_year AS payroll_year,
+                4 AS payroll_month
+
+            UNION ALL
+
+            SELECT
+                month_no + 1,
+                CASE
+                    WHEN payroll_month = 12
+                        THEN payroll_year + 1
+                    ELSE payroll_year
+                END,
+                CASE
+                    WHEN payroll_month = 12
+                        THEN 1
+                    ELSE payroll_month + 1
+                END
+            FROM payroll_months
+            WHERE month_no < 12
+        ),
+
+        cycle_dates AS (
+            SELECT
+                pm.month_no,
+                pm.payroll_month,
+                pm.payroll_year,
+                STR_TO_DATE(
+                    CONCAT(
+                        pm.payroll_year, '-',
+                        LPAD(pm.payroll_month, 2, '0'),
+                        '-01'
+                    ),
+                    '%Y-%m-%d'
+                ) AS month_first_day
+            FROM payroll_months pm
+        ),
+
+        calculated_cycles AS (
+            SELECT
+                month_no,
+                payroll_month,
+                payroll_year,
+
+                DATE_FORMAT(
+                    month_first_day,
+                    '%M %Y'
+                ) AS cycle_name,
+
+                
+                CASE
+                    WHEN v_cycle_start_day > v_cycle_end_day
+                    THEN DATE_ADD(
+                        DATE_SUB(
+                            DATE_SUB(
+                                month_first_day,
+                                INTERVAL 1 DAY
+                            ),
+                            INTERVAL DAYOFMONTH(
+                                DATE_SUB(
+                                    month_first_day,
+                                    INTERVAL 1 DAY
+                                )
+                            ) - 1 DAY
+                        ),
+                        INTERVAL LEAST(
+                            v_cycle_start_day,
+                            DAY(
+                                LAST_DAY(
+                                    DATE_SUB(
+                                        month_first_day,
+                                        INTERVAL 1 MONTH
+                                    )
+                                )
+                            )
+                        ) - 1 DAY
+                    )
+                    ELSE DATE_ADD(
+                        month_first_day,
+                        INTERVAL LEAST(
+                            v_cycle_start_day,
+                            DAY(LAST_DAY(month_first_day))
+                        ) - 1 DAY
+                    )
+                END AS cycle_start_date,
+
+                
+                DATE_ADD(
+                    month_first_day,
+                    INTERVAL LEAST(
+                        v_cycle_end_day,
+                        DAY(LAST_DAY(month_first_day))
+                    ) - 1 DAY
+                ) AS cycle_end_date
+
+            FROM cycle_dates
+        ),
+
+        monthly_summary AS (
+            SELECT
+                payroll_year,
+                payroll_month,
+                COUNT(summary_id) AS employee_count,
+
+                SUM(
+                    CASE
+                        WHEN is_finalized = 'Y' THEN 1
+                        ELSE 0
+                    END
+                ) AS finalized_employee_count
+
+            FROM payroll_attendance_summary
+
+            GROUP BY
+                payroll_year,
+                payroll_month
+        )
+
+        SELECT
+            p_financial_year AS financial_year,
+            cc.payroll_year,
+            cc.payroll_month,
+            cc.cycle_name,
+            cc.cycle_start_date,
+            cc.cycle_end_date,
+
+            ms.employee_count,
+            ms.finalized_employee_count,
+
+            
+            'Y' AS status,
+
+            
+            CASE
+                WHEN ms.finalized_employee_count =
+                     ms.employee_count
+                THEN 'FINALIZED'
+                ELSE 'INPROGRESS'
+            END AS attendance_status,
+
+            
+            CASE
+                WHEN ms.finalized_employee_count =
+                     ms.employee_count
+                THEN 'All employee payroll summaries are finalized'
+                ELSE CONCAT(
+                    ms.employee_count -
+                    ms.finalized_employee_count,
+                    ' employee(s) pending finalization'
+                )
+            END AS remarks,
+
+            '+05:30' AS timezone
+
+        FROM calculated_cycles cc
+
+        INNER JOIN monthly_summary ms
+            ON ms.payroll_month = cc.payroll_month
+           AND ms.payroll_year = cc.payroll_year
+
+        ORDER BY cc.month_no DESC;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_payroll_finalization_status` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_payroll_finalization_status`(
+    IN p_emp_id VARCHAR(20),
+    IN p_month INT,
+    IN p_year INT
+)
+fs: BEGIN
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;   
+
+    
+    SELECT MAX(UPPER(TRIM(user_category))) INTO v_user_category
+      FROM user_login_details
+     WHERE emp_id = TRIM(p_emp_id) AND LOWER(TRIM(status)) = 'active';
+    IF v_user_category IS NULL OR v_user_category NOT IN ('ADMIN', 'HR') THEN
+        SELECT 'N' AS attendance_status, 'Access denied: only active ADMIN or HR users can view attendance status.' AS message;
+        LEAVE fs;
+    END IF;
+
+
+    IF p_month IS NULL OR p_month NOT BETWEEN 1 AND 12
+       OR p_year IS NULL THEN
+
+        SELECT
+            'N' AS attendance_status,
+            'Invalid month or year' AS message;
+
+    ELSE
+
+        SELECT
+            CASE
+                WHEN COUNT(*) = 0 THEN 'N'
+                WHEN SUM(is_finalized = 'N') > 0 THEN 'N'
+                WHEN SUM(is_finalized = 'Y') = COUNT(*) THEN 'Y'
+                ELSE 'N'
+            END AS attendance_status,
+
+            CASE
+                WHEN COUNT(*) = 0
+                    THEN 'Data not available'
+                WHEN SUM(is_finalized = 'Y') = COUNT(*)
+                    THEN 'Attendance finalized'
+                ELSE 'Attendance not finalized'
+            END AS message
+
+        FROM payroll_attendance_summary
+        WHERE payroll_month = p_month
+          AND payroll_year = p_year;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_salary_components` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_salary_components`()
+BEGIN
+    DECLARE v_total_records INT DEFAULT 0;
+
+    SELECT COUNT(*)
+    INTO v_total_records
+    FROM salary_component_master;
+
+    IF v_total_records > 0 THEN
+
+        SELECT
+            'Y' AS status,
+            'Salary components fetched successfully' AS remarks;
+
+        SELECT *
+        FROM salary_component_master
+        ORDER BY component_type ASC, component_id ASC;
+
+    ELSE
+
+        SELECT
+            'N' AS status,
+            'No salary components data available' AS remarks;
+
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_holiday_cud` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_holiday_cud`(
+        IN p_mode VARCHAR(10),
+        IN p_holiday_id INT,
+        IN p_holiday_date DATE,
+        IN p_holiday_name VARCHAR(100),
+        IN p_holiday_type VARCHAR(20),
+        IN p_applicable_for VARCHAR(50),
+        IN p_status CHAR(1)
+    )
+BEGIN
+        SET time_zone = '+05:30';
+
+        IF p_mode = 'INSERT' THEN
+            INSERT INTO holiday_master (
+                holiday_date, holiday_name, holiday_type, applicable_for, status, received_on, updated_on
+            ) VALUES (
+                p_holiday_date, p_holiday_name, COALESCE(NULLIF(p_holiday_type, ''), 'FESTIVAL'), COALESCE(NULLIF(p_applicable_for, ''), 'ALL'), COALESCE(NULLIF(p_status, ''), 'A'), NOW(), NOW()
+            );
+            
+            SELECT 'Y' AS status, 'Holiday created successfully' AS remarks, LAST_INSERT_ID() AS id;
+
+        ELSEIF p_mode = 'UPDATE' THEN
+            UPDATE holiday_master
+            SET holiday_date = COALESCE(p_holiday_date, holiday_date),
+                holiday_name = COALESCE(NULLIF(p_holiday_name, ''), holiday_name),
+                holiday_type = COALESCE(NULLIF(p_holiday_type, ''), holiday_type),
+                applicable_for = COALESCE(NULLIF(p_applicable_for, ''), applicable_for),
+                status = COALESCE(NULLIF(p_status, ''), status),
+                updated_on = NOW()
+            WHERE holiday_id = p_holiday_id;
+            
+            SELECT 'Y' AS status, 'Holiday updated successfully' AS remarks, p_holiday_id AS id;
+
+        ELSEIF p_mode = 'DELETE' THEN
+            DELETE FROM holiday_master
+            WHERE holiday_id = p_holiday_id;
+            
+            SELECT 'Y' AS status, 'Holiday deleted successfully' AS remarks, p_holiday_id AS id;
+
+        ELSE
+            SELECT 'N' AS status, 'Invalid mode' AS remarks, NULL AS id;
+        END IF;
+    END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_input_cancel` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_input_cancel`(IN p_input_id INT)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  UPDATE payroll_inputs SET status = 'CANCELLED' WHERE input_id = p_input_id AND status = 'PENDING';
+  IF ROW_COUNT() = 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Input not found or not in PENDING status';
+  END IF;
+  COMMIT;
+  SELECT 'OK' AS status, 'Input cancelled' AS message, p_input_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_input_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_input_list`(IN p_month TINYINT, IN p_year SMALLINT)
+BEGIN
+  SELECT pi.input_id, pi.user_id, u.emp_code, u.full_name,
+         pi.month, pi.year, pi.component_id,
+         pc.code AS component_code, pc.name AS component_name,
+         pi.amount, pi.remarks, pi.status
+  FROM   payroll_inputs pi
+  JOIN   userdetails u ON u.user_id = pi.user_id
+  JOIN   pay_components pc ON pc.component_id = pi.component_id
+  WHERE  pi.month = p_month AND pi.year = p_year
+  ORDER BY pi.input_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_input_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_input_save`(
+  IN p_user_id      INT,
+  IN p_month        TINYINT,
+  IN p_year         SMALLINT,
+  IN p_component_id INT,
+  IN p_amount       DECIMAL(12,2),
+  IN p_remarks      VARCHAR(255)
+)
+BEGIN
+  
+  DECLARE v_id INT;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  INSERT INTO payroll_inputs (user_id, month, year, component_id, amount, remarks, status)
+  VALUES (p_user_id, p_month, p_year, p_component_id, p_amount, p_remarks, 'PENDING');
+  SET v_id = LAST_INSERT_ID();
+  COMMIT;
+  SELECT 'OK' AS status, 'Input saved' AS message, v_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_payslip_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_payslip_get`(IN p_entry_id INT)
+BEGIN
+  DECLARE v_run_status VARCHAR(20);
+
+  SELECT pr.status INTO v_run_status
+  FROM payroll_runs pr JOIN payroll_entries pe ON pe.run_id = pr.run_id
+  WHERE pe.entry_id = p_entry_id;
+
+  IF v_run_status NOT IN ('LOCKED','PAID') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Payslip only available for LOCKED or PAID runs';
+  END IF;
+
+  
+  SELECT
+    pe.entry_id, pe.run_id, u.emp_code, u.full_name, u.department, u.designation,
+    u.bank_name, u.bank_account_no, u.pan, u.uan,
+    pr.month, pr.year,
+    pe.total_days, pe.payable_days, pe.lop_days, pe.overtime_hours, pe.ctc_monthly,
+    ss.name AS structure_name, pr.status AS run_status
+  FROM payroll_entries pe
+  JOIN userdetails u ON u.user_id = pe.user_id
+  JOIN payroll_runs pr ON pr.run_id = pe.run_id
+  LEFT JOIN salary_structures ss ON ss.structure_id = pe.structure_id
+  WHERE pe.entry_id = p_entry_id;
+
+  
+  SELECT line_id, component_code, component_name, full_amount, amount, source, display_order
+  FROM payroll_entry_lines
+  WHERE entry_id = p_entry_id AND type = 'EARNING'
+  ORDER BY display_order, line_id;
+
+  
+  SELECT line_id, component_code, component_name, full_amount, amount, source, display_order
+  FROM payroll_entry_lines
+  WHERE entry_id = p_entry_id AND type = 'DEDUCTION'
+  ORDER BY display_order, line_id;
+
+  
+  SELECT
+    pe.gross_earnings, pe.total_deductions, pe.employer_contribution, pe.net_pay,
+    CONCAT('PS-', pr.year, LPAD(pr.month,2,'0'), '-', LPAD(pe.user_id,4,'0')) AS payslip_number,
+    pr.status AS run_status
+  FROM payroll_entries pe
+  JOIN payroll_runs pr ON pr.run_id = pe.run_id
+  WHERE pe.entry_id = p_entry_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_payslip_list_by_run` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_payslip_list_by_run`(IN p_run_id INT)
+BEGIN
+  SELECT pe.entry_id, pe.user_id, u.emp_code, u.full_name,
+         pr.month, pr.year, pr.status AS run_status,
+         pe.gross_earnings, pe.total_deductions, pe.net_pay,
+         CONCAT('PS-', pr.year, LPAD(pr.month,2,'0'), '-', LPAD(pe.user_id,4,'0')) AS payslip_number
+  FROM   payroll_entries pe
+  JOIN   userdetails u ON u.user_id = pe.user_id
+  JOIN   payroll_runs pr ON pr.run_id = pe.run_id
+  WHERE  pe.run_id = p_run_id AND pr.status IN ('LOCKED','PAID')
+  ORDER BY u.emp_code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_payslip_list_by_user` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_payslip_list_by_user`(IN p_user_id INT)
+BEGIN
+  SELECT pe.entry_id, pr.month, pr.year, pr.status AS run_status,
+         pe.gross_earnings, pe.total_deductions, pe.net_pay,
+         CONCAT('PS-', pr.year, LPAD(pr.month,2,'0'), '-', LPAD(pe.user_id,4,'0')) AS payslip_number
+  FROM   payroll_entries pe
+  JOIN   payroll_runs pr ON pr.run_id = pe.run_id
+  WHERE  pe.user_id = p_user_id AND pr.status IN ('LOCKED','PAID')
+  ORDER BY pr.year DESC, pr.month DESC;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_approve` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_approve`(IN p_run_id INT, IN p_user VARCHAR(50))
+BEGIN
+  DECLARE v_status      VARCHAR(20);
+  DECLARE v_error_count INT;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status <> 'CALCULATED' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Run must be CALCULATED before approval';
+  END IF;
+
+  SELECT COUNT(*) INTO v_error_count
+  FROM payroll_entries WHERE run_id = p_run_id AND status = 'ERROR';
+
+  IF v_error_count > 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot approve: there are entries with ERROR status';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_runs SET status = 'APPROVED', approved_by = p_user, approved_at = NOW()
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (p_run_id, 'RUN_APPROVED', JSON_OBJECT('approved_by', p_user), p_user);
+  COMMIT;
+  SELECT 'OK' AS status, 'Run approved' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_audit` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_audit`(IN p_run_id INT)
+BEGIN
+  SELECT log_id, run_id, action, details, performed_by, performed_at
+  FROM   payroll_audit_logs
+  WHERE  run_id = p_run_id
+  ORDER BY performed_at DESC;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_bank_advice` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_bank_advice`(IN p_run_id INT)
+BEGIN
+  SELECT u.full_name, u.bank_name, u.bank_account_no, u.ifsc,
+         pe.net_pay, u.emp_code
+  FROM   payroll_entries pe
+  JOIN   userdetails u ON u.user_id = pe.user_id
+  WHERE  pe.run_id = p_run_id
+    AND  pe.status NOT IN ('ON_HOLD','ERROR')
+  ORDER BY u.emp_code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_calculate` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_calculate`(IN p_run_id INT, IN p_user VARCHAR(50))
+BEGIN
+  
+  DECLARE v_status        VARCHAR(20);
+  DECLARE v_month         TINYINT;
+  DECLARE v_year          SMALLINT;
+  DECLARE v_user_id       INT;
+  DECLARE done            INT DEFAULT 0;
+  DECLARE v_total_emp     INT DEFAULT 0;
+  DECLARE v_total_gross   DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_total_ded     DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_total_net     DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_total_emp_cost DECIMAL(14,2) DEFAULT 0;
+
+  DECLARE cur_emp CURSOR FOR
+    SELECT u.user_id
+    FROM userdetails u
+    WHERE u.status = 'ACTIVE'
+      AND u.date_of_joining <= LAST_DAY(STR_TO_DATE(CONCAT(v_year,'-',v_month,'-01'), '%Y-%c-%d'));
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status, month, year INTO v_status, v_month, v_year
+  FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status = 'LOCKED' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot recalculate a LOCKED run';
+  END IF;
+
+  IF v_status NOT IN ('DRAFT','CALCULATED') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Run must be in DRAFT or CALCULATED status to calculate';
+  END IF;
+
+  START TRANSACTION;
+
+  
+  UPDATE payroll_inputs pi
+  JOIN payroll_entries pe ON pe.user_id = pi.user_id
+  SET pi.status = 'PENDING'
+  WHERE pe.run_id = p_run_id
+    AND pi.month = v_month AND pi.year = v_year
+    AND pi.status = 'APPLIED';
+
+  OPEN cur_emp;
+  emp_loop: LOOP
+    FETCH cur_emp INTO v_user_id;
+    IF done THEN LEAVE emp_loop; END IF;
+    SET v_total_emp = v_total_emp + 1;
+    CALL sp_entry_calculate(p_run_id, v_user_id);
+  END LOOP;
+  CLOSE cur_emp;
+
+  
+  SELECT
+    COALESCE(SUM(gross_earnings), 0),
+    COALESCE(SUM(total_deductions), 0),
+    COALESCE(SUM(net_pay), 0),
+    COALESCE(SUM(employer_contribution), 0)
+  INTO v_total_gross, v_total_ded, v_total_net, v_total_emp_cost
+  FROM payroll_entries WHERE run_id = p_run_id;
+
+  UPDATE payroll_runs SET
+    status = 'CALCULATED', calculated_at = NOW(),
+    total_employees = v_total_emp,
+    total_gross = v_total_gross, total_deductions = v_total_ded,
+    total_net = v_total_net, total_employer_cost = v_total_emp_cost
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (p_run_id, 'RUN_CALCULATED',
+    JSON_OBJECT('employees', v_total_emp, 'total_net', v_total_net), p_user);
+
+  COMMIT;
+  SELECT 'OK' AS status, 'Run calculated' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_create` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_create`(
+  IN p_month        TINYINT,
+  IN p_year         SMALLINT,
+  IN p_run_code     VARCHAR(50),
+  IN p_description  VARCHAR(255),
+  IN p_from_date    DATE,
+  IN p_to_date      DATE,
+  IN p_pay_date     DATE,
+  IN p_user         VARCHAR(50)
+)
+BEGIN
+  DECLARE v_id INT;
+  DECLARE v_active_count INT DEFAULT 0;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  
+
+  
+  IF EXISTS (SELECT 1 FROM payroll_runs WHERE month = p_month AND year = p_year) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'A payroll run already exists for this month and year';
+  END IF;
+
+  
+  SELECT COUNT(*) INTO v_active_count
+  FROM userdetails u
+  WHERE u.status = 'ACTIVE'
+    AND u.date_of_joining <= LAST_DAY(STR_TO_DATE(CONCAT(p_year,'-',p_month,'-01'), '%Y-%c-%d'));
+
+  IF v_active_count = 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot create payroll run: No active employees found for this pay period';
+  END IF;
+
+  START TRANSACTION;
+  INSERT INTO payroll_runs
+    (month, year, run_code, description, from_date, to_date, pay_date, status, created_by)
+  VALUES
+    (p_month, p_year, p_run_code, p_description, p_from_date, p_to_date, p_pay_date, 'DRAFT', p_user);
+  SET v_id = LAST_INSERT_ID();
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (v_id, 'RUN_CREATED',
+    JSON_OBJECT('month', p_month, 'year', p_year, 'code', p_run_code, 'from_date', p_from_date, 'to_date', p_to_date, 'active_employees', v_active_count), p_user);
+  COMMIT;
+  SELECT 'OK' AS status, 'Run created' AS message, v_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_delete` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_delete`(IN p_run_id INT, IN p_user VARCHAR(50))
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payroll run not found';
+  END IF;
+
+  IF v_status NOT IN ('DRAFT', 'CALCULATED') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot delete an APPROVED, LOCKED or PAID run';
+  END IF;
+
+  START TRANSACTION;
+  DELETE pel FROM payroll_entry_lines pel
+  JOIN payroll_entries pe ON pe.entry_id = pel.entry_id
+  WHERE pe.run_id = p_run_id;
+
+  DELETE FROM payroll_entries WHERE run_id = p_run_id;
+  DELETE FROM payroll_audit_logs WHERE run_id = p_run_id;
+  DELETE FROM payroll_runs WHERE run_id = p_run_id;
+  COMMIT;
+
+  SELECT 'OK' AS status, 'Payroll run deleted' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_delete_drafts` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_delete_drafts`(IN p_user VARCHAR(50))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  START TRANSACTION;
+  DELETE pel FROM payroll_entry_lines pel
+  JOIN payroll_entries pe ON pe.entry_id = pel.entry_id
+  JOIN payroll_runs pr ON pr.run_id = pe.run_id
+  WHERE pr.status = 'DRAFT';
+
+  DELETE pe FROM payroll_entries pe
+  JOIN payroll_runs pr ON pr.run_id = pe.run_id
+  WHERE pr.status = 'DRAFT';
+
+  DELETE pal FROM payroll_audit_logs pal
+  JOIN payroll_runs pr ON pr.run_id = pal.run_id
+  WHERE pr.status = 'DRAFT';
+
+  DELETE FROM payroll_runs WHERE status = 'DRAFT';
+  COMMIT;
+
+  SELECT 'OK' AS status, 'Draft payroll runs deleted successfully' AS message;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_entries` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_entries`(IN p_run_id INT)
+BEGIN
+  SELECT pe.entry_id, pe.run_id, pe.user_id, u.emp_code, u.full_name, u.department,
+         pe.structure_id, pe.ctc_monthly, pe.total_days, pe.payable_days, pe.lop_days,
+         pe.overtime_hours, pe.gross_earnings, pe.total_deductions,
+         pe.employer_contribution, pe.net_pay, pe.status, pe.hold_reason, pe.error_message
+  FROM   payroll_entries pe
+  JOIN   userdetails u ON u.user_id = pe.user_id
+  WHERE  pe.run_id = p_run_id
+  ORDER BY u.emp_code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_finalize_totals` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_finalize_totals`(IN p_run_id INT, IN p_user VARCHAR(50))
+BEGIN
+  DECLARE v_total_emp      INT DEFAULT 0;
+  DECLARE v_total_gross    DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_total_ded      DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_total_net      DECIMAL(14,2) DEFAULT 0;
+  DECLARE v_total_emp_cost DECIMAL(14,2) DEFAULT 0;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  START TRANSACTION;
+
+  SELECT
+    COUNT(*),
+    COALESCE(SUM(gross_earnings), 0),
+    COALESCE(SUM(total_deductions), 0),
+    COALESCE(SUM(net_pay), 0),
+    COALESCE(SUM(employer_contribution), 0)
+  INTO v_total_emp, v_total_gross, v_total_ded, v_total_net, v_total_emp_cost
+  FROM payroll_entries WHERE run_id = p_run_id;
+
+  UPDATE payroll_runs SET
+    status = 'CALCULATED',
+    calculated_at = NOW(),
+    total_employees = v_total_emp,
+    total_gross = v_total_gross,
+    total_deductions = v_total_ded,
+    total_net = v_total_net,
+    total_employer_cost = v_total_emp_cost
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (p_run_id, 'RUN_CALCULATED',
+    JSON_OBJECT('employees', v_total_emp, 'gross', v_total_gross, 'net', v_total_net), p_user);
+
+  COMMIT;
+  SELECT 'OK' AS status, 'Run totals finalized' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_get`(IN p_run_id INT)
+BEGIN
+  
+  SELECT run_id, month, year, run_code, description, from_date, to_date, pay_date,
+         status, total_employees, total_gross,
+         total_deductions, total_net, total_employer_cost,
+         created_by, calculated_at, approved_by, approved_at, locked_at, paid_at
+  FROM   payroll_runs WHERE run_id = p_run_id;
+
+  
+  SELECT
+    COUNT(*) AS total,
+    SUM(CASE WHEN status = 'CALCULATED' THEN 1 ELSE 0 END) AS ok_count,
+    SUM(CASE WHEN status = 'ERROR'      THEN 1 ELSE 0 END) AS error_count,
+    SUM(CASE WHEN status = 'ON_HOLD'    THEN 1 ELSE 0 END) AS hold_count
+  FROM payroll_entries WHERE run_id = p_run_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_list`()
+BEGIN
+  SELECT run_id, month, year, run_code, description, from_date, to_date, pay_date,
+         status, total_employees, total_gross,
+         total_deductions, total_net, total_employer_cost,
+         created_by, calculated_at, approved_by, approved_at, locked_at, paid_at
+  FROM   payroll_runs
+  ORDER BY year DESC, month DESC;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_lock` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_lock`(IN p_run_id INT, IN p_user VARCHAR(50))
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status <> 'APPROVED' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Run must be APPROVED before locking';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_runs SET status = 'LOCKED', locked_at = NOW()
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (p_run_id, 'RUN_LOCKED', JSON_OBJECT('locked_by', p_user), p_user);
+  COMMIT;
+  SELECT 'OK' AS status, 'Run locked' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_mark_paid` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_mark_paid`(IN p_run_id INT, IN p_user VARCHAR(50))
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status <> 'LOCKED' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Run must be LOCKED before marking as paid';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_runs SET status = 'PAID', paid_at = NOW()
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (p_run_id, 'RUN_PAID', JSON_OBJECT('paid_by', p_user), p_user);
+  COMMIT;
+  SELECT 'OK' AS status, 'Run marked as paid' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_reset_to_draft` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_reset_to_draft`(
+  IN p_run_id INT,
+  IN p_user   VARCHAR(50)
+)
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE v_month  TINYINT;
+  DECLARE v_year   SMALLINT;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status, month, year INTO v_status, v_month, v_year
+  FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status IN ('LOCKED', 'PAID') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Cannot reset a LOCKED or PAID run. Unlock it first.';
+  END IF;
+
+  START TRANSACTION;
+
+  
+  UPDATE payroll_inputs pi
+  JOIN payroll_entries pe ON pe.user_id = pi.user_id
+  SET pi.status = 'PENDING'
+  WHERE pe.run_id = p_run_id
+    AND pi.month = v_month AND pi.year = v_year
+    AND pi.status = 'APPLIED';
+
+  
+  DELETE pel FROM payroll_entry_lines pel
+  JOIN payroll_entries pe ON pe.entry_id = pel.entry_id
+  WHERE pe.run_id = p_run_id;
+
+  DELETE FROM payroll_entries WHERE run_id = p_run_id;
+
+  
+  UPDATE payroll_runs SET
+    status = 'DRAFT',
+    calculated_at = NULL,
+    approved_by = NULL,
+    approved_at = NULL,
+    total_employees = 0,
+    total_gross = 0,
+    total_deductions = 0,
+    total_net = 0,
+    total_employer_cost = 0
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (
+    p_run_id,
+    'RUN_RESET_DRAFT',
+    JSON_OBJECT('reset_by', p_user, 'reason', 'Run reset to DRAFT. All calculations cleared for recalculation.'),
+    p_user
+  );
+
+  COMMIT;
+  SELECT 'OK' AS status, 'Run successfully reset to DRAFT. All calculations cleared.' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_unapprove` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_unapprove`(
+  IN p_run_id INT,
+  IN p_user   VARCHAR(50),
+  IN p_reason VARCHAR(255)
+)
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status <> 'APPROVED' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Only runs with status APPROVED can be unapproved';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_runs SET status = 'CALCULATED', approved_by = NULL, approved_at = NULL
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (
+    p_run_id,
+    'RUN_APPROVAL_REVOKED',
+    JSON_OBJECT('unapproved_by', p_user, 'reason', IFNULL(p_reason, 'Approval revoked for review')),
+    p_user
+  );
+  COMMIT;
+  SELECT 'OK' AS status, 'Run approval revoked. Returned to CALCULATED status.' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_unlock` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_unlock`(
+  IN p_run_id INT,
+  IN p_user   VARCHAR(50),
+  IN p_reason VARCHAR(255)
+)
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status <> 'LOCKED' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Only runs with status LOCKED can be unlocked';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_runs SET status = 'APPROVED', locked_at = NULL
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (
+    p_run_id,
+    'RUN_UNLOCKED',
+    JSON_OBJECT('unlocked_by', p_user, 'reason', IFNULL(p_reason, 'Run unlocked to allow adjustments')),
+    p_user
+  );
+  COMMIT;
+  SELECT 'OK' AS status, 'Run unlocked successfully. Returned to APPROVED status.' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_run_unmark_paid` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_run_unmark_paid`(
+  IN p_run_id INT,
+  IN p_user   VARCHAR(50),
+  IN p_reason VARCHAR(255)
+)
+BEGIN
+  DECLARE v_status VARCHAR(20);
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+
+  
+  SET p_user = IFNULL(NULLIF(TRIM(p_user), ''), 'BS00001');
+  CALL sp_auth_check_admin_hr(p_user);
+
+  SELECT status INTO v_status FROM payroll_runs WHERE run_id = p_run_id;
+
+  IF v_status <> 'PAID' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Only runs with status PAID can be reverted to LOCKED';
+  END IF;
+
+  START TRANSACTION;
+  UPDATE payroll_runs SET status = 'LOCKED', paid_at = NULL
+  WHERE run_id = p_run_id;
+
+  INSERT INTO payroll_audit_logs (run_id, action, details, performed_by)
+  VALUES (
+    p_run_id,
+    'RUN_PAYMENT_REVERTED',
+    JSON_OBJECT('reverted_by', p_user, 'reason', IFNULL(p_reason, 'Disbursement cancelled or reverted to Locked')),
+    p_user
+  );
+  COMMIT;
+  SELECT 'OK' AS status, 'Payment reverted. Run returned to LOCKED status.' AS message, p_run_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_save_company_settings` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_save_company_settings`(
+    IN p_company_name            VARCHAR(150),
+    IN p_brand_title_primary     VARCHAR(50),
+    IN p_brand_title_secondary   VARCHAR(50),
+    IN p_company_address         TEXT,
+    IN p_city                    VARCHAR(80),
+    IN p_state                   VARCHAR(80),
+    IN p_pincode                 VARCHAR(15),
+    IN p_country                 VARCHAR(50),
+    IN p_email                   VARCHAR(100),
+    IN p_phone                   VARCHAR(25),
+    IN p_website                 VARCHAR(100),
+    IN p_logo_url                VARCHAR(255),
+    IN p_watermark_url           VARCHAR(255),
+    IN p_cycle_start_day         INT,
+    IN p_cycle_end_day           INT,
+    IN p_salary_pay_day          INT,
+    IN p_work_hours              DECIMAL(4,2),
+    IN p_pan_number              VARCHAR(20),
+    IN p_tan_number              VARCHAR(20),
+    IN p_gstin                   VARCHAR(25),
+    IN p_pf_code                 VARCHAR(50),
+    IN p_esic_code               VARCHAR(50),
+    IN p_cin                     VARCHAR(30),
+    IN p_payslip_prefix          VARCHAR(20),
+    IN p_signatory_title         VARCHAR(100),
+    IN p_disclaimer              TEXT,
+    IN p_actor                   VARCHAR(30),
+    OUT p_status                 CHAR(1),
+    OUT p_message                VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            @errno = MYSQL_ERRNO, @msg = MESSAGE_TEXT;
+        ROLLBACK;
+        SET p_status = 'N';
+        SET p_message = CONCAT('DB Error [', @errno, ']: ', @msg);
+    END;
+
+    START TRANSACTION;
+
+    IF EXISTS (SELECT 1 FROM `company_settings` LIMIT 1) THEN
+        UPDATE `company_settings`
+        SET `company_name`              = p_company_name,
+            `brand_title_primary`       = p_brand_title_primary,
+            `brand_title_secondary`     = p_brand_title_secondary,
+            `company_address`           = p_company_address,
+            `city`                      = p_city,
+            `state`                     = p_state,
+            `pincode`                   = p_pincode,
+            `country`                   = p_country,
+            `email`                     = p_email,
+            `phone`                     = p_phone,
+            `website`                   = p_website,
+            `logo_url`                  = IF(p_logo_url IS NOT NULL AND p_logo_url != '', p_logo_url, `logo_url`),
+            `watermark_url`             = IF(p_watermark_url IS NOT NULL AND p_watermark_url != '', p_watermark_url, `watermark_url`),
+            `payroll_cycle_start_day`   = p_cycle_start_day,
+            `payroll_cycle_end_day`     = p_cycle_end_day,
+            `salary_pay_day`            = p_salary_pay_day,
+            `standard_work_hours_per_day` = p_work_hours,
+            `pan_number`                = p_pan_number,
+            `tan_number`                = p_tan_number,
+            `gstin`                     = p_gstin,
+            `pf_establishment_code`     = p_pf_code,
+            `esic_code`                 = p_esic_code,
+            `cin`                       = p_cin,
+            `payslip_prefix`            = p_payslip_prefix,
+            `payslip_signatory_title`   = p_signatory_title,
+            `payslip_footer_disclaimer` = p_disclaimer,
+            `updated_by`                = p_actor,
+            `updated_at`                = NOW()
+        WHERE `id` = 1;
+    ELSE
+        INSERT INTO `company_settings` (
+            `id`, `company_name`, `brand_title_primary`, `brand_title_secondary`,
+            `company_address`, `city`, `state`, `pincode`, `country`,
+            `email`, `phone`, `website`, `logo_url`, `watermark_url`,
+            `payroll_cycle_start_day`, `payroll_cycle_end_day`, `salary_pay_day`,
+            `standard_work_hours_per_day`, `pan_number`, `tan_number`, `gstin`,
+            `pf_establishment_code`, `esic_code`, `cin`, `payslip_prefix`,
+            `payslip_signatory_title`, `payslip_footer_disclaimer`, `updated_by`
+        ) VALUES (
+            1, p_company_name, p_brand_title_primary, p_brand_title_secondary,
+            p_company_address, p_city, p_state, p_pincode, p_country,
+            p_email, p_phone, p_website, p_logo_url, p_watermark_url,
+            p_cycle_start_day, p_cycle_end_day, p_salary_pay_day,
+            p_work_hours, p_pan_number, p_tan_number, p_gstin,
+            p_pf_code, p_esic_code, p_cin, p_payslip_prefix,
+            p_signatory_title, p_disclaimer, p_actor
+        );
+    END IF;
+
+    COMMIT;
+    SET p_status = 'Y';
+    SET p_message = 'Company settings & payroll rules updated successfully.';
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_save_salary_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_save_salary_component`(
+    IN p_action                VARCHAR(10),  
+    IN p_component_id          BIGINT,       
+    IN p_component_code        VARCHAR(30),
+    IN p_component_name        VARCHAR(100),
+    IN p_component_type        VARCHAR(30),
+    IN p_calculation_type      VARCHAR(30),
+    IN p_percentage_base       VARCHAR(30),
+    IN p_percentage_value      DECIMAL(7,4),
+    IN p_is_lop_applicable     TINYINT(1),
+    IN p_is_taxable            TINYINT(1),
+    IN p_is_active             TINYINT(1)
+)
+BEGIN
+    DECLARE v_exists INT DEFAULT 0;
+    DECLARE v_duplicate INT DEFAULT 0;
+    DECLARE v_action VARCHAR(10);
+    DECLARE v_component_id BIGINT DEFAULT NULL;
+    DECLARE v_status CHAR(1) DEFAULT 'N';
+    DECLARE v_remarks VARCHAR(255) DEFAULT 'Operation not completed.';
+
+    
+    SET v_action = UPPER(TRIM(IFNULL(p_action, '')));
+    SET p_component_code = UPPER(TRIM(p_component_code));
+    SET p_component_name = TRIM(p_component_name);
+    SET p_component_type = UPPER(TRIM(p_component_type));
+    SET p_calculation_type = UPPER(TRIM(p_calculation_type));
+    SET p_percentage_base =
+        UPPER(TRIM(IFNULL(p_percentage_base, 'NONE')));
+
+    
+    IF v_action NOT IN ('INSERT', 'UPDATE') THEN
+
+        SET v_remarks = 'Invalid action. Use INSERT or UPDATE.';
+
+    
+    ELSEIF p_component_code IS NULL
+        OR p_component_code = ''
+        OR p_component_name IS NULL
+        OR p_component_name = '' THEN
+
+        SET v_remarks = 'Component code and name are required.';
+
+    
+    ELSEIF p_component_type IS NULL
+        OR p_component_type NOT IN (
+            'EARNING',
+            'DEDUCTION',
+            'EMPLOYER_CONTRIBUTION'
+        ) THEN
+
+        SET v_remarks = 'Invalid component type.';
+
+    
+    ELSEIF p_calculation_type IS NULL
+        OR p_calculation_type NOT IN (
+            'FIXED',
+            'PERCENTAGE',
+            'FORMULA',
+            'MANUAL'
+        ) THEN
+
+        SET v_remarks = 'Invalid calculation type.';
+
+    
+    ELSEIF p_percentage_base NOT IN (
+        'BASIC',
+        'GROSS',
+        'CTC',
+        'NONE'
+    ) THEN
+
+        SET v_remarks =
+            'Invalid percentage base. Use BASIC, GROSS, CTC or NONE.';
+
+    
+    ELSEIF p_calculation_type = 'PERCENTAGE'
+        AND (
+            p_percentage_value IS NULL
+            OR p_percentage_value < 0
+            OR p_percentage_base = 'NONE'
+        ) THEN
+
+        SET v_remarks =
+            'Percentage calculation requires a non-negative percentage value and a valid base.';
+
+    
+    
+    
+    ELSEIF v_action = 'INSERT' THEN
+
+        IF p_component_id IS NOT NULL
+            AND p_component_id > 0 THEN
+
+            SET v_remarks =
+                'For INSERT, component ID must be NULL or 0.';
+
+        ELSE
+
+            SELECT COUNT(*)
+            INTO v_duplicate
+            FROM salary_component_master
+            WHERE UPPER(component_code) = p_component_code;
+
+            IF v_duplicate > 0 THEN
+
+                SET v_remarks = CONCAT(
+                    'Component code already exists: ',
+                    p_component_code
+                );
+
+            ELSE
+
+                INSERT INTO salary_component_master (
+                    component_code,
+                    component_name,
+                    component_type,
+                    calculation_type,
+                    percentage_base,
+                    percentage_value,
+                    is_lop_applicable,
+                    is_taxable,
+                    is_active,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    p_component_code,
+                    p_component_name,
+                    p_component_type,
+                    p_calculation_type,
+                    p_percentage_base,
+                    CASE
+                        WHEN p_calculation_type = 'PERCENTAGE'
+                        THEN p_percentage_value
+                        ELSE NULL
+                    END,
+                    IFNULL(p_is_lop_applicable, 1),
+                    IFNULL(p_is_taxable, 1),
+                    IFNULL(p_is_active, 1),
+                    NOW(),
+                    NOW()
+                );
+
+                SET v_component_id = LAST_INSERT_ID();
+
+                
+                CALL sp_add_component_to_all_employees(
+                    v_component_id
+                );
+
+                SET v_status = 'Y';
+                SET v_remarks = CONCAT(
+                    'Salary component created successfully and attached to all active employees. ID: ',
+                    v_component_id
+                );
+
+            END IF;
+
+        END IF;
+
+    
+    
+    
+    ELSEIF v_action = 'UPDATE' THEN
+
+        IF p_component_id IS NULL OR p_component_id <= 0 THEN
+
+            SET v_remarks =
+                'Valid component ID is required for UPDATE.';
+
+        ELSE
+
+            SELECT COUNT(*)
+            INTO v_exists
+            FROM salary_component_master
+            WHERE component_id = p_component_id;
+
+            IF v_exists = 0 THEN
+
+                SET v_remarks = CONCAT(
+                    'Salary component not found for ID: ',
+                    p_component_id
+                );
+
+            ELSE
+
+                
+                SELECT COUNT(*)
+                INTO v_duplicate
+                FROM salary_component_master
+                WHERE UPPER(component_code) = p_component_code
+                  AND component_id <> p_component_id;
+
+                IF v_duplicate > 0 THEN
+
+                    SET v_remarks = CONCAT(
+                        'Component code already exists: ',
+                        p_component_code
+                    );
+
+                ELSE
+
+                    UPDATE salary_component_master
+                    SET
+                        component_code = p_component_code,
+                        component_name = p_component_name,
+                        component_type = p_component_type,
+                        calculation_type = p_calculation_type,
+                        percentage_base = p_percentage_base,
+                        percentage_value = CASE
+                            WHEN p_calculation_type = 'PERCENTAGE'
+                            THEN p_percentage_value
+                            ELSE NULL
+                        END,
+                        is_lop_applicable = IFNULL(
+                            p_is_lop_applicable, 1
+                        ),
+                        is_taxable = IFNULL(p_is_taxable, 1),
+                        is_active = IFNULL(p_is_active, 1),
+                        updated_at = NOW()
+                    WHERE component_id = p_component_id;
+
+                    SET v_component_id = p_component_id;
+
+                    
+                    CALL sp_add_component_to_all_employees(
+                        v_component_id
+                    );
+
+                    SET v_status = 'Y';
+                    SET v_remarks = CONCAT(
+                        'Salary component updated successfully and synced across employees. ID: ',
+                        v_component_id
+                    );
+
+                END IF;
+
+            END IF;
+
+        END IF;
+
+    END IF;
+
+    
+    
+    
+    
+    SELECT
+        v_status AS status,
+        v_remarks AS remarks,
+        v_component_id AS component_id;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_seed_dummy_data` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_seed_dummy_data`()
+BEGIN
+
+    
+
+    INSERT INTO test_table_salary_component_master
+    (
+        component_code,
+        component_name,
+        component_type,
+        calculation_type,
+        percentage_base,
+        percentage_value,
+        minimum_amount,
+        maximum_amount,
+        formula_expression,
+        is_taxable,
+        is_active,
+        calculation_scope,
+        calculation_order,
+        is_manual,
+        is_slab,
+        rounding_precision
+    )
+    VALUES
+
+    
+    (
+        'BASIC',
+        'Basic Salary',
+        'EARNING',
+        'PERCENTAGE',
+        'CTC',
+        40.00,
+        NULL,
+        NULL,
+        NULL,
+        1,
+        1,
+        'COMPONENT',
+        10,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'HRA',
+        'House Rent Allowance',
+        'EARNING',
+        'PERCENTAGE',
+        'BASIC',
+        50.00,
+        NULL,
+        NULL,
+        NULL,
+        1,
+        1,
+        'COMPONENT',
+        20,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'CONVEYANCE',
+        'Conveyance Allowance',
+        'EARNING',
+        'FIXED',
+        'NONE',
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        1,
+        1,
+        'COMPONENT',
+        30,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'MEDICAL',
+        'Medical Allowance',
+        'EARNING',
+        'FIXED',
+        'NONE',
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        1,
+        1,
+        'COMPONENT',
+        40,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'SPECIAL',
+        'Special Allowance',
+        'EARNING',
+        'FORMULA',
+        'NONE',
+        NULL,
+        NULL,
+        NULL,
+        'CTC_MONTHLY - BASIC - HRA - CONVEYANCE - MEDICAL',
+        1,
+        1,
+        'COMPONENT',
+        50,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'BONUS',
+        'Performance Bonus',
+        'EARNING',
+        'MANUAL',
+        'NONE',
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        1,
+        1,
+        'COMPONENT',
+        60,
+        1,
+        0,
+        2
+    ),
+
+    
+    (
+        'PF',
+        'Provident Fund',
+        'DEDUCTION',
+        'STATUTORY',
+        'BASIC',
+        12.00,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        1,
+        'COMPONENT',
+        100,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'ESI',
+        'Employee State Insurance',
+        'DEDUCTION',
+        'STATUTORY',
+        'GROSS',
+        0.75,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        1,
+        'COMPONENT',
+        110,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'PT',
+        'Professional Tax',
+        'DEDUCTION',
+        'STATUTORY',
+        'NONE',
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        1,
+        'COMPONENT',
+        120,
+        0,
+        1,
+        2
+    ),
+
+    
+    (
+        'NPS',
+        'National Pension System',
+        'DEDUCTION',
+        'PERCENTAGE',
+        'BASIC',
+        14.00,
+        1000.00,
+        NULL,
+        NULL,
+        0,
+        1,
+        'COMPONENT',
+        130,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'EMPLOYER_PF',
+        'Employer PF Contribution',
+        'EMPLOYER_CONTRIBUTION',
+        'STATUTORY',
+        'BASIC',
+        12.00,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        1,
+        'COMPONENT',
+        200,
+        0,
+        0,
+        2
+    ),
+
+    
+    (
+        'GRATUITY',
+        'Gratuity',
+        'EMPLOYER_CONTRIBUTION',
+        'PERCENTAGE',
+        'BASIC',
+        4.81,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        1,
+        'COMPONENT',
+        210,
+        0,
+        0,
+        2
+    )
+
+    ON DUPLICATE KEY UPDATE
+        component_name       = VALUES(component_name),
+        component_type       = VALUES(component_type),
+        calculation_type     = VALUES(calculation_type),
+        percentage_base      = VALUES(percentage_base),
+        percentage_value     = VALUES(percentage_value),
+        minimum_amount       = VALUES(minimum_amount),
+        maximum_amount       = VALUES(maximum_amount),
+        formula_expression   = VALUES(formula_expression),
+        is_taxable            = VALUES(is_taxable),
+        is_active             = VALUES(is_active),
+        calculation_scope     = VALUES(calculation_scope),
+        calculation_order     = VALUES(calculation_order),
+        is_manual             = VALUES(is_manual),
+        is_slab               = VALUES(is_slab),
+        rounding_precision    = VALUES(rounding_precision);
+
+
+    
+
+    
+
+    INSERT INTO test_table_salary_component_slab
+    (
+        component_id,
+        slab_based_on,
+        slab_min_value,
+        slab_max_value,
+        result_type,
+        result_value,
+        percentage_base,
+        priority,
+        effective_from,
+        effective_to,
+        is_active
+    )
+    SELECT
+        c.component_id,
+        'GROSS',
+        0.00,
+        15000.00,
+        'FIXED',
+        0.00,
+        'NONE',
+        1,
+        '2026-01-01',
+        NULL,
+        1
+    FROM test_table_salary_component_master c
+    WHERE c.component_code = 'PT'
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM test_table_salary_component_slab s
+          WHERE s.component_id = c.component_id
+            AND s.slab_min_value = 0.00
+            AND s.slab_max_value = 15000.00
+            AND s.effective_from = '2026-01-01'
+      );
+
+
+    INSERT INTO test_table_salary_component_slab
+    (
+        component_id,
+        slab_based_on,
+        slab_min_value,
+        slab_max_value,
+        result_type,
+        result_value,
+        percentage_base,
+        priority,
+        effective_from,
+        effective_to,
+        is_active
+    )
+    SELECT
+        c.component_id,
+        'GROSS',
+        15000.01,
+        20000.00,
+        'FIXED',
+        150.00,
+        'NONE',
+        2,
+        '2026-01-01',
+        NULL,
+        1
+    FROM test_table_salary_component_master c
+    WHERE c.component_code = 'PT'
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM test_table_salary_component_slab s
+          WHERE s.component_id = c.component_id
+            AND s.slab_min_value = 15000.01
+            AND s.slab_max_value = 20000.00
+            AND s.effective_from = '2026-01-01'
+      );
+
+
+    INSERT INTO test_table_salary_component_slab
+    (
+        component_id,
+        slab_based_on,
+        slab_min_value,
+        slab_max_value,
+        result_type,
+        result_value,
+        percentage_base,
+        priority,
+        effective_from,
+        effective_to,
+        is_active
+    )
+    SELECT
+        c.component_id,
+        'GROSS',
+        20000.01,
+        NULL,
+        'FIXED',
+        200.00,
+        'NONE',
+        3,
+        '2026-01-01',
+        NULL,
+        1
+    FROM test_table_salary_component_master c
+    WHERE c.component_code = 'PT'
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM test_table_salary_component_slab s
+          WHERE s.component_id = c.component_id
+            AND s.slab_min_value = 20000.01
+            AND s.slab_max_value IS NULL
+            AND s.effective_from = '2026-01-01'
+      );
+
+
+    
+
+    SELECT
+        component_id,
+        component_code,
+        component_name,
+        component_type,
+        calculation_type,
+        percentage_base,
+        percentage_value,
+        formula_expression,
+        calculation_order,
+        is_active
+    FROM test_table_salary_component_master
+    ORDER BY calculation_order, component_id;
+
+
+    SELECT
+        s.slab_id,
+        c.component_code,
+        c.component_name,
+        s.slab_based_on,
+        s.slab_min_value,
+        s.slab_max_value,
+        s.result_type,
+        s.result_value,
+        s.percentage_base,
+        s.priority,
+        s.effective_from,
+        s.effective_to,
+        s.is_active
+    FROM test_table_salary_component_slab s
+    INNER JOIN test_table_salary_component_master c
+        ON c.component_id = s.component_id
+    ORDER BY
+        c.calculation_order,
+        s.priority,
+        s.slab_min_value;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_structure_attach_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_structure_attach_component`(
+  IN p_structure_id    INT,
+  IN p_component_id    INT,
+  IN p_override_fixed  DECIMAL(12,2),
+  IN p_override_formula TEXT,
+  IN p_display_order   INT
+)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  INSERT INTO structure_components
+    (structure_id, component_id, override_fixed, override_formula, display_order)
+  VALUES
+    (p_structure_id, p_component_id, p_override_fixed, p_override_formula, p_display_order)
+  ON DUPLICATE KEY UPDATE
+    override_fixed = p_override_fixed,
+    override_formula = p_override_formula,
+    display_order = p_display_order;
+  COMMIT;
+  SELECT 'OK' AS status, 'Component attached' AS message, LAST_INSERT_ID() AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_structure_detach_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_structure_detach_component`(
+  IN p_structure_id  INT,
+  IN p_component_id  INT
+)
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  DELETE FROM structure_components
+  WHERE structure_id = p_structure_id AND component_id = p_component_id;
+  COMMIT;
+  SELECT 'OK' AS status, 'Component detached' AS message, p_component_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_structure_get` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_structure_get`(IN p_structure_id INT)
+BEGIN
+  DECLARE v_id INT;
+  SET v_id = IFNULL(p_structure_id, 1);
+  IF NOT EXISTS (SELECT 1 FROM salary_structures WHERE structure_id = v_id) THEN
+    SELECT structure_id INTO v_id FROM salary_structures ORDER BY structure_id LIMIT 1;
+  END IF;
+
+  
+  SELECT structure_id, name, description, is_active
+  FROM   salary_structures
+  WHERE  structure_id = v_id;
+
+  
+  SELECT sc.id, sc.structure_id, sc.component_id,
+         pc.code, pc.name, pc.type, pc.calc_type,
+         pc.fixed_amount, pc.percent_value, pc.percent_of_code, pc.formula,
+         pc.minimum_amount, pc.maximum_amount, pc.calculation_scope, pc.is_slab, pc.is_manual,
+         sc.override_fixed, sc.override_formula, sc.display_order,
+         pc.calc_order, pc.is_prorated, pc.is_active
+  FROM   structure_components sc
+  JOIN   pay_components pc ON pc.component_id = sc.component_id
+  WHERE  sc.structure_id = v_id
+  ORDER BY sc.display_order, pc.calc_order;
+
+  
+  SELECT pc.component_id, pc.code, pc.name, pc.type, pc.calc_type,
+         pc.fixed_amount, pc.formula, pc.calc_order, pc.is_active
+  FROM   pay_components pc
+  WHERE  pc.component_id NOT IN (
+    SELECT component_id FROM structure_components WHERE structure_id = v_id
+  )
+  ORDER BY pc.calc_order, pc.code;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_structure_list` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_structure_list`()
+BEGIN
+  SELECT ss.structure_id, ss.name, ss.description, ss.is_active,
+    COUNT(DISTINCT sc.component_id) AS component_count,
+    (SELECT COUNT(*) FROM userdetails u WHERE u.status = 'ACTIVE') AS employee_count
+  FROM salary_structures ss
+  LEFT JOIN structure_components sc ON sc.structure_id = ss.structure_id
+  GROUP BY ss.structure_id
+  ORDER BY ss.structure_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_structure_preview` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_structure_preview`(IN p_structure_id INT, IN p_ctc_annual DECIMAL(14,2))
+BEGIN
+  DECLARE v_ctc_monthly   DECIMAL(12,2);
+  DECLARE v_basic         DECIMAL(12,2);
+  DECLARE v_hra           DECIMAL(12,2);
+  DECLARE v_med           DECIMAL(12,2);
+  DECLARE v_conv          DECIMAL(12,2);
+  DECLARE v_others        DECIMAL(12,2);
+  DECLARE v_gross         DECIMAL(12,2);
+  DECLARE v_emp_epf       DECIMAL(12,2);
+  DECLARE v_er_admin      DECIMAL(12,2);
+  DECLARE v_er_nps        DECIMAL(12,2);
+  DECLARE v_emp_esi       DECIMAL(12,2);
+  DECLARE v_ee_epf        DECIMAL(12,2);
+  DECLARE v_ee_esi        DECIMAL(12,2);
+  DECLARE v_pt            DECIMAL(12,2);
+  DECLARE v_total_ded     DECIMAL(12,2);
+  DECLARE v_net_pay       DECIMAL(12,2);
+  DECLARE v_employer_cost DECIMAL(12,2);
+  DECLARE v_pre_cost      DECIMAL(12,2);
+  DECLARE v_is_esi        BOOLEAN;
+
+  IF p_ctc_annual > 100000 THEN
+    SET v_ctc_monthly = ROUND(p_ctc_annual / 12, 2);
+  ELSE
+    SET v_ctc_monthly = p_ctc_annual;
+  END IF;
+
+  
+  SET v_basic = ROUND(v_ctc_monthly * 0.50, 2);
+  SET v_hra   = ROUND(v_ctc_monthly * 0.20, 2);
+  SET v_med   = ROUND(v_ctc_monthly * 0.05, 2);
+  SET v_conv  = ROUND(v_ctc_monthly * 0.08, 2);
+
+  
+  SET v_er_nps   = 0.00;
+  SET v_emp_epf  = LEAST(ROUND(v_basic * 0.12, 2), 3000.00);
+  SET v_er_admin = LEAST(ROUND(v_basic * 0.01, 2), 250.00);
+  SET v_ee_epf   = v_emp_epf;
+
+  SET v_pre_cost = v_er_nps + v_emp_epf + v_er_admin;
+
+  
+  SET v_is_esi = ((v_ctc_monthly - v_pre_cost) / 1.0325) <= 21000.00;
+
+  IF v_is_esi THEN
+    SET v_gross   = ROUND((v_ctc_monthly - v_pre_cost) / 1.0325, 2);
+    SET v_emp_esi = ROUND(v_ctc_monthly - v_pre_cost - v_gross, 2);
+    SET v_ee_esi  = ROUND(v_gross * 0.0075, 2);
+  ELSE
+    SET v_gross   = ROUND(v_ctc_monthly - v_pre_cost, 2);
+    SET v_emp_esi = 0.00;
+    SET v_ee_esi  = 0.00;
+  END IF;
+
+  
+  SET v_others = ROUND(v_gross - (v_basic + v_hra + v_med + v_conv), 2);
+
+  
+  IF v_gross > 20000.00 THEN
+    SET v_pt = 200.00;
+  ELSEIF v_gross >= 15000.00 THEN
+    SET v_pt = 150.00;
+  ELSE
+    SET v_pt = 0.00;
+  END IF;
+
+  SET v_total_ded = v_ee_epf + v_ee_esi + v_pt;
+  SET v_net_pay   = v_gross - v_total_ded;
+  SET v_employer_cost = v_er_nps + v_emp_epf + v_er_admin + v_emp_esi;
+
+  DROP TEMPORARY TABLE IF EXISTS tmp_preview_lines;
+  CREATE TEMPORARY TABLE tmp_preview_lines (
+    component_id   INT,
+    component_code VARCHAR(30),
+    component_name VARCHAR(100),
+    comp_type      VARCHAR(30),
+    full_amount    DECIMAL(12,2),
+    amount         DECIMAL(12,2),
+    display_order  INT
+  );
+
+  INSERT INTO tmp_preview_lines (component_id, component_code, component_name, comp_type, full_amount, amount, display_order)
+  SELECT 
+    pc.component_id,
+    pc.code,
+    pc.name,
+    pc.type,
+    CASE pc.code
+      WHEN 'BASIC' THEN v_basic
+      WHEN 'HRA' THEN v_hra
+      WHEN 'MEDICAL' THEN v_med
+      WHEN 'CONVEYANCE' THEN v_conv
+      WHEN 'OTHERS' THEN v_others
+      WHEN 'OTHER_EARNINGS' THEN 0.00
+      WHEN 'GROSS' THEN v_gross
+      WHEN 'ER_NPS' THEN v_er_nps
+      WHEN 'EMP_EPF' THEN v_emp_epf
+      WHEN 'ER_ADMIN' THEN v_er_admin
+      WHEN 'EMP_ESI' THEN v_emp_esi
+      WHEN 'TOTAL_EMPLOYER_CONTRIBUTION' THEN v_employer_cost
+      WHEN 'EE_EPF' THEN v_ee_epf
+      WHEN 'EE_ESI' THEN v_ee_esi
+      WHEN 'PT' THEN v_pt
+      WHEN 'ADVANCE' THEN 0.00
+      WHEN 'TDS' THEN 0.00
+      WHEN 'TOTAL_DEDUCTIONS' THEN v_total_ded
+      WHEN 'NET_PAY' THEN v_net_pay
+      WHEN 'TOTAL_CTC' THEN (v_gross + v_employer_cost)
+      ELSE 0.00
+    END AS full_amount,
+    CASE pc.code
+      WHEN 'BASIC' THEN v_basic
+      WHEN 'HRA' THEN v_hra
+      WHEN 'MEDICAL' THEN v_med
+      WHEN 'CONVEYANCE' THEN v_conv
+      WHEN 'OTHERS' THEN v_others
+      WHEN 'OTHER_EARNINGS' THEN 0.00
+      WHEN 'GROSS' THEN v_gross
+      WHEN 'ER_NPS' THEN v_er_nps
+      WHEN 'EMP_EPF' THEN v_emp_epf
+      WHEN 'ER_ADMIN' THEN v_er_admin
+      WHEN 'EMP_ESI' THEN v_emp_esi
+      WHEN 'TOTAL_EMPLOYER_CONTRIBUTION' THEN v_employer_cost
+      WHEN 'EE_EPF' THEN v_ee_epf
+      WHEN 'EE_ESI' THEN v_ee_esi
+      WHEN 'PT' THEN v_pt
+      WHEN 'ADVANCE' THEN 0.00
+      WHEN 'TDS' THEN 0.00
+      WHEN 'TOTAL_DEDUCTIONS' THEN v_total_ded
+      WHEN 'NET_PAY' THEN v_net_pay
+      WHEN 'TOTAL_CTC' THEN (v_gross + v_employer_cost)
+      ELSE 0.00
+    END AS amount,
+    COALESCE(sc.display_order, pc.calc_order) AS display_order
+  FROM pay_components pc
+  LEFT JOIN structure_components sc ON sc.component_id = pc.component_id AND sc.structure_id = p_structure_id
+  WHERE pc.is_active = 1
+  ORDER BY pc.calc_order;
+
+  
+  SELECT component_id, component_code, component_name, comp_type AS type,
+         full_amount, amount, display_order
+  FROM tmp_preview_lines
+  ORDER BY display_order;
+
+  
+  SELECT
+    v_gross AS gross_earnings,
+    v_total_ded AS total_deductions,
+    v_employer_cost AS employer_contribution,
+    v_net_pay AS net_pay;
+
+  DROP TEMPORARY TABLE IF EXISTS tmp_preview_lines;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_structure_save` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_structure_save`(
+  IN p_structure_id  INT,
+  IN p_name          VARCHAR(100),
+  IN p_description   VARCHAR(255)
+)
+BEGIN
+  DECLARE v_id INT DEFAULT p_structure_id;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+
+  
+  CALL sp_auth_check_admin_hr('BS00001');
+  BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  IF p_structure_id IS NULL THEN
+    INSERT INTO salary_structures (name, description) VALUES (p_name, p_description);
+    SET v_id = LAST_INSERT_ID();
+  ELSE
+    UPDATE salary_structures SET name = p_name, description = p_description
+    WHERE structure_id = p_structure_id;
+  END IF;
+  COMMIT;
+  SELECT 'OK' AS status, 'Structure saved' AS message, v_id AS id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `store_forgot_password_token` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `store_forgot_password_token`(
+    IN p_emp_id VARCHAR(20),
+    IN p_reset_token VARCHAR(255)
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+    SELECT COUNT(*) INTO v_count
+    FROM user_login_details
+    WHERE emp_id = p_emp_id;
+
+    IF v_count > 0 THEN
+
+        
+        UPDATE forgot_password_tokens
+        SET active = 'N'
+        WHERE emp_id = p_emp_id
+          AND active = 'Y';
+
+        
+        INSERT INTO forgot_password_tokens (
+            emp_id,
+            reset_token,
+            active,
+            created_on
+        )
+        VALUES (
+            p_emp_id,
+            p_reset_token,
+            'Y',
+            NOW()
+        );
+
+        
+        SELECT
+            'Y' AS status,
+            p_emp_id AS emp_id,
+            p_reset_token AS reset_token,
+            'token stored successfully' AS remarks;
+
+    ELSE
+
+        
+        SELECT
+            'N' AS status,
+            p_emp_id AS emp_id,
+            NULL AS reset_token,
+            'employee not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `submit_candidate_details` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `submit_candidate_details`(
+
+    IN p_ref_id VARCHAR(20)
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE ref_id = p_ref_id;
+
+    IF v_count > 0 THEN
+
+        
+
+        UPDATE candidate_details
+        SET
+            is_submitted = 1,
+            onboarding_status = 'SUBMITTED'
+        WHERE ref_id = p_ref_id;
+
+        
+
+        SELECT
+            'Y' AS status,
+            p_ref_id AS ref_id,
+            'details submitted successfully' AS remarks;
+
+    ELSE
+
+        SELECT
+            'N' AS status,
+            p_ref_id AS ref_id,
+            'candidate not found' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `test_add_salary_component` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `test_add_salary_component`(
+    IN p_emp_id VARCHAR(20),
+    IN p_component_code VARCHAR(30),
+    IN p_component_name VARCHAR(100),
+    IN p_component_type VARCHAR(30),
+    IN p_calculation_type VARCHAR(20),
+    IN p_percentage_base VARCHAR(20),
+    IN p_percentage_value DECIMAL(7,2),
+    IN p_minimum_amount DECIMAL(12,2),
+    IN p_maximum_amount DECIMAL(12,2),
+    IN p_formula_expression TEXT,
+    IN p_is_taxable TINYINT,
+    IN p_calculation_scope VARCHAR(20),
+    IN p_calculation_order INT,
+    IN p_eligibility_parameter VARCHAR(50),
+    IN p_eligibility_required_value VARCHAR(10),
+    IN p_is_manual TINYINT,
+    IN p_is_slab TINYINT,
+    IN p_rounding_precision INT
+)
+BEGIN
+
+    DECLARE v_user_category VARCHAR(20) DEFAULT NULL;
+    DECLARE v_user_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_component_id BIGINT DEFAULT NULL;
+    DECLARE v_attached_count INT DEFAULT 0;
+
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'Salary component creation failed. Transaction rolled back.' AS remarks;
+    END;
+
+    
+    SET time_zone = '+05:30';
+
+    
+    START TRANSACTION;
+
+    
+
+    SELECT
+        user_category,
+        status
+    INTO
+        v_user_category,
+        v_user_status
+    FROM user_login_details
+    WHERE emp_id = p_emp_id
+    LIMIT 1;
+
+    
+
+    IF v_user_category IS NULL THEN
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'User not found.' AS remarks;
+
+    
+
+    ELSEIF UPPER(v_user_status) <> 'ACTIVE' THEN
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'User account is inactive.' AS remarks;
+
+    
+
+    ELSEIF UPPER(v_user_category) NOT IN ('ADMIN', 'HR') THEN
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'Only ADMIN or HR users can add salary components.'
+            AS remarks;
+
+    ELSE
+
+        
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM test_table_salary_component_master
+            WHERE component_code = p_component_code
+        ) THEN
+
+            ROLLBACK;
+
+            SELECT
+                'N' AS status,
+                CONCAT(
+                    'Component code already exists: ',
+                    p_component_code
+                ) AS remarks;
+
+        ELSE
+
+            
+
+            INSERT INTO test_table_salary_component_master
+            (
+                component_code,
+                component_name,
+                component_type,
+                calculation_type,
+                percentage_base,
+                percentage_value,
+                minimum_amount,
+                maximum_amount,
+                formula_expression,
+                is_taxable,
+                is_active,
+                created_at,
+                updated_at,
+                calculation_scope,
+                calculation_order,
+                eligibility_parameter,
+                eligibility_required_value,
+                is_manual,
+                is_slab,
+                rounding_precision
+            )
+            VALUES
+            (
+                p_component_code,
+                p_component_name,
+                p_component_type,
+                p_calculation_type,
+                p_percentage_base,
+                p_percentage_value,
+                p_minimum_amount,
+                p_maximum_amount,
+                p_formula_expression,
+                p_is_taxable,
+                1,
+                NOW(),
+                NOW(),
+                p_calculation_scope,
+                p_calculation_order,
+                p_eligibility_parameter,
+                p_eligibility_required_value,
+                p_is_manual,
+                p_is_slab,
+                p_rounding_precision
+            );
+
+            SET v_component_id = LAST_INSERT_ID();
+
+            
+
+            INSERT INTO test_employee_salary_structure
+            (
+                structure_id,
+                component_id,
+                calculation_type,
+                component_value,
+                percentage_base,
+                formula_expression,
+                monthly_amount,
+                is_overridden,
+                created_at,
+                updated_at
+            )
+            SELECT
+                ss.structure_id,
+                v_component_id,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                0,
+                NOW(),
+                NOW()
+            FROM test_salary_structure ss
+            WHERE ss.structure_status = 'ACTIVE'
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM test_employee_salary_structure esc
+                  WHERE esc.structure_id = ss.structure_id
+                    AND esc.component_id = v_component_id
+              );
+
+            SET v_attached_count = ROW_COUNT();
+
+            
+
+            COMMIT;
+
+            
+
+            SELECT
+                'Y' AS status,
+                CONCAT(
+                    'Salary component ',
+                    p_component_code,
+                    ' created successfully and attached to ',
+                    v_attached_count,
+                    ' active employee salary structures.'
+                ) AS remarks,
+                v_component_id AS component_id,
+                v_attached_count AS attached_employee_structures;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `test_add_salary_component_slab` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `test_add_salary_component_slab`(
+    IN p_emp_id VARCHAR(20),
+    IN p_component_id BIGINT,
+    IN p_slab_json JSON
+)
+BEGIN
+
+    DECLARE v_role VARCHAR(30);
+    DECLARE v_component_exists INT DEFAULT 0;
+    DECLARE v_slab_count INT DEFAULT 0;
+    DECLARE v_inserted_count INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'Error occurred while adding salary slabs' AS remarks;
+    END;
+
+    SET time_zone = '+05:30';
+
+    START TRANSACTION;
+
+
+    
+
+    SELECT user_category
+    INTO v_role
+    FROM user_login_details
+    WHERE emp_id = p_emp_id
+      AND status = 'Y'
+    LIMIT 1;
+
+
+    IF v_role IS NULL THEN
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'Invalid or inactive user' AS remarks;
+
+
+    ELSEIF v_role NOT IN ('ADMIN', 'HR', 'SUPERADMIN') THEN
+
+        ROLLBACK;
+
+        SELECT
+            'N' AS status,
+            'Only ADMIN, HR or SUPERADMIN can add salary slabs'
+            AS remarks;
+
+
+    ELSE
+
+
+        
+
+        SELECT COUNT(*)
+        INTO v_component_exists
+        FROM test_table_salary_component_master
+        WHERE component_id = p_component_id
+          AND is_active = 1;
+
+
+        IF v_component_exists = 0 THEN
+
+            ROLLBACK;
+
+            SELECT
+                'N' AS status,
+                CONCAT(
+                    'Active salary component not found: ',
+                    p_component_id
+                ) AS remarks;
+
+
+        ELSE
+
+
+            
+
+            IF p_slab_json IS NULL
+               OR JSON_VALID(p_slab_json) = 0
+               OR JSON_TYPE(p_slab_json) <> 'ARRAY' THEN
+
+                ROLLBACK;
+
+                SELECT
+                    'N' AS status,
+                    'Slab data must be a valid JSON array'
+                    AS remarks;
+
+
+            ELSE
+
+
+                SET v_slab_count =
+                    JSON_LENGTH(p_slab_json);
+
+
+                IF v_slab_count = 0 THEN
+
+                    ROLLBACK;
+
+                    SELECT
+                        'N' AS status,
+                        'At least one slab is required'
+                        AS remarks;
+
+
+                ELSE
+
+
+                    
+
+                    INSERT INTO test_table_salary_component_slab
+                    (
+                        component_id,
+                        slab_based_on,
+                        slab_min_value,
+                        slab_max_value,
+                        result_type,
+                        result_value,
+                        percentage_base,
+                        priority,
+                        effective_from,
+                        effective_to,
+                        is_active,
+                        created_at,
+                        updated_at
+                    )
+                    SELECT
+                        p_component_id,
+
+                        JSON_UNQUOTE(
+                            JSON_EXTRACT(
+                                jt.slab_data,
+                                '$.slab_based_on'
+                            )
+                        ),
+
+                        CAST(
+                            JSON_UNQUOTE(
+                                JSON_EXTRACT(
+                                    jt.slab_data,
+                                    '$.slab_min_value'
+                                )
+                            ) AS DECIMAL(12,2)
+                        ),
+
+                        CASE
+                            WHEN JSON_EXTRACT(
+                                jt.slab_data,
+                                '$.slab_max_value'
+                            ) IS NULL
+                            OR JSON_UNQUOTE(
+                                JSON_EXTRACT(
+                                    jt.slab_data,
+                                    '$.slab_max_value'
+                                )
+                            ) = 'null'
+                            THEN NULL
+                            ELSE CAST(
+                                JSON_UNQUOTE(
+                                    JSON_EXTRACT(
+                                        jt.slab_data,
+                                        '$.slab_max_value'
+                                    )
+                                ) AS DECIMAL(12,2)
+                            )
+                        END,
+
+                        JSON_UNQUOTE(
+                            JSON_EXTRACT(
+                                jt.slab_data,
+                                '$.result_type'
+                            )
+                        ),
+
+                        CAST(
+                            JSON_UNQUOTE(
+                                JSON_EXTRACT(
+                                    jt.slab_data,
+                                    '$.result_value'
+                                )
+                            ) AS DECIMAL(12,2)
+                        ),
+
+                        JSON_UNQUOTE(
+                            JSON_EXTRACT(
+                                jt.slab_data,
+                                '$.percentage_base'
+                            )
+                        ),
+
+                        CAST(
+                            JSON_UNQUOTE(
+                                JSON_EXTRACT(
+                                    jt.slab_data,
+                                    '$.priority'
+                                )
+                            ) AS SIGNED
+                        ),
+
+                        CAST(
+                            JSON_UNQUOTE(
+                                JSON_EXTRACT(
+                                    jt.slab_data,
+                                    '$.effective_from'
+                                )
+                            ) AS DATE
+                        ),
+
+                        CASE
+                            WHEN JSON_EXTRACT(
+                                jt.slab_data,
+                                '$.effective_to'
+                            ) IS NULL
+                            OR JSON_UNQUOTE(
+                                JSON_EXTRACT(
+                                    jt.slab_data,
+                                    '$.effective_to'
+                                )
+                            ) = 'null'
+                            THEN NULL
+                            ELSE CAST(
+                                JSON_UNQUOTE(
+                                    JSON_EXTRACT(
+                                        jt.slab_data,
+                                        '$.effective_to'
+                                    )
+                                ) AS DATE
+                            )
+                        END,
+
+                        1,
+                        NOW(),
+                        NOW()
+
+                    FROM JSON_TABLE(
+                        p_slab_json,
+                        '$[*]'
+                        COLUMNS
+                        (
+                            slab_data JSON PATH '$'
+                        )
+                    ) jt;
+
+
+                    SET v_inserted_count = ROW_COUNT();
+
+
+                    
+
+                    COMMIT;
+
+
+                    
+
+                    SELECT
+                        'Y' AS status,
+                        CONCAT(
+                            v_inserted_count,
+                            ' salary slab(s) added successfully'
+                        ) AS remarks,
+                        p_component_id AS component_id,
+                        v_inserted_count AS inserted_count;
+
+                END IF;
+
+            END IF;
+
+        END IF;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `update_salary_table` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `update_salary_table`(IN p_month VARCHAR(40), IN p_year INT)
+BEGIN
+    DECLARE salary_tbl_count INT DEFAULT 0;
+    DECLARE deduction_list_count INT DEFAULT 0;
+    DECLARE allowance_list_count INT DEFAULT 0;
+    DECLARE final_count INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO salary_tbl_count
+    FROM salary_tbl
+    WHERE month = p_month AND year = p_year;
+
+    SELECT COUNT(*) INTO deduction_list_count
+    FROM deduction_list
+    WHERE month = p_month AND year = p_year;
+
+    SELECT COUNT(*) INTO allowance_list_count
+    FROM allowance_list
+    WHERE month = p_month AND year = p_year;
+
+    IF salary_tbl_count > 0 THEN
+        DELETE FROM salary_tbl WHERE month = p_month AND year = p_year;
+    END IF;
+
+    IF deduction_list_count > 0 THEN
+        DELETE FROM deduction_list WHERE month = p_month AND year = p_year;
+    END IF;
+
+    IF allowance_list_count > 0 THEN
+        DELETE FROM allowance_list WHERE month = p_month AND year = p_year;
+    END IF;
+
+    
+    UPDATE employee_salary
+    SET month = p_month, year = p_year
+    WHERE month IS NULL AND year IS NULL;
+
+    
+    CALL get_details_from_employee_sal_to_sal_tbl(p_month, p_year);
+    CALL get_details_from_employee_sal_to_allowance_list(p_month, p_year);
+    CALL get_details_from_employee_sal_to_deduction_list(p_month, p_year);
+
+    
+    UPDATE salary_tbl
+    SET total_working_days = 
+        CASE 
+            WHEN p_month IN ('January', 'March', 'May', 'July', 'August', 'October', 'December') THEN 31
+            WHEN p_month IN ('April', 'June', 'September', 'November') THEN 30
+            WHEN p_month = 'February' AND (p_year % 4 = 0 AND (p_year % 100 != 0 OR p_year % 400 = 0)) THEN 29
+            WHEN p_month = 'February' THEN 28
+            ELSE 0 
+        END
+    WHERE month = p_month AND year = p_year;
+
+    
+    UPDATE salary_tbl
+    SET no_days_present = total_working_days - no_days_absent
+    WHERE month = p_month AND year = p_year;
+
+    SELECT COUNT(*) INTO final_count 
+    FROM salary_tbl 
+    WHERE month = p_month AND year = p_year;
+    
+    IF final_count > 0 THEN
+        SELECT 'Y' AS status, 'Success' AS remarks, staff_name, staff_id, basic_salary,
+        total_working_days, no_days_present, no_days_absent, total_allowances, total_deductions, nps,
+        leave_salary_deduction, advance_amount, ctc, net_income, month, year, department_id, added_by, updated_on, added_on
+        FROM salary_tbl 
+        WHERE month = p_month AND year = p_year;
+    ELSE
+        SELECT 'N' AS status, 'No Data Loaded' AS remarks;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `validate_candidate_login` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `validate_candidate_login`(
+
+    IN p_ref_id VARCHAR(20),
+    IN p_password VARCHAR(50)
+
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+
+    SET time_zone = '+05:30';
+
+    
+
+    SELECT COUNT(*) INTO v_count
+    FROM candidate_details
+    WHERE ref_id = p_ref_id
+    AND temp_password = p_password;
+
+    IF v_count > 0 THEN
+
+        SELECT
+            'Y' AS status,
+            ref_id,
+            emp_name,
+            email,
+            onboarding_status,
+            current_step,
+            'login success' AS remarks
+        FROM candidate_details
+        WHERE ref_id = p_ref_id;
+
+    ELSE
+
+        SELECT
+            'N' AS status,
+            NULL AS ref_id,
+            NULL AS emp_name,
+            'invalid credentials' AS remarks;
+
+    END IF;
+
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `view_all_salary` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `view_all_salary`()
+BEGIN
+    SELECT DISTINCT
+        sa.staff_name,
+        sa.staff_id,
+        COALESCE(dm.department_name, 'Department name is not available') AS department_name
+    FROM salary_tbl sa
+    JOIN user_details st 
+        ON sa.staff_id = st.emp_id
+    JOIN user_login_details ud 
+        ON st.emp_id = ud.emp_id AND ud.status = 'ACTIVE'
+    LEFT JOIN department_master dm 
+        ON st.department = dm.department_id
+        order by sa.staff_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-11-17 16:24:17
